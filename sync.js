@@ -217,6 +217,7 @@
     if (!res.ok) {
       var text = "";
       try { text = await res.text(); } catch (e) { /* ignore */ }
+      console.error("[sync] request body was:", opts.body);
       throw new Error((opts.method || "GET") + " " + path + " -> " + res.status + " " + text);
     }
     if (res.status === 204) return null;
