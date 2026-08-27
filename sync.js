@@ -409,6 +409,7 @@
   }
 
   async function boot() {
+    await msalApp.initialize();
     document.getElementById("signInBtn").onclick = function () {
       document.getElementById("authStatus").textContent = "サインイン中…";
       msalApp.loginPopup({ scopes: SCOPES }).then(function (result) {
