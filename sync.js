@@ -108,9 +108,16 @@
       if (el) { el.textContent = value; el.setAttribute("data-tone", toneFor(kind, spec.role, value)); }
       return;
     }
-    if (spec.kind === "input" || spec.kind === "date") {
+    if (spec.kind === "input") {
       var el2 = getRoleEl(card, spec.role);
       if (el2) el2.value = value || "";
+      return;
+    }
+    if (spec.kind === "date") {
+      var elD = getRoleEl(card, spec.role);
+      if (!elD) return;
+      if (!value) { elD.value = ""; return; }
+      elD.value = String(value).slice(0, 10);
       return;
     }
     if (spec.kind === "editable") {
