@@ -1,0 +1,2261 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>できるAIチーム＋ 案件管理</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+  :root {
+    --bg: #F3F5F8;
+    --surface: #FFFFFF;
+    --surface-2: #E9EDF3;
+    --border: #DCE2EA;
+    --text: #1B2333;
+    --text-muted: #626C7C;
+    --accent: #2C5F8A;
+    --accent-soft: #E3ECF4;
+    --ok: #24714B;
+    --ok-soft: #E1F1E7;
+    --warn: #93650C;
+    --warn-soft: #FAEED9;
+    --crit: #A6371F;
+    --crit-soft: #F9E4DF;
+    --neutral: #5B6473;
+    --neutral-soft: #EAEDF2;
+    --shadow: 0 1px 2px rgba(27,35,51,0.06), 0 1px 1px rgba(27,35,51,0.04);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #11151F;
+      --surface: #181D2A;
+      --surface-2: #202638;
+      --border: #2B3245;
+      --text: #E7EAF2;
+      --text-muted: #9AA3B8;
+      --accent: #7FB0DD;
+      --accent-soft: #1E2E3F;
+      --ok: #6BCB98;
+      --ok-soft: #17301F;
+      --warn: #E0B255;
+      --warn-soft: #332510;
+      --crit: #E58370;
+      --crit-soft: #35190F;
+      --neutral: #A8B0C0;
+      --neutral-soft: #232A3B;
+      --shadow: 0 1px 2px rgba(0,0,0,0.4);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #11151F;
+    --surface: #181D2A;
+    --surface-2: #202638;
+    --border: #2B3245;
+    --text: #E7EAF2;
+    --text-muted: #9AA3B8;
+    --accent: #7FB0DD;
+    --accent-soft: #1E2E3F;
+    --ok: #6BCB98;
+    --ok-soft: #17301F;
+    --warn: #E0B255;
+    --warn-soft: #332510;
+    --crit: #E58370;
+    --crit-soft: #35190F;
+    --neutral: #A8B0C0;
+    --neutral-soft: #232A3B;
+    --shadow: 0 1px 2px rgba(0,0,0,0.4);
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Noto Sans JP", "Hiragino Sans", "Yu Gothic", sans-serif;
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+  }
+
+  h1, h2, .chip, .tab-btn, .stat-num {
+    font-family: "Zen Kaku Gothic New", "Noto Sans JP", sans-serif;
+  }
+  .tabular { font-family: "JetBrains Mono", monospace; font-variant-numeric: tabular-nums; }
+
+  .page {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 28px 20px 80px;
+  }
+
+  header.top {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 20px;
+  }
+  .eyebrow {
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    text-transform: uppercase;
+  }
+  h1 {
+    margin: 0;
+    font-size: clamp(22px, 4vw, 28px);
+    font-weight: 700;
+    text-wrap: balance;
+  }
+  .lede {
+    margin: 2px 0 0;
+    color: var(--text-muted);
+    font-size: 13.5px;
+  }
+
+  nav.tabs {
+    display: flex;
+    gap: 6px;
+    margin: 22px 0 18px;
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+  }
+  .tab-btn {
+    appearance: none;
+    border: none;
+    background: none;
+    color: var(--text-muted);
+    font-size: 14.5px;
+    font-weight: 700;
+    padding: 10px 14px 12px;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn[data-local-active] { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab-count {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px;
+    background: var(--surface-2);
+    color: var(--text-muted);
+    border-radius: 999px;
+    padding: 1px 7px;
+  }
+  .tab-btn[data-local-active] .tab-count { background: var(--accent-soft); color: var(--accent); }
+  .tab-today-btn {
+    appearance: none;
+    border: 1px solid var(--accent);
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-size: 13px;
+    font-weight: 700;
+    padding: 5px 12px;
+    margin: 8px 4px;
+    border-radius: 999px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+    align-self: center;
+  }
+  .tab-today-btn:hover { filter: brightness(0.96); }
+  .tab-today-btn .tab-count { background: var(--surface); color: var(--accent); }
+  .tab-today-btn[data-local-on] { background: var(--accent); color: var(--surface); }
+  .tab-today-btn[data-local-on] .tab-count { background: var(--accent-soft); color: var(--accent); }
+
+  section.panel[data-local-hidden] { display: none; }
+
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+  .stat-tile {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    cursor: pointer;
+    text-align: left;
+    font: inherit;
+    color: inherit;
+    box-shadow: var(--shadow);
+  }
+  .stat-tile:hover { border-color: var(--accent); }
+  .stat-tile[data-local-on] { background: var(--accent-soft); border-color: var(--accent); }
+  .stat-num {
+    font-size: 20px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  .stat-label { font-size: 11.5px; color: var(--text-muted); margin-top: 1px; }
+  .stat-tile[data-tone="warn"] .stat-num { color: var(--warn); }
+  .stat-tile[data-tone="crit"] .stat-num { color: var(--crit); }
+  .stat-tile[data-tone="ok"] .stat-num { color: var(--ok); }
+  .stat-tile[data-tone="accent"] .stat-num { color: var(--accent); }
+
+  .toolbar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+  .search {
+    flex: 1;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    border-radius: 8px;
+    padding: 9px 12px;
+    font-size: 14px;
+    color: var(--text);
+    font-family: inherit;
+  }
+  .search:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .add-btn {
+    border: none;
+    background: var(--accent);
+    color: var(--surface);
+    font-weight: 700;
+    font-size: 14px;
+    border-radius: 8px;
+    padding: 0 16px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .add-btn:hover { filter: brightness(1.08); }
+  .add-btn:focus-visible, .search:focus-visible, button:focus-visible, [contenteditable]:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .list { display: flex; flex-direction: column; gap: 10px; }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 16px;
+    box-shadow: var(--shadow);
+  }
+  .card[data-local-hidden] { display: none; }
+
+  .card-top {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+  }
+  .chip {
+    border: none;
+    border-radius: 999px;
+    font-size: 12.5px;
+    font-weight: 700;
+    padding: 5px 12px;
+    cursor: pointer;
+    background: var(--neutral-soft);
+    color: var(--neutral);
+  }
+  .chip[data-tone="ok"] { background: var(--ok-soft); color: var(--ok); }
+  .chip[data-tone="warn"] { background: var(--warn-soft); color: var(--warn); }
+  .chip[data-tone="crit"] { background: var(--crit-soft); color: var(--crit); }
+  .chip[data-tone="accent"] { background: var(--accent-soft); color: var(--accent); }
+  .chip:hover { filter: brightness(0.97); }
+  /* 種別チップ（問い合わせ／資料DL）。ステータスと見分けがつくよう枠線つきの控えめな見た目にしている */
+  .chip-src {
+    background: transparent;
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+    font-size: 11.5px;
+    padding: 4px 10px;
+  }
+  .chip-src[data-tone="accent"] {
+    background: var(--accent-soft);
+    color: var(--accent);
+    border-color: transparent;
+  }
+  .spacer { flex: 1; }
+  .icon-btn {
+    border: none;
+    background: none;
+    color: var(--text-muted);
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 4px 6px;
+    border-radius: 6px;
+  }
+  .icon-btn:hover { background: var(--crit-soft); color: var(--crit); }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px 14px;
+  }
+  .field label {
+    display: block;
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-bottom: 3px;
+    letter-spacing: 0.02em;
+  }
+  .field input {
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 7px 9px;
+    font-size: 13.5px;
+    font-family: inherit;
+    color: var(--text);
+    background: var(--surface);
+  }
+  .field input[type="date"] { font-family: "JetBrains Mono", monospace; font-size: 13px; }
+  .field input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .field.wide { grid-column: 1 / -1; }
+  .inquiry-content > label {
+    font-size: 13.5px;
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: normal;
+  }
+  .inquiry-content .editable {
+    border: 1px solid var(--accent);
+    border-left-width: 4px;
+    background: var(--accent-soft);
+    font-size: 14.5px;
+    min-height: 64px;
+    padding: 10px 12px;
+  }
+  .action-buttons { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 7px; align-items: center; }
+  .action-buttons:empty { display: none; }
+  .action-btn {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    border-radius: 7px;
+    font-size: 12.5px;
+    font-weight: 700;
+    padding: 6px 11px;
+    cursor: pointer;
+    color: var(--text);
+    text-decoration: none;
+    display: inline-block;
+  }
+  .action-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .action-btn[data-tone="ok"]:hover { border-color: var(--ok); color: var(--ok); }
+  .action-btn[data-tone="crit"]:hover { border-color: var(--crit); color: var(--crit); }
+  .action-btn[data-tone="accent"]:hover { border-color: var(--accent); color: var(--accent); }
+  .action-btn[aria-disabled="true"] { opacity: 0.45; pointer-events: none; }
+  .action-done-note { font-size: 12.5px; color: var(--text-muted); }
+  .link-btn { border-color: var(--accent-soft); color: var(--accent); }
+
+  .suggest {
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+    border: 1px solid var(--border);
+    border-left-width: 3px;
+    border-radius: 8px;
+    padding: 8px 11px;
+    margin-bottom: 8px;
+    background: var(--surface-2);
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+  .suggest[hidden] { display: none; }
+  .suggest-mark {
+    font-size: 10.5px;
+    font-weight: 700;
+    white-space: nowrap;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--neutral-soft);
+    color: var(--neutral);
+  }
+  .suggest[data-tone="crit"] { border-left-color: var(--crit); background: var(--crit-soft); }
+  .suggest[data-tone="crit"] .suggest-mark { background: var(--crit); color: var(--surface); }
+  .suggest[data-tone="warn"] { border-left-color: var(--warn); background: var(--warn-soft); }
+  .suggest[data-tone="warn"] .suggest-mark { background: var(--warn); color: var(--surface); }
+  .suggest[data-tone="accent"] { border-left-color: var(--accent); background: var(--accent-soft); }
+  .suggest[data-tone="accent"] .suggest-mark { background: var(--accent); color: var(--surface); }
+  .suggest[data-tone="ok"] { border-left-color: var(--border); color: var(--text-muted); }
+  .refresh-btn { font-size: 12px; padding: 5px 12px; }
+  .card[data-local-dirty] .refresh-btn {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--surface);
+  }
+  .card[data-local-dirty] .refresh-btn:hover { color: var(--surface); filter: brightness(1.08); }
+  .card[data-local-dirty] .refresh-btn::after { content: "（未反映）"; font-size: 10.5px; }
+  .refresh-note { font-size: 11.5px; color: var(--ok); white-space: nowrap; }
+  .refresh-note[hidden] { display: none; }
+
+  .suggest-body { flex: 1; min-width: 0; }
+  .suggest-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+  .suggest-tags:empty { display: none; }
+  .suggest-tag {
+    font-size: 10.5px;
+    padding: 1px 7px;
+    border-radius: 999px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+
+  .action-btn[data-recommended]::before { content: "★ "; }
+  .action-btn[data-recommended] {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: var(--surface);
+  }
+  .action-btn[data-recommended]:hover {
+    border-color: var(--accent);
+    color: var(--surface);
+    filter: brightness(1.08);
+  }
+
+  .memo-prompt {
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    padding: 10px 12px;
+    background: var(--accent-soft);
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    margin-bottom: 8px;
+  }
+  .memo-prompt[hidden] { display: none; }
+  .memo-prompt-label {
+    font-size: 11.5px;
+    font-weight: 700;
+    color: var(--accent);
+  }
+  .memo-prompt .editable { min-height: 34px; background: var(--surface); }
+  .memo-prompt-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .memo-prompt-hint { font-size: 11px; color: var(--text-muted); }
+
+  .meeting-panel {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    background: var(--surface-2);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 8px;
+  }
+  .meeting-panel[hidden] { display: none; }
+  .meeting-field label {
+    display: block;
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-bottom: 3px;
+  }
+  .meeting-field input[type="datetime-local"] {
+    width: 100%;
+    max-width: 260px;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 7px 9px;
+    font-size: 13px;
+    font-family: "JetBrains Mono", monospace;
+    background: var(--surface);
+    color: var(--text);
+  }
+  .check-row { display: flex; align-items: center; gap: 7px; font-size: 13px; }
+  .check-row input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+
+  .plan-panel {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    background: var(--surface-2);
+  }
+  .plan-panel[hidden] { display: none; }
+  .plan-panel-hint { font-size: 11px; color: var(--text-muted); margin-bottom: 8px; }
+  .plan-panel-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 6px 12px; }
+
+  .fetch-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .fetch-status { font-size: 12px; color: var(--text-muted); }
+  .fetch-btn {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--surface);
+  }
+  .fetch-btn:hover { background: var(--accent); color: var(--surface); border-color: var(--accent); }
+  .fetch-btn:disabled { opacity: 0.5; cursor: default; }
+  .outlook-out { display: flex; flex-direction: column; gap: 2px; }
+  .outlook-link {
+    font-size: 12px;
+    color: var(--text-muted);
+    text-decoration: underline;
+    align-self: flex-start;
+  }
+  .outlook-link:hover { color: var(--accent); }
+  .outlook-hint { font-size: 11px; color: var(--text-muted); }
+
+  .today-badge {
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-size: 11.5px;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .today-badge[hidden] { display: none; }
+  .check-row span { cursor: pointer; }
+
+  .company-panel[data-local-hidden] { display: none; }
+  .company-panel {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    background: var(--surface-2);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .company-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 10px 14px;
+  }
+  .company-note-field label {
+    display: block;
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-bottom: 3px;
+  }
+
+  .history-list { display: flex; flex-direction: column; gap: 6px; }
+  .history-list:empty:before {
+    content: "まだ履歴はありません";
+    font-size: 12.5px;
+    color: var(--text-muted);
+  }
+  .history-entry {
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    border-radius: 8px;
+    padding: 7px 10px;
+  }
+  .history-meta {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 11.5px;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+    flex-wrap: wrap;
+  }
+  .history-time { font-family: "JetBrains Mono", monospace; }
+  .history-action { font-weight: 700; color: var(--text); }
+  .history-status.chip { font-size: 10.5px; padding: 2px 9px; cursor: default; }
+  .history-due {
+    font-size: 10.5px;
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 1px 8px;
+    white-space: nowrap;
+  }
+  .history-delete { margin-left: auto; font-size: 14px; padding: 0 4px; line-height: 1.4; }
+
+  .danger-zone {
+    margin-top: 14px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--border);
+    display: flex;
+    justify-content: flex-end;
+  }
+  .danger-btn {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-muted);
+    font-size: 12px;
+    padding: 6px 12px;
+    border-radius: 7px;
+    cursor: pointer;
+  }
+  .danger-btn:hover { border-color: var(--crit); color: var(--crit); }
+  .danger-btn[data-local-armed="true"] {
+    background: var(--crit-soft);
+    border-color: var(--crit);
+    color: var(--crit);
+    font-weight: 700;
+  }
+
+  .trash-toggle-row { margin: 4px 0 10px; }
+  .trash-list[data-local-hidden] { display: none; }
+  .trash-list:empty:before {
+    content: "削除済みの問い合わせはありません";
+    font-size: 12.5px;
+    color: var(--text-muted);
+  }
+  .card[data-deleted] { opacity: 0.6; }
+  .card[data-deleted] .suggest,
+  .card[data-deleted] .action-buttons,
+  .card[data-deleted] .memo-prompt,
+  .card[data-deleted] .meeting-panel,
+  .card[data-deleted] .plan-panel { display: none !important; }
+  .history-memo.editable { min-height: 26px; font-size: 12.5px; padding: 5px 8px; }
+  .editable {
+    width: 100%;
+    min-height: 40px;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 7px 9px;
+    font-size: 13.5px;
+    font-family: inherit;
+    color: var(--text);
+    background: var(--surface);
+  }
+  .editable:empty:before { content: attr(data-placeholder); color: var(--text-muted); }
+  .editable:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+
+  .empty-msg {
+    color: var(--text-muted);
+    font-size: 13.5px;
+    text-align: center;
+    padding: 30px 10px;
+    border: 1px dashed var(--border);
+    border-radius: 10px;
+  }
+
+  footer.note {
+    margin-top: 26px;
+    font-size: 12px;
+    color: var(--text-muted);
+    text-align: center;
+  }
+
+  #authGate {
+    position: fixed;
+    inset: 0;
+    background: var(--bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 999;
+  }
+  #authGate[hidden] { display: none; }
+  #authGate .box {
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    align-items: center;
+  }
+  #authGate button {
+    border: none;
+    background: var(--accent);
+    color: var(--surface);
+    font-weight: 700;
+    font-size: 14px;
+    border-radius: 8px;
+    padding: 10px 20px;
+    cursor: pointer;
+  }
+  #authGate .status { font-size: 13px; color: var(--text-muted); }
+</style>
+</head>
+<body>
+
+<div id="authGate">
+  <div class="box">
+    <p>Microsoft 365にサインインしてください</p>
+    <button type="button" id="signInBtn">サインイン</button>
+    <p class="status" id="authStatus"></p>
+  </div>
+</div>
+
+<div class="page">
+  <header class="top">
+    <span class="eyebrow">BUSILABO AI Team</span>
+    <h1>できるAIチーム＋ 案件管理</h1>
+    <p class="lede">「次のアクション」には、いまのステータスで選べるボタンだけが並びます。押すとメモ欄が開き、「履歴に記録」を押した時点でステータスの移動・期限の設定・履歴への記録がまとめて行われます。「取り消し」を押せば何も起きません。期限（運用状況は次回接触予定）はアクションに応じて自動で入ります。手で書き換えても構いません。各カードには状況と、問い合わせ内容・メモ・履歴コメントの文面から判断した「次はこれ」を表示し、★の付いたボタンがおすすめの1手です。読み取った手がかりは提案の下にタグで出ます。ステータスの右にある「問い合わせ／資料DL」は流入の種別で、押すと切り替わります。資料DLは資料請求だけで本文がないため、資料を送り直すのではなく電話で要件を引き出す流れを提案します。上部の「要対応」で急ぎのカードだけ、「資料DL」で資料請求だけを絞り込めます。次にやることや所感は、カード下部の「メモ」欄にまとめて書いてください。入力欄は直接編集してください（内容は自動保存され、全員にリアルタイムで共有されます）。編集したら右上の「更新」を押すと、その内容をもとに提案を出し直します。</p>
+  </header>
+
+  <nav class="tabs">
+    <button type="button" class="tab-btn" data-tab="inquiry" data-local-active>問い合わせ管理 <span class="tab-count" data-local-count="inquiry">0</span></button>
+    <button type="button" class="tab-today-btn" data-local data-role="meetingTodayNav">📅 本日商談 <span class="tab-count" data-local-count="meetingToday">0</span></button>
+    <button type="button" class="tab-today-btn" data-local data-role="wonNav">✅ 成約 <span class="tab-count" data-local-count="won">0</span></button>
+    <button type="button" class="tab-btn" data-tab="ops">運用状況 <span class="tab-count" data-local-count="ops">0</span></button>
+    <button type="button" class="tab-btn" data-tab="task">タスク <span class="tab-count" data-local-count="task">0</span></button>
+  </nav>
+
+  <!-- 問い合わせ管理 -->
+  <section class="panel" data-panel="inquiry">
+    <div class="stats" data-local data-stats="inquiry"></div>
+    <div class="toolbar">
+      <input class="search" data-local data-search="inquiry" type="text" placeholder="会社名・担当・メールアドレス・内容で検索">
+      <button type="button" class="add-btn" data-add="inquiry">＋ 追加</button>
+    </div>
+    <div class="list" data-list="inquiry">
+    </div>
+    <p class="empty-msg" data-local data-empty="inquiry" hidden>該当する問い合わせはありません</p>
+
+    <!-- 削除した問い合わせの置き場。カードを消さずここへ移動するだけなので、data-src-id は残り続け、
+         自動反映ルーティンの「反映済みIDの一覧」に自然に含まれて再作成されない。 -->
+    <div class="trash-toggle-row">
+      <button type="button" class="action-btn" data-role="toggleTrash">🗑 削除済み <span class="tab-count" data-local-count="inquiryDeleted">0</span></button>
+    </div>
+    <div class="list trash-list" data-list="inquiryDeleted" data-trash-panel data-local-hidden></div>
+
+    <!-- カードのひな型。表示されない。＋追加ボタンと自動反映ルーティンの両方がここを正として使う -->
+    <template data-card-template="inquiry">
+      <article class="card" data-kind="inquiry">
+        <div class="card-top">
+          <button type="button" class="chip" data-role="status" data-tone="neutral">未対応</button>
+          <button type="button" class="chip chip-src" data-role="source" data-tone="neutral" title="押すと 問い合わせ ⇄ 資料DL が切り替わります">問い合わせ</button>
+          <button type="button" class="action-btn" data-role="toggleCompany">企業情報</button>
+          <artifact-local><a class="action-btn link-btn" data-role="mailLink" href="#" target="_blank" rel="noopener">メールを送る</a></artifact-local>
+          <artifact-local><span class="today-badge" data-today-badge hidden></span></artifact-local>
+          <span class="spacer"></span>
+          <artifact-local><span class="refresh-note" data-refresh-note hidden></span></artifact-local>
+          <artifact-local><button type="button" class="action-btn refresh-btn" data-role="refresh">更新</button></artifact-local>
+        </div>
+        <div class="grid">
+          <div class="field"><label>受付日</label><input type="date" data-role="receivedAt"></div>
+          <div class="field"><label>会社名</label><input type="text" data-role="company"></div>
+          <div class="field"><label>担当者名</label><input type="text" data-role="contactName"></div>
+          <div class="field"><label>メールアドレス</label><input type="text" data-role="contact"></div>
+          <div class="field"><label>期限</label><input type="date" data-role="due"></div>
+          <div class="field wide">
+            <label>企業情報</label>
+            <div class="company-panel" data-company-panel data-local-hidden>
+              <div class="company-grid">
+                <div class="field"><label>所在地</label><input type="text" data-role="address"></div>
+                <div class="field"><label>電話番号</label><input type="text" data-role="companyPhone"></div>
+                <div class="field"><label>Webサイト</label><input type="text" data-role="website" placeholder="https://"></div>
+              </div>
+              <div class="company-grid">
+                <div class="field"><label>業種</label><input type="text" data-role="industry"></div>
+              </div>
+              <div class="company-note-field">
+                <label>企業メモ</label>
+                <div class="editable" contenteditable="true" data-role="companyNote" data-placeholder="業界動向・過去のやり取りなど、この企業に関する継続的なメモ"></div>
+              </div>
+            </div>
+          </div>
+          <div class="field wide inquiry-content">
+            <label>問い合わせ内容</label>
+            <div class="editable" contenteditable="true" data-role="content" data-placeholder="問い合わせの内容を入力"></div>
+          </div>
+          <div class="field wide">
+            <label>次のアクション</label>
+            <div class="suggest" artifact-local data-suggest hidden>
+              <span class="suggest-mark" data-suggest-mark>次はこれ</span>
+              <span class="suggest-body">
+                <span class="suggest-text" data-suggest-text></span>
+                <span class="suggest-tags" data-suggest-tags></span>
+              </span>
+            </div>
+            <div class="action-buttons" artifact-local data-actions></div>
+            <div class="memo-prompt" artifact-local data-memo-prompt hidden>
+              <span class="memo-prompt-label" data-memo-label>メモ</span>
+              <div class="editable" contenteditable="true" data-memo-input data-placeholder="実施内容・次の予定などを記入（任意）"></div>
+              <div class="memo-prompt-actions">
+                <button type="button" class="action-btn" data-tone="accent" data-role="commitMemo">履歴に記録</button>
+                <button type="button" class="action-btn" data-role="cancelMemo">取り消し</button>
+                <span class="memo-prompt-hint">押すまで反映されません（Enterで記録／Shift+Enterで改行）</span>
+              </div>
+            </div>
+            <div class="meeting-panel" data-meeting-panel hidden>
+              <div class="meeting-field">
+                <label>商談日時</label>
+                <input type="datetime-local" data-role="meetingAt">
+              </div>
+              <artifact-local>
+                <div class="fetch-row">
+                  <button type="button" class="action-btn fetch-btn" data-role="fetchMeeting">⬇ Outlookの予定から日時を取り込む</button>
+                  <span class="fetch-status" data-fetch-status></span>
+                </div>
+              </artifact-local>
+              <artifact-local>
+                <div class="outlook-out">
+                  <a class="outlook-link" data-role="calendarLink" href="https://outlook.office.com/calendar/0/deeplink/compose" target="_blank" rel="noopener">↗ Outlookで新しい予定を作成する（別ウィンドウ）</a>
+                  <span class="outlook-hint">作成した予定は自動では戻りません。作成後に上の「取り込む」を押してください。</span>
+                </div>
+              </artifact-local>
+            </div>
+          </div>
+          <div class="field wide">
+            <label>契約プラン（選べるチーム）</label>
+            <div class="plan-panel" data-plan-panel hidden>
+              <div class="plan-panel-hint">「受注」を押すと表示されます。成約したチームにチェックしてください（複数可）</div>
+              <div class="plan-panel-grid">
+                <label class="check-row"><input type="checkbox" data-role="plan" value="①Instagram AIチーム"><span>①Instagram AIチーム</span></label>
+                <label class="check-row"><input type="checkbox" data-role="plan" value="②Facebook AIチーム"><span>②Facebook AIチーム</span></label>
+                <label class="check-row"><input type="checkbox" data-role="plan" value="③X AIチーム"><span>③X AIチーム</span></label>
+                <label class="check-row"><input type="checkbox" data-role="plan" value="④TikTok AIチーム"><span>④TikTok AIチーム</span></label>
+                <label class="check-row"><input type="checkbox" data-role="plan" value="⑤YouTube AIチーム"><span>⑤YouTube AIチーム</span></label>
+                <label class="check-row"><input type="checkbox" data-role="plan" value="⑥記事・コラムAIチーム"><span>⑥記事・コラムAIチーム</span></label>
+                <label class="check-row"><input type="checkbox" data-role="plan" value="⑦求人・採用AIチーム"><span>⑦求人・採用AIチーム</span></label>
+                <label class="check-row"><input type="checkbox" data-role="plan" value="⑧補助金AIチーム"><span>⑧補助金AIチーム</span></label>
+                <label class="check-row"><input type="checkbox" data-role="plan" value="⑨Shopify運営AIチーム"><span>⑨Shopify運営AIチーム</span></label>
+                <label class="check-row"><input type="checkbox" data-role="plan" value="⑩Amazonセラー運営チーム"><span>⑩Amazonセラー運営チーム</span></label>
+                <label class="check-row"><input type="checkbox" data-role="plan" value="⑪ホームページAIチーム"><span>⑪ホームページAIチーム</span></label>
+              </div>
+            </div>
+          </div>
+          <div class="field wide">
+            <label>アクション履歴</label>
+            <div class="history-list" data-history></div>
+          </div>
+          <div class="field wide">
+            <label>メモ</label>
+            <div class="editable" contenteditable="true" data-role="memo" data-placeholder="次にやること・所感などのメモ"></div>
+          </div>
+        </div>
+        <div class="danger-zone">
+          <button type="button" class="danger-btn" data-role="delete" data-confirm-label="本当に削除しますか？（もう一度クリック）">この問い合わせを削除</button>
+        </div>
+      </article>
+    </template>
+  </section>
+
+  <!-- 運用状況 -->
+  <section class="panel" data-panel="ops" data-local-hidden>
+    <div class="stats" data-local data-stats="ops"></div>
+    <div class="toolbar">
+      <input class="search" data-local data-search="ops" type="text" placeholder="顧客名・プランで検索">
+      <button type="button" class="add-btn" data-add="ops">＋ 追加</button>
+    </div>
+    <div class="list" data-list="ops"></div>
+    <p class="empty-msg" data-local data-empty="ops" hidden>該当する顧客はありません</p>
+
+    <template data-card-template="ops">
+      <article class="card" data-kind="ops">
+        <div class="card-top">
+          <button type="button" class="chip" data-role="status" data-tone="ok">順調</button>
+          <span class="spacer"></span>
+          <artifact-local><span class="refresh-note" data-refresh-note hidden></span></artifact-local>
+          <artifact-local><button type="button" class="action-btn refresh-btn" data-role="refresh">更新</button></artifact-local>
+        </div>
+        <div class="grid">
+          <div class="field"><label>顧客名</label><input type="text" data-role="customer"></div>
+          <div class="field"><label>プラン</label><input type="text" data-role="plan"></div>
+          <div class="field"><label>契約開始日</label><input type="date" data-role="startAt"></div>
+          <div class="field"><label>次回接触予定</label><input type="date" data-role="nextTouch"></div>
+          <div class="field"><label>担当</label><input type="text" data-role="owner" value="未定"></div>
+          <div class="field wide">
+            <label>次のアクション</label>
+            <div class="suggest" artifact-local data-suggest hidden>
+              <span class="suggest-mark" data-suggest-mark>次はこれ</span>
+              <span class="suggest-body">
+                <span class="suggest-text" data-suggest-text></span>
+                <span class="suggest-tags" data-suggest-tags></span>
+              </span>
+            </div>
+            <div class="action-buttons" artifact-local data-actions></div>
+            <div class="memo-prompt" artifact-local data-memo-prompt hidden>
+              <span class="memo-prompt-label" data-memo-label>メモ</span>
+              <div class="editable" contenteditable="true" data-memo-input data-placeholder="実施内容・次の予定などを記入（任意）"></div>
+              <div class="memo-prompt-actions">
+                <button type="button" class="action-btn" data-tone="accent" data-role="commitMemo">履歴に記録</button>
+                <button type="button" class="action-btn" data-role="cancelMemo">取り消し</button>
+                <span class="memo-prompt-hint">押すまで反映されません（Enterで記録／Shift+Enterで改行）</span>
+              </div>
+            </div>
+          </div>
+          <div class="field wide">
+            <label>アクション履歴</label>
+            <div class="history-list" data-history></div>
+          </div>
+          <div class="field wide">
+            <label>メモ</label>
+            <div class="editable" contenteditable="true" data-role="memo" data-placeholder="活用状況などのメモ"></div>
+          </div>
+        </div>
+        <div class="danger-zone">
+          <button type="button" class="danger-btn" data-role="delete" data-confirm-label="本当に削除しますか？（もう一度クリック）">この顧客を削除</button>
+        </div>
+      </article>
+    </template>
+  </section>
+
+  <!-- タスク -->
+  <section class="panel" data-panel="task" data-local-hidden>
+    <div class="stats" data-local data-stats="task"></div>
+    <div class="toolbar">
+      <input class="search" data-local data-search="task" type="text" placeholder="タスク内容・担当で検索">
+      <button type="button" class="add-btn" data-add="task">＋ 追加</button>
+    </div>
+    <div class="list" data-list="task"></div>
+    <p class="empty-msg" data-local data-empty="task" hidden>該当するタスクはありません</p>
+
+    <template data-card-template="task">
+      <article class="card" data-kind="task">
+        <div class="card-top">
+          <button type="button" class="chip" data-role="status" data-tone="neutral">未着手</button>
+          <button type="button" class="chip" data-role="priority" data-tone="warn">中</button>
+          <span class="spacer"></span>
+          <artifact-local><span class="refresh-note" data-refresh-note hidden></span></artifact-local>
+          <artifact-local><button type="button" class="action-btn refresh-btn" data-role="refresh">更新</button></artifact-local>
+        </div>
+        <div class="grid">
+          <div class="field"><label>担当</label><input type="text" data-role="owner" value="未定"></div>
+          <div class="field"><label>期限</label><input type="date" data-role="due"></div>
+          <div class="field"><label>関連（顧客・問い合わせ）</label><input type="text" data-role="related"></div>
+          <div class="field wide">
+            <label>タスク内容</label>
+            <div class="editable" contenteditable="true" data-role="content" data-placeholder="タスクの内容を入力"></div>
+          </div>
+          <div class="field wide">
+            <label>次のアクション</label>
+            <div class="suggest" artifact-local data-suggest hidden>
+              <span class="suggest-mark" data-suggest-mark>次はこれ</span>
+              <span class="suggest-body">
+                <span class="suggest-text" data-suggest-text></span>
+                <span class="suggest-tags" data-suggest-tags></span>
+              </span>
+            </div>
+            <div class="action-buttons" artifact-local data-actions></div>
+            <div class="memo-prompt" artifact-local data-memo-prompt hidden>
+              <span class="memo-prompt-label" data-memo-label>メモ</span>
+              <div class="editable" contenteditable="true" data-memo-input data-placeholder="実施内容・次の予定などを記入（任意）"></div>
+              <div class="memo-prompt-actions">
+                <button type="button" class="action-btn" data-tone="accent" data-role="commitMemo">履歴に記録</button>
+                <button type="button" class="action-btn" data-role="cancelMemo">取り消し</button>
+                <span class="memo-prompt-hint">押すまで反映されません（Enterで記録／Shift+Enterで改行）</span>
+              </div>
+            </div>
+          </div>
+          <div class="field wide">
+            <label>アクション履歴</label>
+            <div class="history-list" data-history></div>
+          </div>
+        </div>
+        <div class="danger-zone">
+          <button type="button" class="danger-btn" data-role="delete" data-confirm-label="本当に削除しますか？（もう一度クリック）">このタスクを削除</button>
+        </div>
+      </article>
+    </template>
+  </section>
+
+  <footer class="note">できるAIチーム＋ 販売・運用管理ツール — BUSILABO INC.</footer>
+</div>
+
+<script>
+(function () {
+  var CYCLES = {
+    inquiry: {
+      status: [
+        { label: "未対応", tone: "neutral" },
+        { label: "対応中", tone: "warn" },
+        { label: "商談中", tone: "accent" },
+        { label: "成約", tone: "ok" },
+        { label: "失注", tone: "crit" }
+      ],
+      // 流入の種別。資料DLは「本文のない資料請求」で対応の型が変わるため、提案と絞り込みを分ける
+      source: [
+        { label: "問い合わせ", tone: "neutral" },
+        { label: "資料DL", tone: "accent" }
+      ]
+    },
+    ops: {
+      status: [
+        { label: "順調", tone: "ok" },
+        { label: "要フォロー", tone: "warn" },
+        { label: "停滞", tone: "crit" }
+      ]
+    },
+    task: {
+      status: [
+        { label: "未着手", tone: "neutral" },
+        { label: "進行中", tone: "warn" },
+        { label: "完了", tone: "ok" }
+      ],
+      priority: [
+        { label: "低", tone: "neutral" },
+        { label: "中", tone: "warn" },
+        { label: "高", tone: "crit" }
+      ]
+    }
+  };
+
+  // カードのひな型は本文中の <template data-card-template="..."> を正とする。
+  // ＋追加ボタンも自動反映ルーティンも同じ場所を見るので、構造の二重管理をしない。
+  function buildCard(kind) {
+    var tpl = document.querySelector('template[data-card-template="' + kind + '"]');
+    var src = tpl && tpl.content && tpl.content.firstElementChild;
+    if (!src) return null;
+    return src.cloneNode(true);
+  }
+
+  // 問い合わせカードは削除しても消さず「削除済み」置き場へ移すだけにする。
+  // data-src-id を持ったままDOMに残るので、自動反映ルーティンの反映済みID一覧に含まれ続け、
+  // 元データ（Forms/メール等）が残っていても作り直されない。
+  function updateTrashCount() {
+    var trashList = document.querySelector('[data-list="inquiryDeleted"]');
+    var countEl = document.querySelector('[data-local-count="inquiryDeleted"]');
+    if (countEl) countEl.textContent = trashList ? trashList.querySelectorAll('.card').length : 0;
+  }
+
+  function moveToTrash(card) {
+    var trashList = document.querySelector('[data-list="inquiryDeleted"]');
+    if (!trashList) { card.remove(); return; }
+    card.setAttribute('data-deleted', 'true');
+    var del = card.querySelector('[data-role="delete"]');
+    if (del) {
+      del.removeAttribute('data-local-armed');
+      if (del._armTimer) clearTimeout(del._armTimer);
+      delete del.dataset.localIdleLabel;
+      del.setAttribute('data-role', 'restoreCard');
+      del.textContent = '元に戻す';
+    }
+    trashList.insertBefore(card, trashList.firstChild);
+    updateTrashCount();
+  }
+
+  function restoreFromTrash(card) {
+    var list = document.querySelector('[data-list="inquiry"]');
+    if (!list) return;
+    card.removeAttribute('data-deleted');
+    var btn = card.querySelector('[data-role="restoreCard"]');
+    if (btn) {
+      btn.setAttribute('data-role', 'delete');
+      btn.textContent = btn.getAttribute('data-idle-label') || 'この問い合わせを削除';
+    }
+    list.insertBefore(card, list.firstChild);
+    updateTrashCount();
+  }
+
+  // 現ステータスごとに出し分ける「次のアクション」
+  // due: 押した日から何日後を次の期限（運用状況タブは次回接触予定）にするか。
+  //      "clear" は期限をなくす。土日に当たったら翌月曜にずらす。
+  var ACTIONS = {
+    inquiry: {
+      "未対応": [
+        { label: "初回返信メール送付", goto: "対応中", tone: "warn", due: 3 },
+        { label: "電話ヒアリング", goto: "対応中", tone: "warn", due: 3 },
+        { label: "対象外", goto: "失注", tone: "crit", due: "clear" }
+      ],
+      "対応中": [
+        // 資料DLは資料送付から始まらないので、対応中でも電話ヒアリングを選べるようにしている
+        { label: "電話ヒアリング", goto: "対応中", tone: "warn", due: 3 },
+        { label: "STEP1資料を送付", goto: "対応中", tone: "warn", due: 5 },
+        { label: "見積提示", goto: "対応中", tone: "warn", due: 7 },
+        { label: "商談設定", goto: "商談中", tone: "accent", reveal: "meeting", due: 3 },
+        { label: "失注", goto: "失注", tone: "crit", due: "clear" }
+      ],
+      "商談中": [
+        { label: "商談実施・提案送付", goto: "商談中", tone: "accent", due: 7 },
+        { label: "再商談設定", goto: "商談中", tone: "accent", reveal: "meeting", due: 3 },
+        { label: "受注", goto: "成約", tone: "ok", reveal: "plan", due: 3 },
+        { label: "失注", goto: "失注", tone: "crit", due: "clear" }
+      ],
+      "成約": [
+        { label: "契約書送付", goto: "成約", tone: "ok", due: 5 },
+        { label: "キックオフ日程設定", goto: "成約", tone: "ok", reveal: "meeting", due: 3 },
+        { label: "運用状況タブへ登録", goto: "成約", tone: "accent", special: "toOps", due: "clear" }
+      ],
+      "失注": [
+        { label: "再アプローチ予定を登録", goto: "未対応", tone: "neutral", due: 90 },
+        { label: "お礼メール送付", goto: "失注", tone: "neutral", due: "clear" }
+      ]
+    },
+    ops: {
+      "順調": [
+        { label: "Day15フォロー実施", goto: "順調", tone: "ok", due: 15 },
+        { label: "Day30活用度診断を送付", goto: "順調", tone: "ok", due: 30 },
+        { label: "アップセル提案", goto: "要フォロー", tone: "warn", due: 7 }
+      ],
+      "要フォロー": [
+        { label: "フォロー連絡", goto: "順調", tone: "ok", due: 14 },
+        { label: "活用度ヒアリング", goto: "要フォロー", tone: "warn", due: 7 },
+        { label: "個別サポート設定", goto: "要フォロー", tone: "warn", due: 7 },
+        { label: "停滞として記録", goto: "停滞", tone: "crit", due: 3 }
+      ],
+      "停滞": [
+        { label: "緊急フォロー面談を設定", goto: "要フォロー", tone: "warn", due: 3 },
+        { label: "解約リスクとして相談", goto: "停滞", tone: "crit", due: 2 }
+      ]
+    },
+    task: {
+      "未着手": [
+        { label: "着手する", goto: "進行中", tone: "warn", due: 3 },
+        { label: "期限を1週間延ばす", goto: "未着手", tone: "neutral", special: "postpone" }
+      ],
+      "進行中": [
+        { label: "完了にする", goto: "完了", tone: "ok", due: "clear" },
+        { label: "保留に戻す", goto: "未着手", tone: "neutral", due: 7 }
+      ],
+      "完了": [
+        { label: "再オープン", goto: "進行中", tone: "warn", due: 3 }
+      ]
+    }
+  };
+
+  var STAT_DEFS = {
+    inquiry: [
+      { key: "all", label: "全件", tone: "" },
+      { key: "urgent", label: "要対応", tone: "crit" },
+      { key: "未対応", label: "未対応", tone: "neutral" },
+      { key: "対応中", label: "対応中", tone: "warn" },
+      { key: "download", label: "資料DL", tone: "accent" },
+      { key: "商談中", label: "商談中", tone: "accent" },
+      { key: "成約", label: "成約", tone: "ok" },
+      { key: "overdue", label: "期限超過", tone: "crit" }
+    ],
+    ops: [
+      { key: "all", label: "全件", tone: "" },
+      { key: "urgent", label: "要対応", tone: "crit" },
+      { key: "順調", label: "順調", tone: "ok" },
+      { key: "要フォロー", label: "要フォロー", tone: "warn" },
+      { key: "停滞", label: "停滞", tone: "crit" }
+    ],
+    task: [
+      { key: "all", label: "全件", tone: "" },
+      { key: "urgent", label: "要対応", tone: "crit" },
+      { key: "未着手", label: "未着手", tone: "neutral" },
+      { key: "進行中", label: "進行中", tone: "warn" },
+      { key: "overdue", label: "期限超過", tone: "crit" }
+    ]
+  };
+
+  var filters = { inquiry: null, ops: null, task: null };
+  var todayStr = new Date().toISOString().slice(0, 10);
+
+  function cycleChip(btn, kind, role) {
+    var states = CYCLES[kind][role];
+    var current = btn.textContent.trim();
+    var idx = 0;
+    for (var i = 0; i < states.length; i++) { if (states[i].label === current) { idx = i; break; } }
+    var next = states[(idx + 1) % states.length];
+    btn.textContent = next.label;
+    btn.setAttribute("data-tone", next.tone);
+  }
+
+  function toneForStatus(kind, label) {
+    var states = (CYCLES[kind] && CYCLES[kind].status) || [];
+    for (var i = 0; i < states.length; i++) { if (states[i].label === label) return states[i].tone; }
+    return "neutral";
+  }
+
+  function statusOf(card) {
+    var btn = card.querySelector('[data-role="status"]');
+    return btn ? btn.textContent.trim() : "";
+  }
+
+  // 資料ダウンロード経由かどうか。カード上の種別チップだけを見る（メモの文面は見ない）
+  function isDownloadLead(card) {
+    var btn = card.querySelector('[data-role="source"]');
+    return !!btn && btn.textContent.trim() === "資料DL";
+  }
+
+  // 次のアクションは <artifact-local> 島の中なので、各自の画面でだけ組み立てられる
+  function renderActions(card, kind, suggestion) {
+    var wrap = card.querySelector('[data-actions]');
+    if (!wrap) return;
+    var defs = (ACTIONS[kind] && ACTIONS[kind][statusOf(card)]) || [];
+    var registered = card.getAttribute('data-ops-registered') === 'true';
+    var recommended = (suggestion && suggestion.label) || null;
+    var html = defs.map(function (a) {
+      if (a.special === "toOps" && registered) {
+        return '<span class="action-done-note">運用状況タブに登録済み</span>';
+      }
+      return '<button type="button" class="action-btn" data-tone="' + (a.tone || "") + '"' +
+        (a.label === recommended ? ' data-recommended' : '') +
+        ' data-goto="' + a.goto + '"' +
+        (a.reveal ? ' data-reveal="' + a.reveal + '"' : '') +
+        (a.special ? ' data-special="' + a.special + '"' : '') +
+        (a.due !== undefined ? ' data-due="' + a.due + '"' : '') +
+        '>' + a.label + '</button>';
+    }).join('');
+    if (wrap.innerHTML !== html) wrap.innerHTML = html;
+  }
+
+  function pad2(n) { return (n < 10 ? "0" : "") + n; }
+
+  function fmtDate(d) {
+    return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate());
+  }
+
+  // 土日に当たった期限は翌月曜にずらす
+  function shiftToWeekday(d) {
+    var g = d.getDay();
+    if (g === 6) d.setDate(d.getDate() + 2);
+    else if (g === 0) d.setDate(d.getDate() + 1);
+    return d;
+  }
+
+  // 期限欄は問い合わせ・タスクが「期限」、運用状況は「次回接触予定」
+  function dueFieldOf(card, kind) {
+    return card.querySelector('input[data-role="' + (kind === 'ops' ? 'nextTouch' : 'due') + '"]');
+  }
+
+  function dueFieldLabel(kind) {
+    return kind === 'ops' ? "次回接触" : "期限";
+  }
+
+  function postponeDue(card, kind, days) {
+    var due = dueFieldOf(card, kind);
+    if (!due) return "";
+    var base = due.value ? new Date(due.value + "T00:00:00") : new Date();
+    if (isNaN(base.getTime())) base = new Date();
+    base.setDate(base.getDate() + days);
+    shiftToWeekday(base);
+    due.value = fmtDate(base);
+    return due.value;
+  }
+
+  // アクションに紐づく期限を自動セットする。戻り値は履歴に出す表示用の文字列。
+  function applyAutoDue(card, kind, spec) {
+    if (spec === null || spec === undefined || spec === "") return null;
+    var input = dueFieldOf(card, kind);
+    if (!input) return null;
+    if (spec === "clear") {
+      if (!input.value) return null;
+      input.value = "";
+      return "";
+    }
+    var days = parseInt(spec, 10);
+    if (isNaN(days)) return null;
+    var d = new Date(todayStr + "T00:00:00");
+    if (isNaN(d.getTime())) d = new Date();
+    d.setDate(d.getDate() + days);
+    shiftToWeekday(d);
+    input.value = fmtDate(d);
+    return input.value;
+  }
+
+  function dayDiffFromToday(dateStr) {
+    var a = Date.parse(dateStr + "T00:00:00");
+    var b = Date.parse(todayStr + "T00:00:00");
+    if (isNaN(a) || isNaN(b)) return null;
+    return Math.round((a - b) / 86400000);
+  }
+
+  function didAction(card, label) {
+    var found = false;
+    card.querySelectorAll('.history-action').forEach(function (el) {
+      if (el.textContent.trim() === label) found = true;
+    });
+    return found;
+  }
+
+  // 問い合わせ内容・メモ・履歴メモの文面から読み取る手がかり。
+  // 生成AIによる読解ではなく、語句の一致で判定している。
+  var TEXT_SIGNALS = [
+    { key: "price", tag: "料金の質問", words: ["料金", "価格", "費用", "いくら", "見積", "コスト", "値段", "おいくら"] },
+    { key: "period", tag: "導入期間の質問", words: ["導入期間", "期間", "納期", "どのくらいかかる", "いつから", "いつまでに使える"] },
+    { key: "urgent", tag: "急ぎ", words: ["急ぎ", "至急", "早急", "すぐに", "今月中", "来週まで", "スピード重視", "早めに"] },
+    { key: "compare", tag: "他社比較中", words: ["他社", "比較", "相見積", "競合", "他のサービス", "他社さん"] },
+    { key: "approval", tag: "社内決裁あり", words: ["稟議", "決裁", "上長", "持ち帰", "社内で検討", "役員", "上司", "会議にかけ"] },
+    { key: "noanswer", tag: "連絡がつかない", words: ["不在", "折り返し", "つながら", "繋がら", "留守", "電話に出", "returncall"] },
+    { key: "waiting", tag: "先方の返答待ち", words: ["返信待ち", "返答待ち", "連絡待ち", "保留", "様子見", "反応がな", "音沙汰"] },
+    { key: "budgetng", tag: "予算面の懸念", words: ["予算が", "予算的", "見送り", "今回は見", "コストが高", "高いと", "厳しい"] },
+    { key: "trouble", tag: "活用につまずき", words: ["使えて", "使いこなせ", "わからな", "分からな", "止まって", "エラー", "うまくいか", "難しい", "困って"] },
+    { key: "satisfied", tag: "好反応", words: ["助かって", "便利", "効果が", "成果が", "うまくいって", "満足", "good", "ありがた"] },
+    { key: "blocked", tag: "他者待ち", words: ["待ち", "確認中", "依頼中", "先方の", "返事がきたら"] }
+  ];
+
+  function cardFreeText(card) {
+    var parts = [];
+    ["content", "companyNote", "memo"].forEach(function (role) {
+      var el = card.querySelector('[data-role="' + role + '"]');
+      if (el) parts.push(el.textContent);
+    });
+    card.querySelectorAll('.history-memo').forEach(function (el) { parts.push(el.textContent); });
+    return parts.join(" ");
+  }
+
+  function detectSignals(text) {
+    var found = {};
+    if (!text) return found;
+    TEXT_SIGNALS.forEach(function (sig) {
+      for (var i = 0; i < sig.words.length; i++) {
+        if (text.indexOf(sig.words[i]) !== -1) { found[sig.key] = sig.tag; return; }
+      }
+    });
+    return found;
+  }
+
+  function hasAction(kind, status, label) {
+    var defs = (ACTIONS[kind] && ACTIONS[kind][status]) || [];
+    for (var i = 0; i < defs.length; i++) { if (defs[i].label === label) return true; }
+    return false;
+  }
+
+  function suggestFor(card, kind) {
+    var s = baseSuggest(card, kind);
+    if (!s) return null;
+    return applyTextSignals(card, kind, s);
+  }
+
+  // 文面から読み取った手がかりで、提案そのものと緊急度を上書きする
+  function applyTextSignals(card, kind, s) {
+    var status = statusOf(card);
+    var sig = detectSignals(cardFreeText(card));
+    var notes = [];
+    var escalate = function () { if (s.tone !== 'crit') s.tone = 'crit'; };
+    var retarget = function (label) { if (hasAction(kind, status, label)) s.label = label; };
+
+    if (kind === 'inquiry') {
+      if (sig.price && !didAction(card, "見積提示")) {
+        if (didAction(card, "STEP1資料を送付") && hasAction(kind, status, "見積提示")) {
+          retarget("見積提示");
+          notes.push("料金を聞かれています。金額の提示を優先しましょう。");
+        } else {
+          notes.push("料金を聞かれています。資料に価格表を添えましょう。");
+        }
+      }
+      if (sig.period && !didAction(card, "STEP1資料を送付")) {
+        notes.push("導入期間の質問があります。工程が分かる資料を添えましょう。");
+      }
+      if (sig.approval) {
+        notes.push("社内決裁が絡みます。稟議に通る資料と見積を揃えましょう。");
+      }
+      if (sig.compare) {
+        escalate();
+        notes.push("他社と比較検討中です。スピードで差をつけましょう。");
+      }
+      if (sig.urgent) {
+        escalate();
+        notes.push("急ぎの意向が書かれています。");
+      }
+      if (sig.noanswer) {
+        if (hasAction(kind, status, "電話ヒアリング")) retarget("電話ヒアリング");
+        notes.push("連絡がついていません。時間帯を変えて再度接触を。");
+      }
+      if (sig.waiting && (status === "対応中" || status === "商談中")) {
+        notes.push("先方の返答待ちです。期限を過ぎたら催促しましょう。");
+      }
+      if (sig.budgetng) {
+        notes.push("予算面の懸念があります。条件やプランの見直しを検討しましょう。");
+      }
+    }
+
+    if (kind === 'ops') {
+      if (sig.trouble) {
+        escalate();
+        if (status === "順調") {
+          s.label = null;
+          notes.push("活用に詰まりの記述があります。ステータスを『要フォロー』に切り替えて対応しましょう。");
+        } else {
+          retarget("活用度ヒアリング");
+          notes.push("活用に詰まりの記述があります。");
+        }
+      }
+      if (sig.satisfied && status === "順調" && !sig.trouble && hasAction(kind, status, "アップセル提案")) {
+        retarget("アップセル提案");
+        if (s.tone !== 'crit') s.tone = 'accent';
+        notes.push("好意的な反応が出ています。次の提案を出す好機です。");
+      }
+    }
+
+    if (kind === 'task') {
+      if (sig.blocked) {
+        notes.push("他者待ちの記述があります。自分で進められる部分がないか確認を。");
+      }
+      if (sig.trouble) {
+        notes.push("つまずきが記録されています。担当変更や分割を検討しましょう。");
+      }
+    }
+
+    if (notes.length) s.reason = s.reason + " " + notes.slice(0, 2).join(" ");
+    s.tags = Object.keys(sig).map(function (k) { return sig[k]; });
+    return s;
+  }
+
+  // カードの状態から「次にやるべき1手」を判定する。
+  // label は現ステータスのボタン名。label が null なら「いまは動かなくてよい」。
+  function baseSuggest(card, kind) {
+    var status = statusOf(card);
+    var dueInput = dueFieldOf(card, kind);
+    var dueIn = (dueInput && dueInput.value) ? dayDiffFromToday(dueInput.value) : null;
+    var overdue = dueIn !== null && dueIn < 0;
+    var dueWord = dueIn === null ? ""
+      : dueIn < 0 ? ("期限を" + (-dueIn) + "日超過")
+        : dueIn === 0 ? "本日が期限"
+          : ("期限まで" + dueIn + "日");
+    var lead = overdue ? (dueWord + "。") : "";
+    var did = function (l) { return didAction(card, l); };
+
+    if (kind === 'inquiry') {
+      var received = card.querySelector('[data-role="receivedAt"]');
+      var age = (received && received.value) ? -dayDiffFromToday(received.value) : null;
+      var meeting = card.querySelector('[data-role="meetingAt"]');
+      var meetingVal = meeting ? meeting.value : "";
+      var meetingDay = meetingVal ? dayDiffFromToday(meetingVal.slice(0, 10)) : null;
+
+      // 資料DLは「本文のない資料請求」。質問に答える対応ではなく、こちらから接触して要件を引き出す対応になる
+      var isDL = isDownloadLead(card);
+
+      if (status === "未対応") {
+        if (isDL) {
+          if (age !== null && age >= 3) {
+            return { label: "電話ヒアリング", tone: "crit", reason: "資料ダウンロードから" + age + "日たっています。関心が冷めないうちに電話で接触しましょう。" };
+          }
+          return { label: "初回返信メール送付", tone: "warn", reason: "資料請求のみで問い合わせ本文はありません。お礼と『ご不明点はありませんか』の一報を送り、反応を見ましょう。" };
+        }
+        if (age !== null && age >= 2) {
+          return { label: "初回返信メール送付", tone: "crit", reason: "受付から" + age + "日たっています。まず一次返信を返しましょう。" };
+        }
+        return { label: "初回返信メール送付", tone: "warn", reason: "初動の速さが受注率を左右します。当日中の一次返信を。" };
+      }
+      if (status === "対応中") {
+        // 資料DLは先方が自分で資料を取得済み。同じものを送り直しても前に進まない
+        if (isDL && !did("STEP1資料を送付")) {
+          if (!did("電話ヒアリング")) {
+            return { label: "電話ヒアリング", tone: overdue ? "crit" : "warn", reason: lead + "資料は先方がダウンロード済みです。改めて送るより、電話で検討状況と課題を聞き出しましょう。" };
+          }
+          return { label: "商談設定", tone: overdue ? "crit" : "warn", reason: lead + "資料は先方が取得済みで、状況も聞けています。商談の場を作りましょう。" };
+        }
+        if (!did("STEP1資料を送付")) {
+          return { label: "STEP1資料を送付", tone: overdue ? "crit" : "warn", reason: lead + "まず商品資料を届けて、検討材料を渡しましょう。" };
+        }
+        if (!did("見積提示")) {
+          return { label: "見積提示", tone: overdue ? "crit" : "warn", reason: lead + "資料は送付済みです。金額を提示して判断を促しましょう。" };
+        }
+        return { label: "商談設定", tone: overdue ? "crit" : "warn", reason: lead + "資料・見積とも提示済みです。商談に進めましょう。" };
+      }
+      if (status === "商談中") {
+        if (!meetingVal) {
+          return { label: "再商談設定", tone: "crit", reason: "商談日時が未設定です。日程を確定してください。" };
+        }
+        if (meetingDay === 0) {
+          return { label: "商談実施・提案送付", tone: "crit", reason: "本日が商談日です。終了後に提案を送って記録しましょう。" };
+        }
+        if (meetingDay > 0) {
+          return { label: null, tone: "ok", reason: meetingDay + "日後に商談予定です。いまは準備に専念してください。" };
+        }
+        if (!did("商談実施・提案送付")) {
+          return { label: "商談実施・提案送付", tone: "crit", reason: "商談日を過ぎています。実施結果と提案を記録しましょう。" };
+        }
+        return { label: "再商談設定", tone: overdue ? "crit" : "warn", reason: lead + "提案後の返答待ちです。再接触して意思決定を促しましょう。" };
+      }
+      if (status === "成約") {
+        if (!did("契約書送付")) {
+          return { label: "契約書送付", tone: "warn", reason: "受注が決まりました。まず契約書を送付してください。" };
+        }
+        if (!did("キックオフ日程設定")) {
+          return { label: "キックオフ日程設定", tone: "warn", reason: "契約書は送付済みです。キックオフ日を押さえましょう。" };
+        }
+        if (card.getAttribute('data-ops-registered') !== 'true') {
+          return { label: "運用状況タブへ登録", tone: "accent", reason: "立ち上げまで完了です。運用状況タブへ移して継続管理に切り替えましょう。" };
+        }
+        return { label: null, tone: "ok", reason: "運用状況タブへ引き継ぎ済みです。この案件での対応は完了しています。" };
+      }
+      if (status === "失注") {
+        if (!did("お礼メール送付")) {
+          return { label: "お礼メール送付", tone: "neutral", reason: "検討のお礼を伝えておくと、次の機会に戻ってきてもらいやすくなります。" };
+        }
+        if (!did("再アプローチ予定を登録")) {
+          return { label: "再アプローチ予定を登録", tone: "neutral", reason: "3か月後に再接触する予定を入れておきましょう。" };
+        }
+        return { label: null, tone: "ok", reason: "対応は完了しています。" };
+      }
+    }
+
+    if (kind === 'ops') {
+      var start = card.querySelector('[data-role="startAt"]');
+      var day = (start && start.value) ? -dayDiffFromToday(start.value) : null;
+      var dayText = day !== null ? ("契約から" + day + "日目。") : "";
+      if (status === "停滞") {
+        return { label: "緊急フォロー面談を設定", tone: "crit", reason: dayText + "停滞しています。面談で原因を直接確認しましょう。" };
+      }
+      if (status === "要フォロー") {
+        if (overdue) {
+          return { label: "フォロー連絡", tone: "crit", reason: dueWord + "。接触予定を過ぎています。すぐ連絡を。" };
+        }
+        if (!did("活用度ヒアリング")) {
+          return { label: "活用度ヒアリング", tone: "warn", reason: dayText + "どこで止まっているのかを聞き取りましょう。" };
+        }
+        return { label: "個別サポート設定", tone: "warn", reason: dayText + "課題は把握済みです。個別サポートで詰まりを解消しましょう。" };
+      }
+      if (status === "順調") {
+        if (day !== null && day >= 30 && !did("Day30活用度診断を送付")) {
+          return { label: "Day30活用度診断を送付", tone: "warn", reason: dayText + "活用度診断の時期です。" };
+        }
+        if (day !== null && day >= 15 && !did("Day15フォロー実施")) {
+          return { label: "Day15フォロー実施", tone: "warn", reason: dayText + "定着確認のフォロー時期です。" };
+        }
+        if (day !== null && day >= 45 && did("Day30活用度診断を送付")) {
+          return { label: "アップセル提案", tone: "accent", reason: dayText + "定着しています。次の提案を出す好機です。" };
+        }
+        if (overdue) {
+          return { label: "アップセル提案", tone: "warn", reason: dueWord + "。接触予定を過ぎています。近況確認を兼ねて提案を。" };
+        }
+        return { label: null, tone: "ok", reason: dayText + "予定どおりです。次回接触日まで対応不要です。" };
+      }
+    }
+
+    if (kind === 'task') {
+      if (status === "完了") {
+        return { label: null, tone: "ok", reason: "完了済みです。" };
+      }
+      if (status === "未着手") {
+        if (dueIn === null) {
+          return { label: null, tone: "warn", reason: "期限が未設定です。まず期限を決めましょう。" };
+        }
+        if (overdue) {
+          return { label: "着手する", tone: "crit", reason: dueWord + "。すぐ着手するか、期限を延ばして現実的な計画に直しましょう。" };
+        }
+        if (dueIn <= 2) {
+          return { label: "着手する", tone: "warn", reason: dueWord + "です。着手しましょう。" };
+        }
+        return { label: null, tone: "ok", reason: dueWord + "あります。急ぎではありません。" };
+      }
+      if (status === "進行中") {
+        if (overdue) {
+          return { label: "完了にする", tone: "crit", reason: dueWord + "。終わらないなら保留に戻して期限を引き直しましょう。" };
+        }
+        return { label: null, tone: "ok", reason: (dueIn === null ? "" : dueWord + "。") + "進行中です。" };
+      }
+    }
+
+    return null;
+  }
+
+  function suggestTextOf(card) {
+    var el = card.querySelector('[data-suggest-text]');
+    return el ? el.textContent : "";
+  }
+
+  // 「更新しました」の一時表示。<artifact-local> の中なので自分の画面だけに出る。
+  function flashRefreshNote(card, changed) {
+    var note = card.querySelector('[data-refresh-note]');
+    if (!note) return;
+    note.textContent = changed ? "更新しました（提案を見直しました）" : "更新しました";
+    note.hidden = false;
+    if (note._timer) clearTimeout(note._timer);
+    note._timer = setTimeout(function () { note.hidden = true; }, 3000);
+  }
+
+  function renderSuggestion(card, s) {
+    var box = card.querySelector('[data-suggest]');
+    if (!box) return;
+    if (!s) { box.hidden = true; return; }
+    box.hidden = false;
+    box.setAttribute('data-tone', s.tone || "");
+    var mark = box.querySelector('[data-suggest-mark]');
+    var text = box.querySelector('[data-suggest-text]');
+    if (mark) mark.textContent = s.label ? "次はこれ" : "状況";
+    if (text) text.textContent = (s.label ? "「" + s.label + "」— " : "") + s.reason;
+    var tagsBox = box.querySelector('[data-suggest-tags]');
+    if (tagsBox) {
+      var tags = s.tags || [];
+      var html = tags.map(function (t) {
+        return '<span class="suggest-tag"></span>';
+      }).join('');
+      if (tagsBox.childElementCount !== tags.length) tagsBox.innerHTML = html;
+      var nodes = tagsBox.querySelectorAll('.suggest-tag');
+      for (var i = 0; i < nodes.length; i++) nodes[i].textContent = tags[i];
+    }
+  }
+
+  // 商談日時を入れたら、その日を期限に合わせる
+  function syncDueToMeeting(card) {
+    var meeting = card.querySelector('[data-role="meetingAt"]');
+    if (!meeting || !meeting.value) return;
+    var due = dueFieldOf(card, card.getAttribute('data-kind'));
+    if (!due) return;
+    var day = meeting.value.slice(0, 10);
+    if (due.value !== day) due.value = day;
+  }
+
+  function registerToOps(card) {
+    if (card.getAttribute('data-ops-registered') === 'true') return;
+    var list = document.querySelector('[data-list="ops"]');
+    if (!list) return;
+    var read = function (role) {
+      var el = card.querySelector('[data-role="' + role + '"]');
+      if (!el) return "";
+      return (el.value !== undefined ? el.value : el.textContent).trim();
+    };
+    var opsCard = buildCard('ops');
+    if (!opsCard) return;
+    var write = function (role, val) {
+      var el = opsCard.querySelector('[data-role="' + role + '"]');
+      if (el && val) el.value = val;
+    };
+    write('customer', read('company'));
+    write('owner', read('owner'));
+    write('startAt', todayStr);
+    var firstTouch = new Date(todayStr + "T00:00:00");
+    if (!isNaN(firstTouch.getTime())) {
+      firstTouch.setDate(firstTouch.getDate() + 7);
+      write('nextTouch', fmtDate(shiftToWeekday(firstTouch)));
+    }
+    list.appendChild(opsCard);
+    card.setAttribute('data-ops-registered', 'true');
+  }
+
+  var EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  function updateContactLinks(card) {
+    if (card.getAttribute('data-kind') !== 'inquiry') return;
+    var contactInput = card.querySelector('[data-role="contact"]');
+    var companyInput = card.querySelector('[data-role="company"]');
+    var ownerInput = card.querySelector('[data-role="owner"]');
+    var email = contactInput ? contactInput.value.trim() : "";
+    var isEmail = EMAIL_RE.test(email);
+
+    var mailLink = card.querySelector('[data-role="mailLink"]');
+    if (mailLink) {
+      if (isEmail) {
+        var owner = ownerInput ? ownerInput.value.trim() : "";
+        var body = "お問い合わせいただきありがとうございます。\n\n株式会社ビジラボ" + (owner && owner !== "未定" ? "\n" + owner : "");
+        mailLink.href = "https://outlook.office.com/mail/deeplink/compose?to=" + encodeURIComponent(email) +
+          "&subject=" + encodeURIComponent("できるAIチーム＋ お問い合わせについて") +
+          "&body=" + encodeURIComponent(body);
+        mailLink.removeAttribute("aria-disabled");
+      } else {
+        mailLink.href = "#";
+        mailLink.setAttribute("aria-disabled", "true");
+      }
+    }
+
+    var calLink = card.querySelector('[data-role="calendarLink"]');
+    if (calLink) {
+      var params = [];
+      var company = companyInput ? companyInput.value.trim() : "";
+      params.push("subject=" + encodeURIComponent("商談: " + company));
+      var meetingInput = card.querySelector('[data-role="meetingAt"]');
+      var startVal = meetingInput ? meetingInput.value : "";
+      if (startVal) {
+        var start = new Date(startVal);
+        if (!isNaN(start.getTime())) {
+          var end = new Date(start.getTime() + 30 * 60000);
+          params.push("startdt=" + encodeURIComponent(start.toISOString()));
+          params.push("enddt=" + encodeURIComponent(end.toISOString()));
+        }
+      }
+      if (isEmail) params.push("to=" + encodeURIComponent(email));
+      params.push("optionalattendees=" + encodeURIComponent("busilabo@busilabo.com"));
+      calLink.href = "https://outlook.office.com/calendar/0/deeplink/compose?" + params.join("&");
+    }
+  }
+
+  var MCP_SERVER_NAME = "Microsoft 365";
+  var mcpNamespacePromise = null;
+  var artifactNamespacePromise = null;
+
+  function getMcpNamespace() {
+    if (!mcpNamespacePromise) {
+      mcpNamespacePromise = (window.claude && window.claude.use) ? window.claude.use("mcp") : Promise.resolve(null);
+    }
+    return mcpNamespacePromise;
+  }
+
+  function getArtifactNamespace() {
+    if (!artifactNamespacePromise) {
+      artifactNamespacePromise = (window.claude && window.claude.use) ? window.claude.use("artifact") : Promise.resolve(null);
+    }
+    return artifactNamespacePromise;
+  }
+
+  // outlook_calendar_search は予定を1件ずつ連結したJSONで返してくる。
+  // 全体をJSON.parseできないことがあるので、トップレベルの { } を拾って個別に読む。
+  function parseConcatJson(text) {
+    var out = [];
+    try { out.push(JSON.parse(text)); return out; } catch (e) { /* 連結形式として読み直す */ }
+    var depth = 0, start = -1, inStr = false, esc = false;
+    for (var i = 0; i < text.length; i++) {
+      var ch = text.charAt(i);
+      if (inStr) {
+        if (esc) esc = false;
+        else if (ch === '\\') esc = true;
+        else if (ch === '"') inStr = false;
+        continue;
+      }
+      if (ch === '"') { inStr = true; continue; }
+      if (ch === '{') { if (depth === 0) start = i; depth++; continue; }
+      if (ch === '}') {
+        depth--;
+        if (depth === 0 && start !== -1) {
+          try { out.push(JSON.parse(text.slice(start, i + 1))); } catch (e2) { /* 壊れた断片は捨てる */ }
+          start = -1;
+        }
+      }
+    }
+    return out;
+  }
+
+  // payload・content どちらの形で返ってきても予定を取り出せるようにする
+  function extractEvents(result) {
+    var out = [];
+    var seen = {};
+    var push = function (v) {
+      if (!v || typeof v !== 'object') return;
+      if (Array.isArray(v)) { v.forEach(push); return; }
+      if (Array.isArray(v.events)) { v.events.forEach(push); return; }
+      if (!v.start || !v.start.dateTime) return;   // ページ情報の行などは除外
+      if (v.isCancelled) return;
+      var key = v.id || (v.subject + v.start.dateTime);
+      if (seen[key]) return;
+      seen[key] = true;
+      out.push(v);
+    };
+    var payload = result && result.payload;
+    if (payload && typeof payload === 'object') push(payload);
+    var texts = [];
+    if (typeof payload === 'string') texts.push(payload);
+    var blocks = (result && result.content) || [];
+    for (var i = 0; i < blocks.length; i++) {
+      if (blocks[i] && blocks[i].type === 'text' && typeof blocks[i].text === 'string') texts.push(blocks[i].text);
+    }
+    texts.forEach(function (t) { parseConcatJson(t).forEach(push); });
+    out.sort(function (a, b) { return a.start.dateTime < b.start.dateTime ? -1 : 1; });
+    return out;
+  }
+
+  function fetchMeetingFromOutlook(card, btn) {
+    var statusEl = card.querySelector('[data-fetch-status]');
+    var meetingInput = card.querySelector('[data-role="meetingAt"]');
+    var companyInput = card.querySelector('[data-role="company"]');
+    var contactInput = card.querySelector('[data-role="contact"]');
+    if (!meetingInput) return;
+    var company = companyInput ? companyInput.value.trim() : "";
+    var email = contactInput ? contactInput.value.trim() : "";
+    var byEmail = EMAIL_RE.test(email);
+    if (!byEmail && !company) {
+      if (statusEl) statusEl.textContent = "会社名かメールアドレスを入力してから実行してください";
+      return;
+    }
+    if (statusEl) statusEl.textContent = byEmail ? "検索中…（" + email + " 宛の予定）" : "検索中…";
+    btn.disabled = true;
+
+    getMcpNamespace().then(function (mcp) {
+      if (!mcp) { throw { code: "not_granted" }; }
+      // メールアドレスがあれば出席者で絞り込むのが最も確実。なければ件名の全文検索。
+      var input = {
+        query: byEmail ? "*" : company,
+        afterDateTime: "today",
+        order: "oldest",
+        limit: 25
+      };
+      if (byEmail) input.attendee = email;
+      return mcp.callTool(MCP_SERVER_NAME, "outlook_calendar_search", input, { cache: false });
+    }).then(function (result) {
+      var events = extractEvents(result);
+      // 会社名が件名に入っている予定を優先する（無関係な予定を拾わないため）
+      if (company) {
+        var narrowed = events.filter(function (ev) {
+          return (ev.subject || "").indexOf(company) !== -1;
+        });
+        if (narrowed.length) events = narrowed;
+        else if (!byEmail) events = [];
+      }
+      if (!events.length) {
+        if (statusEl) {
+          statusEl.textContent = company
+            ? "「" + company + "」に一致する今後の予定が見つかりませんでした"
+            : "今後の予定が見つかりませんでした";
+        }
+        btn.disabled = false;
+        return;
+      }
+      var ev = events[0];
+      var val = ev.start.dateTime.slice(0, 16);
+      return getArtifactNamespace().then(function (artifact) {
+        var write = function () {
+          meetingInput.value = val;
+          syncDueToMeeting(card);
+        };
+        if (artifact && artifact.sync) return artifact.sync(write);
+        write();
+      }).then(function () {
+        applyPanel(card.getAttribute('data-kind'));
+        if (statusEl) {
+          statusEl.textContent = "反映しました：" + val.slice(5).replace("-", "/").replace("T", " ") +
+            "　" + (ev.subject || "") + (events.length > 1 ? "（他" + (events.length - 1) + "件）" : "");
+        }
+        btn.disabled = false;
+      });
+    }).catch(function (err) {
+      var code = err && err.code;
+      var msg = "取得に失敗しました。もう一度お試しください";
+      if (code === "needs_reauth") {
+        msg = "Microsoft 365の接続が切れています。claude.aiの設定→コネクタで再接続してください";
+      } else if (code === "server_not_connected" || code === "server_not_found") {
+        msg = "Microsoft 365が未接続です。claude.aiの設定→コネクタで追加してください";
+      } else if (code === "selection_required") {
+        msg = "Microsoft 365の接続先が複数あります。claude.aiで使用する接続を選んでください";
+      } else if (code === "server_unavailable") {
+        msg = "Outlookに一時的につながりません。少し待ってからもう一度お試しください";
+      } else if (code === "not_in_manifest" || code === "capability_disabled" || code === "not_granted" || code === "capability_removed") {
+        msg = "この機能は現在ご利用のページでは使えません";
+      } else if (code === "blocked_by_policy" || code === "approval_required") {
+        msg = "組織のポリシーによりこの操作は許可されていません";
+      } else if (code === "tool_error") {
+        msg = "Outlookが検索を実行できませんでした：" + ((err && err.message) || "");
+      }
+      if (statusEl) statusEl.textContent = msg;
+      btn.disabled = false;
+    });
+  }
+
+  function addHistoryEntry(card, kind, actionLabel, toLabel, newDue, memoText) {
+    var list = card.querySelector('[data-history]');
+    if (!list) return;
+    var now = new Date();
+    var pad = pad2;
+    var stamp = (now.getMonth() + 1) + "/" + pad(now.getDate()) + " " + pad(now.getHours()) + ":" + pad(now.getMinutes());
+    var dueNote = "";
+    if (newDue === "") dueNote = dueFieldLabel(kind) + "なし";
+    else if (newDue) dueNote = dueFieldLabel(kind) + " " + newDue.slice(5).replace("-", "/");
+    var entry = document.createElement("div");
+    entry.className = "history-entry";
+    entry.innerHTML =
+      '<div class="history-meta">' +
+      '<span class="history-time tabular">' + stamp + "</span>" +
+      '<span class="history-action"></span>' +
+      '<span class="history-arrow">→</span>' +
+      '<span class="history-status chip" data-tone="' + toneForStatus(kind, toLabel) + '"></span>' +
+      (dueNote ? '<span class="history-due tabular"></span>' : '') +
+      '<button type="button" class="icon-btn history-delete" data-role="deleteHistory" aria-label="この履歴を削除">×</button>' +
+      "</div>" +
+      '<div class="history-memo editable" contenteditable="true" data-placeholder="メモを追加"></div>';
+    entry.querySelector(".history-action").textContent = actionLabel;
+    entry.querySelector(".history-status").textContent = toLabel;
+    if (dueNote) entry.querySelector(".history-due").textContent = dueNote;
+    if (memoText) entry.querySelector(".history-memo").textContent = memoText;
+    list.insertBefore(entry, list.firstChild);
+    return entry;
+  }
+
+  // アクションは押した時点では実行されない。押すとメモ入力欄が開いて内容が保留され、
+  // 「履歴に記録」を押した時点で初めてステータス変更・期限設定・履歴追加がまとめて走る。
+  // 保留内容は data-local-* なので、確定するまで他の人には見えない。
+  function openActionPrompt(card, actionBtn, focusInput) {
+    var prompt = card.querySelector('[data-memo-prompt]');
+    if (!prompt) return;
+    prompt.setAttribute('data-local-act-label', actionBtn.textContent.trim());
+    prompt.setAttribute('data-local-act-goto', actionBtn.getAttribute('data-goto') || "");
+    prompt.setAttribute('data-local-act-due', actionBtn.getAttribute('data-due') || "");
+    prompt.setAttribute('data-local-act-special', actionBtn.getAttribute('data-special') || "");
+    prompt.setAttribute('data-local-act-reveal', actionBtn.getAttribute('data-reveal') || "");
+    var label = prompt.querySelector('[data-memo-label]');
+    if (label) label.textContent = "「" + actionBtn.textContent.trim() + "」を記録します";
+    var input = prompt.querySelector('[data-memo-input]');
+    if (input) input.textContent = "";
+    prompt.hidden = false;
+    if (input && focusInput) input.focus();
+  }
+
+  function clearActionPrompt(card) {
+    var prompt = card.querySelector('[data-memo-prompt]');
+    if (!prompt) return;
+    prompt.hidden = true;
+    ['label', 'goto', 'due', 'special', 'reveal'].forEach(function (k) {
+      prompt.removeAttribute('data-local-act-' + k);
+    });
+    var input = prompt.querySelector('[data-memo-input]');
+    if (input) input.textContent = "";
+  }
+
+  // 取り消し。開いていたパネルに何も入力・チェックされていなければ畳んでおく。
+  function cancelActionPrompt(card) {
+    var prompt = card.querySelector('[data-memo-prompt]');
+    var revealKind = prompt ? prompt.getAttribute('data-local-act-reveal') : "";
+    if (revealKind === 'meeting') {
+      var meetingPanel = card.querySelector('[data-meeting-panel]');
+      var meetingInput = card.querySelector('[data-role="meetingAt"]');
+      if (meetingPanel && meetingInput && !meetingInput.value) meetingPanel.hidden = true;
+    } else if (revealKind === 'plan') {
+      var planPanel = card.querySelector('[data-plan-panel]');
+      var anyChecked = card.querySelector('[data-plan-panel] input[type="checkbox"]:checked');
+      if (planPanel && !anyChecked) planPanel.hidden = true;
+    }
+    clearActionPrompt(card);
+  }
+
+  // ここで初めて実際の移動が起きる
+  function commitActionPrompt(card, kind) {
+    var prompt = card.querySelector('[data-memo-prompt]');
+    if (!prompt || prompt.hidden) return;
+    var actionLabel = prompt.getAttribute('data-local-act-label');
+    if (!actionLabel) { clearActionPrompt(card); return; }
+    var to = prompt.getAttribute('data-local-act-goto');
+    var dueSpec = prompt.getAttribute('data-local-act-due');
+    var special = prompt.getAttribute('data-local-act-special');
+    var input = prompt.querySelector('[data-memo-input]');
+    var memoText = input ? (input.innerText || "").trim() : "";
+
+    var statusBtn = card.querySelector('[data-role="status"]');
+    if (statusBtn && to && statusBtn.textContent.trim() !== to) {
+      statusBtn.textContent = to;
+      statusBtn.setAttribute('data-tone', toneForStatus(kind, to));
+    }
+    var newDue;
+    if (special === 'postpone') newDue = postponeDue(card, kind, 7);
+    else newDue = applyAutoDue(card, kind, dueSpec);
+    if (special === 'toOps') registerToOps(card);
+
+    addHistoryEntry(card, kind, actionLabel, to || statusOf(card), newDue, memoText);
+    clearActionPrompt(card);
+    applyPanel(kind);
+    if (special === 'toOps') applyPanel('ops');
+  }
+
+  // textContent だけでは入力欄（会社名・担当など）の値を拾えないので、
+  // 値と本文を明示的に集める。ボタンのラベルは検索対象から外す。
+  function cardSearchText(card) {
+    var parts = [];
+    var statusBtn = card.querySelector('[data-role="status"]');
+    if (statusBtn) parts.push(statusBtn.textContent);
+    var priorityBtn = card.querySelector('[data-role="priority"]');
+    if (priorityBtn) parts.push(priorityBtn.textContent);
+    var sourceBtn = card.querySelector('[data-role="source"]');
+    if (sourceBtn) parts.push(sourceBtn.textContent);
+    card.querySelectorAll('input').forEach(function (el) {
+      if (el.type === 'checkbox') { if (el.checked && el.value) parts.push(el.value); return; }
+      if (el.value) parts.push(el.value);
+    });
+    card.querySelectorAll('.editable, .history-action, .history-status').forEach(function (el) {
+      if (el.hasAttribute('data-memo-input')) return; // 未記録の下書きは検索対象外
+      parts.push(el.textContent);
+    });
+    return parts.join(" ").toLowerCase();
+  }
+
+  function cardMatchesSearch(card, query) {
+    if (!query) return true;
+    return cardSearchText(card).indexOf(query.toLowerCase()) !== -1;
+  }
+
+  function isOverdue(card) {
+    var dueInput = card.querySelector('input[data-role="due"]');
+    if (!dueInput || !dueInput.value) return false;
+    var statusBtn = card.querySelector('[data-role="status"]');
+    var doneLabels = ["成約", "完了", "失注"];
+    if (statusBtn && doneLabels.indexOf(statusBtn.textContent.trim()) !== -1) return false;
+    return dueInput.value < todayStr;
+  }
+
+  function isMeetingToday(card) {
+    var meetingInput = card.querySelector('[data-role="meetingAt"]');
+    if (!meetingInput || !meetingInput.value) return false;
+    return meetingInput.value.slice(0, 10) === todayStr;
+  }
+
+  function updateMeetingBadge(card) {
+    if (card.getAttribute('data-kind') !== 'inquiry') return;
+    var badge = card.querySelector('[data-today-badge]');
+    if (!badge) return;
+    var meetingInput = card.querySelector('[data-role="meetingAt"]');
+    if (meetingInput && meetingInput.value && isMeetingToday(card)) {
+      badge.hidden = false;
+      badge.textContent = "本日 " + meetingInput.value.slice(11, 16) + " 商談予定";
+    } else {
+      badge.hidden = true;
+    }
+  }
+
+  function applyPanel(kind) {
+    var panel = document.querySelector('.panel[data-panel="' + kind + '"]');
+    var list = panel.querySelector('[data-list="' + kind + '"]');
+    var cards = Array.prototype.slice.call(list.querySelectorAll('.card'));
+    var searchInput = panel.querySelector('[data-search="' + kind + '"]');
+    var query = searchInput ? searchInput.value : "";
+    var activeFilter = filters[kind];
+
+    var counts = { all: cards.length, overdue: 0, meetingToday: 0, urgent: 0, download: 0 };
+    cards.forEach(function (card) {
+      updateContactLinks(card);
+      updateMeetingBadge(card);
+      card.removeAttribute('data-local-dirty');
+      var suggestion = suggestFor(card, kind);
+      renderSuggestion(card, suggestion);
+      renderActions(card, kind, suggestion);
+      if (suggestion && suggestion.tone === 'crit') {
+        card.setAttribute('data-local-urgent', 'true');
+        counts.urgent++;
+      } else {
+        card.removeAttribute('data-local-urgent');
+      }
+      var label = statusOf(card);
+      counts[label] = (counts[label] || 0) + 1;
+      if (isOverdue(card)) counts.overdue++;
+      if (isMeetingToday(card)) counts.meetingToday++;
+      if (kind === 'inquiry' && isDownloadLead(card)) counts.download++;
+    });
+
+    var visibleCount = 0;
+    cards.forEach(function (card) {
+      var label = statusOf(card);
+      var matchesFilter = true;
+      if (activeFilter === "urgent") matchesFilter = card.getAttribute('data-local-urgent') === 'true';
+      else if (activeFilter === "overdue") matchesFilter = isOverdue(card);
+      else if (activeFilter === "meetingToday") matchesFilter = isMeetingToday(card);
+      else if (activeFilter === "download") matchesFilter = isDownloadLead(card);
+      else if (activeFilter) matchesFilter = label === activeFilter;
+      var matchesSearch = cardMatchesSearch(card, query);
+      var show = matchesFilter && matchesSearch;
+      if (show) { card.removeAttribute("data-local-hidden"); visibleCount++; }
+      else card.setAttribute("data-local-hidden", "true");
+    });
+
+    var emptyMsg = panel.querySelector('[data-empty="' + kind + '"]');
+    if (emptyMsg) emptyMsg.hidden = visibleCount !== 0;
+
+    var statsWrap = panel.querySelector('[data-stats="' + kind + '"]');
+    if (statsWrap) {
+      statsWrap.innerHTML = STAT_DEFS[kind].map(function (def) {
+        var n = counts[def.key] || 0;
+        var on = (activeFilter === def.key) || (!activeFilter && def.key === "all");
+        return '<button type="button" class="stat-tile" data-filter-key="' + def.key + '" data-tone="' + def.tone + '"' + (on ? ' data-local-on' : '') + '>' +
+          '<div class="stat-num tabular">' + n + '</div>' +
+          '<div class="stat-label">' + def.label + '</div>' +
+          '</button>';
+      }).join('');
+      statsWrap.querySelectorAll('[data-filter-key]').forEach(function (tile) {
+        tile.addEventListener('click', function () {
+          var key = tile.getAttribute('data-filter-key');
+          filters[kind] = (key === "all") ? null : (filters[kind] === key ? null : key);
+          applyPanel(kind);
+        });
+      });
+    }
+
+    var tabCount = document.querySelector('[data-local-count="' + kind + '"]');
+    if (tabCount) tabCount.textContent = cards.length;
+
+    if (kind === 'inquiry') {
+      var todayNav = document.querySelector('[data-role="meetingTodayNav"]');
+      if (todayNav) {
+        var todayCountEl = todayNav.querySelector('[data-local-count="meetingToday"]');
+        if (todayCountEl) todayCountEl.textContent = counts.meetingToday;
+        todayNav.hidden = false;
+        if (activeFilter === 'meetingToday') todayNav.setAttribute('data-local-on', '');
+        else todayNav.removeAttribute('data-local-on');
+      }
+      var wonNav = document.querySelector('[data-role="wonNav"]');
+      if (wonNav) {
+        var wonCountEl = wonNav.querySelector('[data-local-count="won"]');
+        if (wonCountEl) wonCountEl.textContent = counts["成約"] || 0;
+        wonNav.hidden = false;
+        if (activeFilter === '成約') wonNav.setAttribute('data-local-on', '');
+        else wonNav.removeAttribute('data-local-on');
+      }
+    }
+  }
+
+  function applyAll() {
+    Object.keys(CYCLES).forEach(applyPanel);
+    updateTrashCount();
+  }
+
+  function activateTab(target) {
+    document.querySelectorAll('.tab-btn').forEach(function (b) {
+      if (b.getAttribute('data-tab') === target) b.setAttribute('data-local-active', ''); else b.removeAttribute('data-local-active');
+    });
+    document.querySelectorAll('.panel').forEach(function (p) {
+      if (p.getAttribute('data-panel') === target) p.removeAttribute('data-local-hidden');
+      else p.setAttribute('data-local-hidden', 'true');
+    });
+  }
+
+  document.querySelectorAll('.tab-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () { activateTab(btn.getAttribute('data-tab')); });
+  });
+
+  var meetingTodayNavBtn = document.querySelector('[data-role="meetingTodayNav"]');
+  if (meetingTodayNavBtn) {
+    meetingTodayNavBtn.addEventListener('click', function () {
+      filters.inquiry = (filters.inquiry === 'meetingToday') ? null : 'meetingToday';
+      activateTab('inquiry');
+      applyPanel('inquiry');
+    });
+  }
+
+  var wonNavBtn = document.querySelector('[data-role="wonNav"]');
+  if (wonNavBtn) {
+    wonNavBtn.addEventListener('click', function () {
+      filters.inquiry = (filters.inquiry === '成約') ? null : '成約';
+      activateTab('inquiry');
+      applyPanel('inquiry');
+    });
+  }
+
+  document.querySelectorAll('[data-search]').forEach(function (input) {
+    input.addEventListener('input', function () { applyPanel(input.getAttribute('data-search')); });
+  });
+
+  document.body.addEventListener('click', function (e) {
+    var actionBtn = e.target.closest('[data-goto]');
+    if (actionBtn) {
+      var actionCard = actionBtn.closest('.card');
+      var revealKind = actionBtn.getAttribute('data-reveal');
+      // 商談設定・受注のときは専用パネルを優先するので、メモ欄はフォーカスを奪わない
+      openActionPrompt(actionCard, actionBtn, !revealKind);
+      if (revealKind === 'meeting') {
+        var meetingPanel = actionCard.querySelector('[data-meeting-panel]');
+        if (meetingPanel) {
+          meetingPanel.hidden = false;
+          var meetingInput = meetingPanel.querySelector('input[type="datetime-local"]');
+          if (meetingInput) meetingInput.focus();
+        }
+      } else if (revealKind === 'plan') {
+        var planPanel = actionCard.querySelector('[data-plan-panel]');
+        if (planPanel) planPanel.hidden = false;
+      }
+      return;
+    }
+    var refreshBtn = e.target.closest('[data-role="refresh"]');
+    if (refreshBtn) {
+      var rCard = refreshBtn.closest('.card');
+      if (rCard) {
+        var before = suggestTextOf(rCard);
+        applyPanel(rCard.getAttribute('data-kind'));
+        flashRefreshNote(rCard, before !== suggestTextOf(rCard));
+      }
+      return;
+    }
+    var commitBtn = e.target.closest('[data-role="commitMemo"]');
+    if (commitBtn) {
+      var cCard = commitBtn.closest('.card');
+      if (cCard) commitActionPrompt(cCard, cCard.getAttribute('data-kind'));
+      return;
+    }
+    var cancelBtn = e.target.closest('[data-role="cancelMemo"]');
+    if (cancelBtn) {
+      var xCard = cancelBtn.closest('.card');
+      if (xCard) cancelActionPrompt(xCard);
+      return;
+    }
+    var fetchBtn = e.target.closest('[data-role="fetchMeeting"]');
+    if (fetchBtn) {
+      var fCard = fetchBtn.closest('.card');
+      if (fCard) fetchMeetingFromOutlook(fCard, fetchBtn);
+      return;
+    }
+    var toggleBtn = e.target.closest('[data-role="toggleCompany"]');
+    if (toggleBtn) {
+      var tCard = toggleBtn.closest('.card');
+      var companyPanel = tCard.querySelector('[data-company-panel]');
+      if (companyPanel) {
+        if (companyPanel.hasAttribute('data-local-hidden')) {
+          companyPanel.removeAttribute('data-local-hidden');
+          toggleBtn.textContent = '企業情報を閉じる';
+        } else {
+          companyPanel.setAttribute('data-local-hidden', 'true');
+          toggleBtn.textContent = '企業情報';
+        }
+      }
+      return;
+    }
+    var chip = e.target.closest('[data-role="status"], [data-role="priority"], [data-role="source"]');
+    if (chip) {
+      var card = chip.closest('.card');
+      var kind = card.getAttribute('data-kind');
+      var role = chip.getAttribute('data-role');
+      cycleChip(chip, kind, role);
+      applyPanel(kind);
+      return;
+    }
+    var histDel = e.target.closest('[data-role="deleteHistory"]');
+    if (histDel) {
+      var histEntry = histDel.closest('.history-entry');
+      if (histEntry) histEntry.remove();
+      return;
+    }
+    var toggleTrashBtn = e.target.closest('[data-role="toggleTrash"]');
+    if (toggleTrashBtn) {
+      var trashPanel = document.querySelector('[data-trash-panel]');
+      if (trashPanel) {
+        if (trashPanel.hasAttribute('data-local-hidden')) trashPanel.removeAttribute('data-local-hidden');
+        else trashPanel.setAttribute('data-local-hidden', 'true');
+      }
+      return;
+    }
+    var restoreBtn = e.target.closest('[data-role="restoreCard"]');
+    if (restoreBtn) {
+      var rCard2 = restoreBtn.closest('.card');
+      if (rCard2) { restoreFromTrash(rCard2); applyPanel('inquiry'); }
+      return;
+    }
+    var del = e.target.closest('[data-role="delete"]');
+    if (del) {
+      if (del.getAttribute('data-local-armed') === 'true') {
+        if (del._armTimer) clearTimeout(del._armTimer);
+        var dcard = del.closest('.card');
+        var dkind = dcard.getAttribute('data-kind');
+        if (dkind === 'inquiry') moveToTrash(dcard);
+        else dcard.remove();
+        applyPanel(dkind);
+        return;
+      }
+      if (!del.dataset.localIdleLabel) del.dataset.localIdleLabel = del.textContent;
+      del.setAttribute('data-local-armed', 'true');
+      del.textContent = del.getAttribute('data-confirm-label') || '本当に削除しますか？（もう一度クリック）';
+      del._armTimer = setTimeout(function () {
+        del.removeAttribute('data-local-armed');
+        del.textContent = del.dataset.localIdleLabel;
+      }, 4000);
+      return;
+    }
+    var addBtn = e.target.closest('[data-add]');
+    if (addBtn) {
+      var kind2 = addBtn.getAttribute('data-add');
+      var list = document.querySelector('[data-list="' + kind2 + '"]');
+      var card2 = buildCard(kind2);
+      if (!list || !card2) return;
+      list.appendChild(card2);
+      applyPanel(kind2);
+      var firstField = card2.querySelector('input[type="text"], .editable');
+      if (firstField) firstField.focus();
+      return;
+    }
+  });
+
+  // 入力中に提案文が変わると読みづらいので、その場では反映せず「未反映」印を付けるだけ。
+  // 実際の再判定は「更新」ボタン（または他の操作による再描画）で走る。
+  document.body.addEventListener('input', function (e) {
+    if (e.target.closest('[data-memo-input]')) return;
+    var card = e.target.closest('.card');
+    if (!card) return;
+    if (e.target.getAttribute('data-role') === 'meetingAt') syncDueToMeeting(card);
+    updateContactLinks(card);
+    updateMeetingBadge(card);
+    card.setAttribute('data-local-dirty', 'true');
+    var note = card.querySelector('[data-refresh-note]');
+    if (note) note.hidden = true;
+  });
+
+  document.body.addEventListener('keydown', function (e) {
+    var memoInput = e.target.closest('[data-memo-input]');
+    if (!memoInput) return;
+    var card = memoInput.closest('.card');
+    if (!card) return;
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      commitActionPrompt(card, card.getAttribute('data-kind'));
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      cancelActionPrompt(card);
+    }
+  });
+
+  document.addEventListener('claude:edit', function () { applyAll(); });
+
+  applyAll();
+
+  window.__app = {
+    buildCard: buildCard,
+    applyAll: applyAll,
+    applyPanel: applyPanel,
+    moveToTrash: moveToTrash,
+    restoreFromTrash: restoreFromTrash,
+    addHistoryEntry: addHistoryEntry,
+    registerToOps: registerToOps
+  };
+  document.dispatchEvent(new CustomEvent('app:ready'));
+})();
+</script>
+<script src="vendor/msal-browser.min.js"></script>
+<script src="sync.js"></script>
+</body>
+</html>
+
