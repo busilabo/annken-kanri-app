@@ -80,7 +80,12 @@
 
   function readField(card, spec) {
     if (spec.kind === "chip") { var el = getRoleEl(card, spec.role); return el ? el.textContent.trim() : ""; }
-    if (spec.kind === "input" || spec.kind === "date") { var el2 = getRoleEl(card, spec.role); return el2 ? el2.value : ""; }
+    if (spec.kind === "input") { var el2 = getRoleEl(card, spec.role); return el2 ? el2.value : ""; }
+    if (spec.kind === "date") {
+      var elD = getRoleEl(card, spec.role);
+      if (!elD || !elD.value) return null;
+      return elD.value + "T00:00:00.000Z";
+    }
     if (spec.kind === "editable") { var el3 = getRoleEl(card, spec.role); return el3 ? el3.innerText.trim() : ""; }
     if (spec.kind === "datetime") {
       var el4 = getRoleEl(card, spec.role);
@@ -179,7 +184,11 @@
   function collectFields(card, kind) {
     var map = FIELD_MAP[kind];
     var fields = {};
-    for (var col in map) fields[col] = readField(card, map[col]);
+    for (var col in map) {
+      var v = readField(card, map[col]);
+      if (v === null || v === undefined) continue;
+      fields[col] = v;
+    }
     fields.History = serializeHistory(card);
     if (kind === "inquiry") {
       var companyEl = getRoleEl(card, "company");
