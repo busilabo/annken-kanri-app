@@ -14,6 +14,10 @@
   var SITE_PATH = "/sites/msteams_f7ddf8";
   var LIST_NAMES = { inquiry: "問い合わせ管理", ops: "運用状況", task: "タスク" };
   var POLL_MS = 5000;
+  var QUEUE_DRIVE_ID = "b!wbAWUnf6KkGVCCMpzpid5mjD2eweyyFPkqQ-wGokg-I25eWJtTuGQ7bhpfZRHTvP";
+  var QUEUE_FOLDER = "案件管理キュー/queue";
+  var QUEUE_PROCESSED_FOLDER = "案件管理キュー/processed";
+  var QUEUE_DRAIN_MS = 15000;
 
   var FIELD_MAP = {
     inquiry: {
@@ -283,6 +287,64 @@
     } catch (e) { log("delete failed: " + e.message); }
   }
 
+  // 自動反映ルーティンはSharePointリストへの書き込み権限を持たないため、代わりに
+  // 「案件管理キュー/queue」フォルダにJSONファイルを置くだけにしている。
+  // このアプリを開いた人がここでキューを取り込み、正式にリストへ登録する。
+  async function drainQueue() {
+    var listing;
+    try {
+      listing = await graph("/drives/" + QUEUE_DRIVE_ID + "/root:/" + encodeURIComponent(QUEUE_FOLDER) + ":/children");
+    } catch (e) { log("queue listing failed: " + e.message); return; }
+    var files = (listing.value || []).filter(function (f) { return f.name && f.name.indexOf(".json") !== -1; });
+    for (var i = 0; i < files.length; i++) {
+      await drainOne(files[i]);
+    }
+  }
+
+  async function drainOne(file) {
+    var data;
+    try {
+      data = await graph("/drives/" + QUEUE_DRIVE_ID + "/items/" + file.id + "/content");
+    } catch (e) { log("queue read failed (" + file.name + "): " + e.message); return; }
+    var srcId = data.srcId || "";
+    var already = srcId && document.querySelector('.card[data-src-id="' + srcId + '"]');
+    if (!already) {
+      var fields = {
+        Title: data.company || "無題",
+        SrcId: srcId,
+        Status: "未対応",
+        Source: data.source === "資料DL" ? "資料DL" : "問い合わせ",
+        Company: data.company || "",
+        ContactName: data.contactName || "",
+        ContactEmail: data.contact || "",
+        Address: data.address || "",
+        CompanyPhone: data.companyPhone || "",
+        Website: data.website || "",
+        Content: data.content || "",
+        Memo: data.memo || "",
+        History: "[]",
+        Deleted: false
+      };
+      if (data.receivedAt) fields.ReceivedAt = data.receivedAt + "T00:00:00.000Z";
+      var created;
+      try {
+        created = await graph("/sites/" + siteId + "/lists/" + listIds.inquiry + "/items", { method: "POST", body: { fields: fields } });
+      } catch (e) { log("queue create failed (" + file.name + "): " + e.message); return; }
+      applying = true;
+      var card = buildCardFromItem("inquiry", { id: created.id, fields: fields });
+      var list = document.querySelector('[data-list="inquiry"]');
+      if (card && list) list.appendChild(card);
+      applying = false;
+      window.__app.applyAll();
+    }
+    try {
+      await graph("/drives/" + QUEUE_DRIVE_ID + "/items/" + file.id, {
+        method: "PATCH",
+        body: { parentReference: { path: "/drives/" + QUEUE_DRIVE_ID + "/root:/" + QUEUE_PROCESSED_FOLDER } }
+      });
+    } catch (e) { log("queue move failed (" + file.name + "): " + e.message); }
+  }
+
   function buildCardFromItem(kind, item) {
     var card = window.__app.buildCard(kind);
     if (!card) return null;
@@ -423,6 +485,8 @@
     watchInteractions();
     await loadAll();
     setInterval(pollRefresh, POLL_MS);
+    await drainQueue();
+    setInterval(drainQueue, QUEUE_DRAIN_MS);
   }
 
   async function boot() {
