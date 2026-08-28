@@ -33,6 +33,7 @@
       Website: { role: "website", kind: "input" },
       Industry: { role: "industry", kind: "input" },
       CompanyNote: { role: "companyNote", kind: "editable" },
+      CompanyResearch: { role: "companyResearch", kind: "editable" },
       Content: { role: "content", kind: "editable" },
       MeetingAt: { role: "meetingAt", kind: "datetime" },
       Plan: { role: "plan", kind: "checkboxGroup" },
@@ -321,6 +322,8 @@
         CompanyPhone: data.companyPhone || "",
         Website: data.website || "",
         Content: data.content || "",
+        Industry: data.industry || "",
+        CompanyResearch: data.companyResearch || "",
         Memo: data.memo || "",
         History: "[]",
         Deleted: false

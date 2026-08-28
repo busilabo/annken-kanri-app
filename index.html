@@ -606,6 +606,7 @@
   .card[data-deleted] .meeting-panel,
   .card[data-deleted] .plan-panel { display: none !important; }
   .history-memo.editable { min-height: 26px; font-size: 12.5px; padding: 5px 8px; }
+  .research-note.editable { min-height: 100px; white-space: pre-wrap; }
   .editable {
     width: 100%;
     min-height: 40px;
@@ -742,6 +743,10 @@
               <div class="company-note-field">
                 <label>企業メモ</label>
                 <div class="editable" contenteditable="true" data-role="companyNote" data-placeholder="業界動向・過去のやり取りなど、この企業に関する継続的なメモ"></div>
+              </div>
+              <div class="company-note-field">
+                <label>自動調査メモ（自動反映・公式サイトより）</label>
+                <div class="editable research-note" contenteditable="true" data-role="companyResearch" data-placeholder="資料ダウンロード経由の問い合わせで公式サイトが分かる場合、事業内容などを自動で調べて記載します"></div>
               </div>
             </div>
           </div>
