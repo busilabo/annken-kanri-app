@@ -138,12 +138,19 @@
       if (isNaN(d.getTime())) return;
       var pad = function (n) { return (n < 10 ? "0" : "") + n; };
       el4.value = d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) + "T" + pad(d.getHours()) + ":" + pad(d.getMinutes());
+      var meetingPanel = card.querySelector('[data-meeting-panel]');
+      if (meetingPanel) meetingPanel.hidden = false;
       return;
     }
     if (spec.kind === "checkboxGroup") {
       var set = {};
       (value || "").split(",").map(function (s) { return s.trim(); }).filter(Boolean).forEach(function (v) { set[v] = true; });
-      card.querySelectorAll('[data-role="' + spec.role + '"]').forEach(function (cb) { cb.checked = !!set[cb.value]; });
+      var anyChecked = false;
+      card.querySelectorAll('[data-role="' + spec.role + '"]').forEach(function (cb) { cb.checked = !!set[cb.value]; if (cb.checked) anyChecked = true; });
+      if (anyChecked) {
+        var planPanel = card.querySelector('[data-plan-panel]');
+        if (planPanel) planPanel.hidden = false;
+      }
       return;
     }
   }

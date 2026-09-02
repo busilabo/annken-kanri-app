@@ -457,6 +457,7 @@
     color: var(--text-muted);
     margin-bottom: 3px;
   }
+  .meeting-field-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .meeting-field input[type="datetime-local"] {
     width: 100%;
     max-width: 260px;
@@ -468,6 +469,8 @@
     background: var(--surface);
     color: var(--text);
   }
+  .meeting-clear-btn { font-size: 12px; padding: 6px 10px; }
+  .meeting-clear-btn:hover { border-color: var(--crit); color: var(--crit); }
   .check-row { display: flex; align-items: center; gap: 7px; font-size: 13px; }
   .check-row input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
 
@@ -776,7 +779,10 @@
             <div class="meeting-panel" data-meeting-panel hidden>
               <div class="meeting-field">
                 <label>商談日時</label>
-                <input type="datetime-local" data-role="meetingAt">
+                <div class="meeting-field-row">
+                  <input type="datetime-local" data-role="meetingAt">
+                  <button type="button" class="action-btn meeting-clear-btn" data-role="clearMeeting" title="商談日時を削除">✕ 削除</button>
+                </div>
               </div>
               <artifact-local>
                 <div class="fetch-row">
@@ -2134,6 +2140,22 @@
     if (fetchBtn) {
       var fCard = fetchBtn.closest('.card');
       if (fCard) fetchMeetingFromOutlook(fCard, fetchBtn);
+      return;
+    }
+    var clearMeetingBtn = e.target.closest('[data-role="clearMeeting"]');
+    if (clearMeetingBtn) {
+      var mCard = clearMeetingBtn.closest('.card');
+      if (mCard) {
+        var meetingInput2 = mCard.querySelector('[data-role="meetingAt"]');
+        if (meetingInput2) {
+          meetingInput2.value = "";
+          updateContactLinks(mCard);
+          updateMeetingBadge(mCard);
+          mCard.setAttribute('data-local-dirty', 'true');
+          var note2 = mCard.querySelector('[data-refresh-note]');
+          if (note2) note2.hidden = true;
+        }
+      }
       return;
     }
     var toggleBtn = e.target.closest('[data-role="toggleCompany"]');
