@@ -484,6 +484,10 @@
   .plan-panel[hidden] { display: none; }
   .plan-panel-hint { font-size: 11px; color: var(--text-muted); margin-bottom: 8px; }
   .plan-panel-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 6px 12px; }
+  .plan-panel-grid-note { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px 16px; }
+  .check-row-note { align-items: flex-start; }
+  .check-row-body { display: flex; flex-direction: column; gap: 2px; }
+  .check-row-hint { font-size: 11px; color: var(--text-muted); font-weight: 400; line-height: 1.4; }
 
   .fetch-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .fetch-status { font-size: 12px; color: var(--text-muted); }
@@ -920,19 +924,18 @@
           <div class="field wide">
             <label>Project構築・コネクタ接続・動作確認（チーム別）</label>
             <div class="plan-panel">
-              <div class="plan-panel-hint">チーム名にマウスを乗せるとコネクタの注意点を表示します</div>
-              <div class="plan-panel-grid">
-                <label class="check-row" title="Windsor.ai経由でInstagramインサイトを直接連携（Facebookアカウント連携は不要。誤解しやすいので注意）"><input type="checkbox" data-role="projectSetupTeams" value="①Instagram AIチーム"><span>①Instagram AIチーム</span></label>
-                <label class="check-row" title="Windsor.ai経由でFacebook（Instagramと同一基盤）を連携"><input type="checkbox" data-role="projectSetupTeams" value="②Facebook AIチーム"><span>②Facebook AIチーム</span></label>
-                <label class="check-row" title="Windsor.ai経由のXコネクタ（読み取り専用）を連携"><input type="checkbox" data-role="projectSetupTeams" value="③X AIチーム"><span>③X AIチーム</span></label>
-                <label class="check-row" title="Windsor.ai経由のTikTokコネクタを連携（ビジネスアカウント未設定だと一部指標が取得不可）"><input type="checkbox" data-role="projectSetupTeams" value="④TikTok AIチーム"><span>④TikTok AIチーム</span></label>
-                <label class="check-row" title="Windsor.ai経由のYouTubeコネクタを連携"><input type="checkbox" data-role="projectSetupTeams" value="⑤YouTube AIチーム"><span>⑤YouTube AIチーム</span></label>
-                <label class="check-row" title="外部データ連携なし。任意でCanva（見出し画像）・Googleドライブ連携"><input type="checkbox" data-role="projectSetupTeams" value="⑥記事・コラムAIチーム"><span>⑥記事・コラムAIチーム</span></label>
-                <label class="check-row" title="Indeed公式コネクタを連携（読み取り専用。応募状況等は取得不可）"><input type="checkbox" data-role="projectSetupTeams" value="⑦求人・採用AIチーム"><span>⑦求人・採用AIチーム</span></label>
-                <label class="check-row" title="外部コネクタなし。対象1制度の公募要領・申請書様式をProjectに添付"><input type="checkbox" data-role="projectSetupTeams" value="⑧補助金AIチーム"><span>⑧補助金AIチーム</span></label>
-                <label class="check-row" title="Shopify公式コネクタを連携"><input type="checkbox" data-role="projectSetupTeams" value="⑨Shopify運営AIチーム"><span>⑨Shopify運営AIチーム</span></label>
-                <label class="check-row" title="Windsor.ai経由でAmazon Seller Centralコネクタを連携"><input type="checkbox" data-role="projectSetupTeams" value="⑩Amazonセラー運営チーム"><span>⑩Amazonセラー運営チーム</span></label>
-                <label class="check-row" title="外部データ連携なし（会社情報.md＋ヒアリングのみ）。Claude Design制作指示書の完成までを担当"><input type="checkbox" data-role="projectSetupTeams" value="⑪ホームページAIチーム"><span>⑪ホームページAIチーム</span></label>
+              <div class="plan-panel-grid plan-panel-grid-note">
+                <label class="check-row check-row-note"><input type="checkbox" data-role="projectSetupTeams" value="①Instagram AIチーム"><span class="check-row-body"><span>①Instagram AIチーム</span><span class="check-row-hint">Windsor.ai経由でInstagramインサイトを直接連携（Facebookアカウント連携は不要。誤解しやすいので注意）</span></span></label>
+                <label class="check-row check-row-note"><input type="checkbox" data-role="projectSetupTeams" value="②Facebook AIチーム"><span class="check-row-body"><span>②Facebook AIチーム</span><span class="check-row-hint">Windsor.ai経由でFacebook（Instagramと同一基盤）を連携</span></span></label>
+                <label class="check-row check-row-note"><input type="checkbox" data-role="projectSetupTeams" value="③X AIチーム"><span class="check-row-body"><span>③X AIチーム</span><span class="check-row-hint">Windsor.ai経由のXコネクタ（読み取り専用）を連携</span></span></label>
+                <label class="check-row check-row-note"><input type="checkbox" data-role="projectSetupTeams" value="④TikTok AIチーム"><span class="check-row-body"><span>④TikTok AIチーム</span><span class="check-row-hint">Windsor.ai経由のTikTokコネクタを連携（ビジネスアカウント未設定だと一部指標が取得不可）</span></span></label>
+                <label class="check-row check-row-note"><input type="checkbox" data-role="projectSetupTeams" value="⑤YouTube AIチーム"><span class="check-row-body"><span>⑤YouTube AIチーム</span><span class="check-row-hint">Windsor.ai経由のYouTubeコネクタを連携</span></span></label>
+                <label class="check-row check-row-note"><input type="checkbox" data-role="projectSetupTeams" value="⑥記事・コラムAIチーム"><span class="check-row-body"><span>⑥記事・コラムAIチーム</span><span class="check-row-hint">外部データ連携なし。任意でCanva（見出し画像）・Googleドライブ連携</span></span></label>
+                <label class="check-row check-row-note"><input type="checkbox" data-role="projectSetupTeams" value="⑦求人・採用AIチーム"><span class="check-row-body"><span>⑦求人・採用AIチーム</span><span class="check-row-hint">Indeed公式コネクタを連携（読み取り専用。応募状況等は取得不可）</span></span></label>
+                <label class="check-row check-row-note"><input type="checkbox" data-role="projectSetupTeams" value="⑧補助金AIチーム"><span class="check-row-body"><span>⑧補助金AIチーム</span><span class="check-row-hint">外部コネクタなし。対象1制度の公募要領・申請書様式をProjectに添付</span></span></label>
+                <label class="check-row check-row-note"><input type="checkbox" data-role="projectSetupTeams" value="⑨Shopify運営AIチーム"><span class="check-row-body"><span>⑨Shopify運営AIチーム</span><span class="check-row-hint">Shopify公式コネクタを連携</span></span></label>
+                <label class="check-row check-row-note"><input type="checkbox" data-role="projectSetupTeams" value="⑩Amazonセラー運営チーム"><span class="check-row-body"><span>⑩Amazonセラー運営チーム</span><span class="check-row-hint">Windsor.ai経由でAmazon Seller Centralコネクタを連携</span></span></label>
+                <label class="check-row check-row-note"><input type="checkbox" data-role="projectSetupTeams" value="⑪ホームページAIチーム"><span class="check-row-body"><span>⑪ホームページAIチーム</span><span class="check-row-hint">外部データ連携なし（会社情報.md＋ヒアリングのみ）。Claude Design制作指示書の完成までを担当</span></span></label>
               </div>
             </div>
           </div>
