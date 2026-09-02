@@ -88,13 +88,15 @@
     if (spec.kind === "input") { var el2 = getRoleEl(card, spec.role); return el2 ? el2.value : ""; }
     if (spec.kind === "date") {
       var elD = getRoleEl(card, spec.role);
-      if (!elD || !elD.value) return null;
+      if (!elD) return undefined;
+      if (!elD.value) return null;
       return elD.value + "T00:00:00.000Z";
     }
     if (spec.kind === "editable") { var el3 = getRoleEl(card, spec.role); return el3 ? el3.innerText.trim() : ""; }
     if (spec.kind === "datetime") {
       var el4 = getRoleEl(card, spec.role);
-      if (!el4 || !el4.value) return null;
+      if (!el4) return undefined;
+      if (!el4.value) return null;
       var d = new Date(el4.value);
       return isNaN(d.getTime()) ? null : d.toISOString();
     }
@@ -207,7 +209,7 @@
     var fields = {};
     for (var col in map) {
       var v = readField(card, map[col]);
-      if (v === null || v === undefined) continue;
+      if (v === undefined) continue;
       fields[col] = v;
     }
     fields.History = serializeHistory(card);
