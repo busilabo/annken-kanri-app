@@ -720,6 +720,7 @@
           <button type="button" class="chip" data-role="status" data-tone="neutral">未対応</button>
           <button type="button" class="chip chip-src" data-role="source" data-tone="neutral" title="押すと 問い合わせ ⇄ 資料DL が切り替わります">問い合わせ</button>
           <button type="button" class="action-btn" data-role="toggleCompany">企業情報</button>
+          <button type="button" class="action-btn" data-role="togglePlan">契約プラン</button>
           <artifact-local><a class="action-btn link-btn" data-role="mailLink" href="#" target="_blank" rel="noopener">メールを送る</a></artifact-local>
           <artifact-local><span class="today-badge" data-today-badge hidden></span></artifact-local>
           <span class="spacer"></span>
@@ -801,7 +802,7 @@
           <div class="field wide">
             <label>契約プラン（選べるチーム）</label>
             <div class="plan-panel" data-plan-panel hidden>
-              <div class="plan-panel-hint">「受注」を押すと表示されます。成約したチームにチェックしてください（複数可）</div>
+              <div class="plan-panel-hint">成約したチームにチェックしてください（複数可）</div>
               <div class="plan-panel-grid">
                 <label class="check-row"><input type="checkbox" data-role="plan" value="①Instagram AIチーム"><span>①Instagram AIチーム</span></label>
                 <label class="check-row"><input type="checkbox" data-role="plan" value="②Facebook AIチーム"><span>②Facebook AIチーム</span></label>
@@ -2169,6 +2170,21 @@
         } else {
           companyPanel.setAttribute('data-local-hidden', 'true');
           toggleBtn.textContent = '企業情報';
+        }
+      }
+      return;
+    }
+    var togglePlanBtn = e.target.closest('[data-role="togglePlan"]');
+    if (togglePlanBtn) {
+      var pCard = togglePlanBtn.closest('.card');
+      var planPanelToggle = pCard.querySelector('[data-plan-panel]');
+      if (planPanelToggle) {
+        if (planPanelToggle.hidden) {
+          planPanelToggle.hidden = false;
+          togglePlanBtn.textContent = '契約プランを閉じる';
+        } else {
+          planPanelToggle.hidden = true;
+          togglePlanBtn.textContent = '契約プラン';
         }
       }
       return;

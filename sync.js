@@ -150,6 +150,8 @@
       if (anyChecked) {
         var planPanel = card.querySelector('[data-plan-panel]');
         if (planPanel) planPanel.hidden = false;
+        var togglePlanBtn = card.querySelector('[data-role="togglePlan"]');
+        if (togglePlanBtn) togglePlanBtn.textContent = '契約プランを閉じる';
       }
       return;
     }
