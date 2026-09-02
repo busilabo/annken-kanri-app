@@ -472,6 +472,7 @@
   .meeting-clear-btn { font-size: 12px; padding: 6px 10px; }
   .meeting-clear-btn:hover { border-color: var(--crit); color: var(--crit); }
   .check-row { display: flex; align-items: center; gap: 7px; font-size: 13px; }
+  .check-row[hidden] { display: none; }
   .check-row input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
 
   .plan-panel {
@@ -2218,6 +2219,22 @@
     if (hint) hint.textContent = ready ? '' : 'Day30の実施日を入力すると押せるようになります';
   }
 
+  // チーム別チェック欄（AI社員カスタム指示作成・Project構築）は、契約プランに入っているチームだけを表示する
+  function updateTeamChecklists(card) {
+    if (card.getAttribute('data-kind') !== 'wontask') return;
+    var planInput = card.querySelector('[data-role="plan"]');
+    var planText = planInput ? planInput.value : "";
+    var wanted = planText.split(",").map(function (s) { return s.trim(); }).filter(Boolean);
+    var showAll = wanted.length === 0;
+    ['customInstructionTeams', 'projectSetupTeams'].forEach(function (role) {
+      card.querySelectorAll('.check-row input[data-role="' + role + '"]').forEach(function (cb) {
+        var row = cb.closest('.check-row');
+        if (!row) return;
+        row.hidden = !(showAll || wanted.indexOf(cb.value) !== -1);
+      });
+    });
+  }
+
   function applyPanel(kind) {
     var panel = document.querySelector('.panel[data-panel="' + kind + '"]');
     var list = panel.querySelector('[data-list="' + kind + '"]');
@@ -2231,6 +2248,7 @@
       updateContactLinks(card);
       updateMeetingBadge(card);
       updateGraduateButton(card);
+      updateTeamChecklists(card);
       card.removeAttribute('data-local-dirty');
       var suggestion = suggestFor(card, kind);
       renderSuggestion(card, suggestion);
@@ -2549,6 +2567,7 @@
     updateContactLinks(card);
     updateMeetingBadge(card);
     updateGraduateButton(card);
+    updateTeamChecklists(card);
     card.setAttribute('data-local-dirty', 'true');
     var note = card.querySelector('[data-refresh-note]');
     if (note) note.hidden = true;
