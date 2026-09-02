@@ -142,6 +142,8 @@
       el4.value = d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) + "T" + pad(d.getHours()) + ":" + pad(d.getMinutes());
       var meetingPanel = card.querySelector('[data-meeting-panel]');
       if (meetingPanel) meetingPanel.hidden = false;
+      var toggleMeetingBtn = card.querySelector('[data-role="toggleMeeting"]');
+      if (toggleMeetingBtn) toggleMeetingBtn.textContent = '商談日時を閉じる';
       return;
     }
     if (spec.kind === "checkboxGroup") {
