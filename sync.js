@@ -12,7 +12,7 @@
   var SCOPES = ["Sites.ReadWrite.All"];
   var SITE_HOST = "busilabo.sharepoint.com";
   var SITE_PATH = "/sites/msteams_f7ddf8";
-  var LIST_NAMES = { inquiry: "問い合わせ管理", ops: "運用状況", task: "タスク" };
+  var LIST_NAMES = { inquiry: "問い合わせ管理", wontask: "成約管理タスク", ops: "運用状況", task: "タスク" };
   var POLL_MS = 5000;
   var QUEUE_DRIVE_ID = "b!wbAWUnf6KkGVCCMpzpid5mjD2eweyyFPkqQ-wGokg-I25eWJtTuGQ7bhpfZRHTvP";
   var QUEUE_FOLDER = "案件管理キュー/queue";
@@ -39,6 +39,22 @@
       Plan: { role: "plan", kind: "checkboxGroup" },
       Memo: { role: "memo", kind: "editable" }
     },
+    wontask: {
+      Status: { role: "status", kind: "chip" },
+      Company: { role: "company", kind: "input" },
+      Owner: { role: "owner", kind: "input" },
+      ContractDate: { role: "contractDate", kind: "date" },
+      Plan: { role: "plan", kind: "input" },
+      SetupSteps: { role: "setupSteps", kind: "checkboxGroup" },
+      ProductionSteps: { role: "productionSteps", kind: "checkboxGroup" },
+      HearingAt: { role: "hearingAt", kind: "date" },
+      CustomInstructionTeams: { role: "customInstructionTeams", kind: "checkboxGroup" },
+      ProjectSetupTeams: { role: "projectSetupTeams", kind: "checkboxGroup" },
+      Day0At: { role: "day0At", kind: "date" },
+      Day15At: { role: "day15At", kind: "date" },
+      Day30At: { role: "day30At", kind: "date" },
+      Memo: { role: "memo", kind: "editable" }
+    },
     ops: {
       Status: { role: "status", kind: "chip" },
       Plan: { role: "plan", kind: "input" },
@@ -62,6 +78,7 @@
       status: { "未対応": "neutral", "対応中": "warn", "商談中": "accent", "成約": "ok", "失注": "crit" },
       source: { "問い合わせ": "neutral", "資料DL": "accent" }
     },
+    wontask: { status: { "進行中": "warn", "完了": "ok" } },
     ops: { status: { "順調": "ok", "要フォロー": "warn", "停滞": "crit" } },
     task: {
       status: { "未着手": "neutral", "進行中": "warn", "完了": "ok" },
@@ -220,6 +237,9 @@
       fields.Title = (companyEl && companyEl.value) || "無題";
       fields.SrcId = card.getAttribute("data-src-id") || "";
       fields.Deleted = card.hasAttribute("data-deleted");
+    } else if (kind === "wontask") {
+      var wonCompanyEl = getRoleEl(card, "company");
+      fields.Title = (wonCompanyEl && wonCompanyEl.value) || "無題";
     } else if (kind === "ops") {
       var customerEl = getRoleEl(card, "customer");
       fields.Title = (customerEl && customerEl.value) || "無題";
@@ -264,7 +284,11 @@
     siteId = site.id;
     for (var kind in LIST_NAMES) {
       var res = await graph("/sites/" + siteId + "/lists?$filter=" + encodeURIComponent("displayName eq '" + LIST_NAMES[kind] + "'"));
-      listIds[kind] = res.value[0].id;
+      if (res.value && res.value[0]) {
+        listIds[kind] = res.value[0].id;
+      } else {
+        log("list not found, skipping: " + LIST_NAMES[kind]);
+      }
     }
   }
 
@@ -383,6 +407,7 @@
   async function loadAll() {
     applying = true;
     for (var kind in LIST_NAMES) {
+      if (!listIds[kind]) continue;
       var res = await graph("/sites/" + siteId + "/lists/" + listIds[kind] + "/items?expand=fields&$top=500");
       var mainList = document.querySelector('[data-list="' + kind + '"]');
       var trashList = kind === "inquiry" ? document.querySelector('[data-list="inquiryDeleted"]') : null;
@@ -407,6 +432,7 @@
     try {
       applying = true;
       for (var kind in LIST_NAMES) {
+        if (!listIds[kind]) continue;
         var res = await graph("/sites/" + siteId + "/lists/" + listIds[kind] + "/items?expand=fields&$top=500");
         var seenIds = {};
         res.value.forEach(function (item) {

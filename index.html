@@ -691,6 +691,7 @@
     <button type="button" class="tab-btn" data-tab="inquiry" data-local-active>問い合わせ管理 <span class="tab-count" data-local-count="inquiry">0</span></button>
     <button type="button" class="tab-today-btn" data-local data-role="meetingTodayNav">📅 本日商談 <span class="tab-count" data-local-count="meetingToday">0</span></button>
     <button type="button" class="tab-today-btn" data-local data-role="wonNav">✅ 成約 <span class="tab-count" data-local-count="won">0</span></button>
+    <button type="button" class="tab-btn" data-tab="wontask">成約管理タスク <span class="tab-count" data-local-count="wontask">0</span></button>
     <button type="button" class="tab-btn" data-tab="ops">運用状況 <span class="tab-count" data-local-count="ops">0</span></button>
     <button type="button" class="tab-btn" data-tab="task">タスク <span class="tab-count" data-local-count="task">0</span></button>
   </nav>
@@ -830,6 +831,139 @@
         </div>
         <div class="danger-zone">
           <button type="button" class="danger-btn" data-role="delete" data-confirm-label="本当に削除しますか？（もう一度クリック）">この問い合わせを削除</button>
+        </div>
+      </article>
+    </template>
+  </section>
+
+  <!-- 成約管理タスク -->
+  <section class="panel" data-panel="wontask" data-local-hidden>
+    <div class="stats" data-local data-stats="wontask"></div>
+    <div class="toolbar">
+      <input class="search" data-local data-search="wontask" type="text" placeholder="会社名・担当で検索">
+      <button type="button" class="add-btn" data-add="wontask">＋ 追加</button>
+    </div>
+    <div class="list" data-list="wontask"></div>
+    <p class="empty-msg" data-local data-empty="wontask" hidden>該当する成約管理タスクはありません</p>
+
+    <template data-card-template="wontask">
+      <article class="card" data-kind="wontask">
+        <div class="card-top">
+          <button type="button" class="chip" data-role="status" data-tone="warn">進行中</button>
+          <span class="spacer"></span>
+          <artifact-local><span class="refresh-note" data-refresh-note hidden></span></artifact-local>
+          <artifact-local><button type="button" class="action-btn refresh-btn" data-role="refresh">更新</button></artifact-local>
+        </div>
+        <div class="grid">
+          <div class="field"><label>会社名</label><input type="text" data-role="company"></div>
+          <div class="field"><label>担当</label><input type="text" data-role="owner" value="未定"></div>
+          <div class="field"><label>契約日</label><input type="date" data-role="contractDate"></div>
+          <div class="field wide"><label>契約プラン（参考表示）</label><input type="text" data-role="plan"></div>
+
+          <div class="field wide">
+            <label>次のアクション</label>
+            <div class="suggest" artifact-local data-suggest hidden>
+              <span class="suggest-mark" data-suggest-mark>次はこれ</span>
+              <span class="suggest-body">
+                <span class="suggest-text" data-suggest-text></span>
+                <span class="suggest-tags" data-suggest-tags></span>
+              </span>
+            </div>
+          </div>
+
+          <div class="field wide">
+            <label>フェーズ0：技術基盤セッティング</label>
+            <div class="plan-panel">
+              <div class="plan-panel-grid">
+                <label class="check-row"><input type="checkbox" data-role="setupSteps" value="Claudeアカウント登録・Proプラン契約・カード登録"><span>Claudeアカウント登録・Proプラン契約・カード登録（顧客側）</span></label>
+                <label class="check-row"><input type="checkbox" data-role="setupSteps" value="開発環境準備"><span>開発環境準備（VS Code・GitHub Desktop、顧客側）</span></label>
+                <label class="check-row"><input type="checkbox" data-role="setupSteps" value="GitHubリポジトリ作成・招待"><span>GitHubリポジトリ作成・ビジラボを共同編集者として招待</span></label>
+                <label class="check-row"><input type="checkbox" data-role="setupSteps" value="招待承認・同期確認"><span>ビジラボが招待承認・双方向同期を確認</span></label>
+              </div>
+            </div>
+          </div>
+
+          <div class="field wide">
+            <label>フェーズ1：製作工程</label>
+            <div class="plan-panel">
+              <div class="plan-panel-grid">
+                <label class="check-row"><input type="checkbox" data-role="productionSteps" value="フォーマット記入依頼送付・回収"><span>フォーマット記入依頼送付・回収</span></label>
+                <label class="check-row"><input type="checkbox" data-role="productionSteps" value="裏付け情報収集"><span>裏付け情報収集</span></label>
+                <label class="check-row"><input type="checkbox" data-role="productionSteps" value="会社情報.md作成"><span>会社情報.md作成</span></label>
+              </div>
+            </div>
+          </div>
+
+          <div class="field"><label>お客様ヒアリング実施日</label><input type="date" data-role="hearingAt"></div>
+
+          <div class="field wide">
+            <label>AI社員カスタム指示作成（チーム別）</label>
+            <div class="plan-panel">
+              <div class="plan-panel-hint">各チーム専用のClaude Project用手順書を作成したらチェック</div>
+              <div class="plan-panel-grid">
+                <label class="check-row"><input type="checkbox" data-role="customInstructionTeams" value="①Instagram AIチーム"><span>①Instagram AIチーム</span></label>
+                <label class="check-row"><input type="checkbox" data-role="customInstructionTeams" value="②Facebook AIチーム"><span>②Facebook AIチーム</span></label>
+                <label class="check-row"><input type="checkbox" data-role="customInstructionTeams" value="③X AIチーム"><span>③X AIチーム</span></label>
+                <label class="check-row"><input type="checkbox" data-role="customInstructionTeams" value="④TikTok AIチーム"><span>④TikTok AIチーム</span></label>
+                <label class="check-row"><input type="checkbox" data-role="customInstructionTeams" value="⑤YouTube AIチーム"><span>⑤YouTube AIチーム</span></label>
+                <label class="check-row"><input type="checkbox" data-role="customInstructionTeams" value="⑥記事・コラムAIチーム"><span>⑥記事・コラムAIチーム</span></label>
+                <label class="check-row"><input type="checkbox" data-role="customInstructionTeams" value="⑦求人・採用AIチーム"><span>⑦求人・採用AIチーム</span></label>
+                <label class="check-row"><input type="checkbox" data-role="customInstructionTeams" value="⑧補助金AIチーム"><span>⑧補助金AIチーム</span></label>
+                <label class="check-row"><input type="checkbox" data-role="customInstructionTeams" value="⑨Shopify運営AIチーム"><span>⑨Shopify運営AIチーム</span></label>
+                <label class="check-row"><input type="checkbox" data-role="customInstructionTeams" value="⑩Amazonセラー運営チーム"><span>⑩Amazonセラー運営チーム</span></label>
+                <label class="check-row"><input type="checkbox" data-role="customInstructionTeams" value="⑪ホームページAIチーム"><span>⑪ホームページAIチーム</span></label>
+              </div>
+            </div>
+          </div>
+
+          <div class="field wide">
+            <label>Project構築・コネクタ接続・動作確認（チーム別）</label>
+            <div class="plan-panel">
+              <div class="plan-panel-hint">チーム名にマウスを乗せるとコネクタの注意点を表示します</div>
+              <div class="plan-panel-grid">
+                <label class="check-row" title="Windsor.ai経由でInstagramインサイトを直接連携（Facebookアカウント連携は不要。誤解しやすいので注意）"><input type="checkbox" data-role="projectSetupTeams" value="①Instagram AIチーム"><span>①Instagram AIチーム</span></label>
+                <label class="check-row" title="Windsor.ai経由でFacebook（Instagramと同一基盤）を連携"><input type="checkbox" data-role="projectSetupTeams" value="②Facebook AIチーム"><span>②Facebook AIチーム</span></label>
+                <label class="check-row" title="Windsor.ai経由のXコネクタ（読み取り専用）を連携"><input type="checkbox" data-role="projectSetupTeams" value="③X AIチーム"><span>③X AIチーム</span></label>
+                <label class="check-row" title="Windsor.ai経由のTikTokコネクタを連携（ビジネスアカウント未設定だと一部指標が取得不可）"><input type="checkbox" data-role="projectSetupTeams" value="④TikTok AIチーム"><span>④TikTok AIチーム</span></label>
+                <label class="check-row" title="Windsor.ai経由のYouTubeコネクタを連携"><input type="checkbox" data-role="projectSetupTeams" value="⑤YouTube AIチーム"><span>⑤YouTube AIチーム</span></label>
+                <label class="check-row" title="外部データ連携なし。任意でCanva（見出し画像）・Googleドライブ連携"><input type="checkbox" data-role="projectSetupTeams" value="⑥記事・コラムAIチーム"><span>⑥記事・コラムAIチーム</span></label>
+                <label class="check-row" title="Indeed公式コネクタを連携（読み取り専用。応募状況等は取得不可）"><input type="checkbox" data-role="projectSetupTeams" value="⑦求人・採用AIチーム"><span>⑦求人・採用AIチーム</span></label>
+                <label class="check-row" title="外部コネクタなし。対象1制度の公募要領・申請書様式をProjectに添付"><input type="checkbox" data-role="projectSetupTeams" value="⑧補助金AIチーム"><span>⑧補助金AIチーム</span></label>
+                <label class="check-row" title="Shopify公式コネクタを連携"><input type="checkbox" data-role="projectSetupTeams" value="⑨Shopify運営AIチーム"><span>⑨Shopify運営AIチーム</span></label>
+                <label class="check-row" title="Windsor.ai経由でAmazon Seller Centralコネクタを連携"><input type="checkbox" data-role="projectSetupTeams" value="⑩Amazonセラー運営チーム"><span>⑩Amazonセラー運営チーム</span></label>
+                <label class="check-row" title="外部データ連携なし（会社情報.md＋ヒアリングのみ）。Claude Design制作指示書の完成までを担当"><input type="checkbox" data-role="projectSetupTeams" value="⑪ホームページAIチーム"><span>⑪ホームページAIチーム</span></label>
+              </div>
+            </div>
+          </div>
+
+          <div class="field wide">
+            <label>フェーズ1：仕上げ</label>
+            <div class="plan-panel">
+              <div class="plan-panel-grid">
+                <label class="check-row"><input type="checkbox" data-role="productionSteps" value="運用状況.md作成"><span>運用状況.md作成</span></label>
+                <label class="check-row"><input type="checkbox" data-role="productionSteps" value="品質最終チェック"><span>品質最終チェック（制作者以外が確認）</span></label>
+              </div>
+            </div>
+          </div>
+
+          <div class="field"><label>Day0 キックオフ実施日</label><input type="date" data-role="day0At"></div>
+          <div class="field"><label>Day15 中間チェックイン実施日</label><input type="date" data-role="day15At"></div>
+          <div class="field"><label>Day30 活用度診断実施日</label><input type="date" data-role="day30At"></div>
+
+          <div class="field wide">
+            <div class="fetch-row">
+              <button type="button" class="action-btn fetch-btn" data-role="graduateToOps" disabled>運用状況へ移行</button>
+              <span class="fetch-status" data-role="graduateHint">Day30の実施日を入力すると押せるようになります</span>
+            </div>
+          </div>
+
+          <div class="field wide">
+            <label>メモ</label>
+            <div class="editable" contenteditable="true" data-role="memo" data-placeholder="進捗・所感などのメモ"></div>
+          </div>
+        </div>
+        <div class="danger-zone">
+          <button type="button" class="danger-btn" data-role="delete" data-confirm-label="本当に削除しますか？（もう一度クリック）">この成約管理タスクを削除</button>
         </div>
       </article>
     </template>
@@ -992,6 +1126,12 @@
         { label: "中", tone: "warn" },
         { label: "高", tone: "crit" }
       ]
+    },
+    wontask: {
+      status: [
+        { label: "進行中", tone: "warn" },
+        { label: "完了", tone: "ok" }
+      ]
     }
   };
 
@@ -1068,8 +1208,7 @@
       ],
       "成約": [
         { label: "契約書送付", goto: "成約", tone: "ok", due: 5 },
-        { label: "キックオフ日程設定", goto: "成約", tone: "ok", reveal: "meeting", due: 3 },
-        { label: "運用状況タブへ登録", goto: "成約", tone: "accent", special: "toOps", due: "clear" }
+        { label: "キックオフ日程設定", goto: "成約", tone: "ok", reveal: "meeting", due: 3 }
       ],
       "失注": [
         { label: "再アプローチ予定を登録", goto: "未対応", tone: "neutral", due: 90 },
@@ -1132,10 +1271,16 @@
       { key: "未着手", label: "未着手", tone: "neutral" },
       { key: "進行中", label: "進行中", tone: "warn" },
       { key: "overdue", label: "期限超過", tone: "crit" }
+    ],
+    wontask: [
+      { key: "all", label: "全件", tone: "" },
+      { key: "urgent", label: "要確認", tone: "crit" },
+      { key: "進行中", label: "進行中", tone: "warn" },
+      { key: "完了", label: "完了", tone: "ok" }
     ]
   };
 
-  var filters = { inquiry: null, ops: null, task: null };
+  var filters = { inquiry: null, ops: null, task: null, wontask: null };
   var todayStr = new Date().toISOString().slice(0, 10);
 
   function cycleChip(btn, kind, role) {
@@ -1454,10 +1599,7 @@
         if (!did("キックオフ日程設定")) {
           return { label: "キックオフ日程設定", tone: "warn", reason: "契約書は送付済みです。キックオフ日を押さえましょう。" };
         }
-        if (card.getAttribute('data-ops-registered') !== 'true') {
-          return { label: "運用状況タブへ登録", tone: "accent", reason: "立ち上げまで完了です。運用状況タブへ移して継続管理に切り替えましょう。" };
-        }
-        return { label: null, tone: "ok", reason: "運用状況タブへ引き継ぎ済みです。この案件での対応は完了しています。" };
+        return { label: null, tone: "ok", reason: "成約管理タスクタブに自動登録済みです。以降の進捗はそちらで管理してください。" };
       }
       if (status === "失注") {
         if (!did("お礼メール送付")) {
@@ -1525,6 +1667,69 @@
         }
         return { label: null, tone: "ok", reason: (dueIn === null ? "" : dueWord + "。") + "進行中です。" };
       }
+    }
+
+    if (kind === 'wontask') {
+      if (status === "完了") {
+        return { label: null, tone: "ok", reason: "運用状況へ移行済みです。" };
+      }
+      var checkedVals = function (role) {
+        var vals = {};
+        card.querySelectorAll('[data-role="' + role + '"]:checked').forEach(function (cb) { vals[cb.value] = true; });
+        return vals;
+      };
+      var allDone = function (role, values) {
+        var vals = checkedVals(role);
+        return values.every(function (v) { return vals[v]; });
+      };
+      var dateVal = function (role) {
+        var el = card.querySelector('[data-role="' + role + '"]');
+        return el ? el.value : "";
+      };
+      var contractEl = card.querySelector('[data-role="contractDate"]');
+      var contractDay = (contractEl && contractEl.value) ? -dayDiffFromToday(contractEl.value) : null;
+      var overdueWon = contractDay !== null && contractDay >= 45;
+      var wonTone = overdueWon ? "crit" : "warn";
+
+      var SETUP_STEPS = ["Claudeアカウント登録・Proプラン契約・カード登録", "開発環境準備", "GitHubリポジトリ作成・招待", "招待承認・同期確認"];
+      if (!allDone('setupSteps', SETUP_STEPS)) {
+        return { label: "技術基盤セッティング", tone: wonTone, reason: "Claudeアカウント登録〜GitHubリポジトリの招待承認までを進めてください。" };
+      }
+      var production = checkedVals('productionSteps');
+      if (!production["フォーマット記入依頼送付・回収"]) {
+        return { label: "フォーマット記入依頼送付・回収", tone: wonTone, reason: "顧客へ事前フォーマットを送付し、回収してください。" };
+      }
+      if (!production["裏付け情報収集"]) {
+        return { label: "裏付け情報収集", tone: wonTone, reason: "HP・SNS等から補足情報を収集してください。" };
+      }
+      if (!production["会社情報.md作成"]) {
+        return { label: "会社情報.md作成", tone: wonTone, reason: "フォーマット回答と裏付け情報から一次ドラフトを作成してください。" };
+      }
+      if (!dateVal('hearingAt')) {
+        return { label: "お客様ヒアリング日程調整", tone: wonTone, reason: "会社情報.mdのドラフトをもとに、ヒアリングの日程を確定してください。" };
+      }
+      if (Object.keys(checkedVals('customInstructionTeams')).length === 0) {
+        return { label: "AI社員カスタム指示作成", tone: wonTone, reason: "契約プランの各チームのカスタム指示（手順書）を作成してください。" };
+      }
+      if (Object.keys(checkedVals('projectSetupTeams')).length === 0) {
+        return { label: "Project構築・コネクタ接続", tone: wonTone, reason: "各チームのProjectを作成し、コネクタを接続してください。" };
+      }
+      if (!production["運用状況.md作成"]) {
+        return { label: "運用状況.md作成", tone: wonTone, reason: "導入済みチームの状況を運用状況.mdに記録してください。" };
+      }
+      if (!production["品質最終チェック"]) {
+        return { label: "品質最終チェック", tone: wonTone, reason: "制作者以外の目で最終チェックを行ってください。" };
+      }
+      if (!dateVal('day0At')) {
+        return { label: "Day0キックオフ", tone: wonTone, reason: "納品・初回レクチャーの日程を確定してください。" };
+      }
+      if (!dateVal('day15At')) {
+        return { label: "Day15中間チェックイン", tone: "warn", reason: "中間チェックインを実施してください。" };
+      }
+      if (!dateVal('day30At')) {
+        return { label: "Day30活用度診断", tone: "warn", reason: "活用度診断とSTEP2提案ミーティングを実施してください。" };
+      }
+      return { label: null, tone: "ok", reason: "Day30まで完了しています。「運用状況へ移行」を押してください。" };
     }
 
     return null;
@@ -1602,6 +1807,32 @@
     }
     list.appendChild(opsCard);
     card.setAttribute('data-ops-registered', 'true');
+  }
+
+  // 問い合わせが「成約」になった瞬間に、成約管理タスクカードを自動作成する
+  function registerToWonTask(card) {
+    if (card.getAttribute('data-wontask-registered') === 'true') return;
+    var list = document.querySelector('[data-list="wontask"]');
+    if (!list) return;
+    var read = function (role) {
+      var el = card.querySelector('[data-role="' + role + '"]');
+      if (!el) return "";
+      return (el.value !== undefined ? el.value : el.textContent).trim();
+    };
+    var planVals = [];
+    card.querySelectorAll('[data-role="plan"]:checked').forEach(function (cb) { planVals.push(cb.value); });
+    var wonCard = buildCard('wontask');
+    if (!wonCard) return;
+    var write = function (role, val) {
+      var el = wonCard.querySelector('[data-role="' + role + '"]');
+      if (el && val) el.value = val;
+    };
+    write('company', read('company'));
+    write('owner', read('owner'));
+    write('contractDate', todayStr);
+    write('plan', planVals.join(", "));
+    list.appendChild(wonCard);
+    card.setAttribute('data-wontask-registered', 'true');
   }
 
   var EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -1905,11 +2136,13 @@
     if (special === 'postpone') newDue = postponeDue(card, kind, 7);
     else newDue = applyAutoDue(card, kind, dueSpec);
     if (special === 'toOps') registerToOps(card);
+    if (kind === 'inquiry' && to === '成約') registerToWonTask(card);
 
     addHistoryEntry(card, kind, actionLabel, to || statusOf(card), newDue, memoText);
     clearActionPrompt(card);
     applyPanel(kind);
     if (special === 'toOps') applyPanel('ops');
+    if (kind === 'inquiry' && to === '成約') applyPanel('wontask');
   }
 
   // textContent だけでは入力欄（会社名・担当など）の値を拾えないので、
@@ -1966,6 +2199,25 @@
     }
   }
 
+  // Day30実施日が入るまでは「運用状況へ移行」を押せなくする
+  function updateGraduateButton(card) {
+    if (card.getAttribute('data-kind') !== 'wontask') return;
+    var btn = card.querySelector('[data-role="graduateToOps"]');
+    var hint = card.querySelector('[data-role="graduateHint"]');
+    if (!btn) return;
+    if (card.getAttribute('data-ops-registered') === 'true') {
+      btn.disabled = true;
+      btn.textContent = '✓ 運用状況へ登録済み';
+      if (hint) hint.textContent = '';
+      return;
+    }
+    btn.textContent = '運用状況へ移行';
+    var day30 = card.querySelector('[data-role="day30At"]');
+    var ready = !!(day30 && day30.value);
+    btn.disabled = !ready;
+    if (hint) hint.textContent = ready ? '' : 'Day30の実施日を入力すると押せるようになります';
+  }
+
   function applyPanel(kind) {
     var panel = document.querySelector('.panel[data-panel="' + kind + '"]');
     var list = panel.querySelector('[data-list="' + kind + '"]');
@@ -1978,6 +2230,7 @@
     cards.forEach(function (card) {
       updateContactLinks(card);
       updateMeetingBadge(card);
+      updateGraduateButton(card);
       card.removeAttribute('data-local-dirty');
       var suggestion = suggestFor(card, kind);
       renderSuggestion(card, suggestion);
@@ -2209,6 +2462,19 @@
       }
       return;
     }
+    var graduateBtn = e.target.closest('[data-role="graduateToOps"]');
+    if (graduateBtn) {
+      if (graduateBtn.disabled) return;
+      var gCard = graduateBtn.closest('.card');
+      if (gCard) {
+        registerToOps(gCard);
+        var gStatus = gCard.querySelector('[data-role="status"]');
+        if (gStatus) { gStatus.textContent = '完了'; gStatus.setAttribute('data-tone', toneForStatus('wontask', '完了')); }
+        applyPanel('wontask');
+        applyPanel('ops');
+      }
+      return;
+    }
     var chip = e.target.closest('[data-role="status"], [data-role="priority"], [data-role="source"]');
     if (chip) {
       var card = chip.closest('.card');
@@ -2282,6 +2548,7 @@
     if (e.target.getAttribute('data-role') === 'meetingAt') syncDueToMeeting(card);
     updateContactLinks(card);
     updateMeetingBadge(card);
+    updateGraduateButton(card);
     card.setAttribute('data-local-dirty', 'true');
     var note = card.querySelector('[data-refresh-note]');
     if (note) note.hidden = true;
