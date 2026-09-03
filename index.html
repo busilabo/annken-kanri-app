@@ -615,6 +615,7 @@
   .card[data-deleted] .plan-panel { display: none !important; }
   .history-memo.editable { min-height: 26px; font-size: 12.5px; padding: 5px 8px; }
   .research-note.editable { min-height: 100px; white-space: pre-wrap; }
+  .verify-result.editable { min-height: 24px; white-space: pre-wrap; font-size: 12.5px; }
   .editable {
     width: 100%;
     min-height: 40px;
@@ -864,6 +865,11 @@
           <div class="field"><label>担当</label><input type="text" data-role="owner" value="未定"></div>
           <div class="field"><label>契約日</label><input type="date" data-role="contractDate"></div>
           <div class="field wide"><label>契約プラン（参考表示）</label><input type="text" data-role="plan"></div>
+          <div class="field wide">
+            <label>顧客フォルダ名</label>
+            <input type="text" data-role="customerFolder" placeholder="例：坂中商店">
+            <div class="plan-panel-hint">docs/できるAIチーム＋_実装/配下のフォルダ名。「確認する」ボタンでの抜け漏れチェックに使う（未入力だと確認できません）</div>
+          </div>
 
           <div class="field wide">
             <label>次のアクション</label>
@@ -948,6 +954,15 @@
                 <label class="check-row"><input type="checkbox" data-role="productionSteps" value="品質最終チェック"><span>品質最終チェック（制作者以外が確認）</span></label>
               </div>
             </div>
+          </div>
+
+          <div class="field wide">
+            <div class="fetch-row">
+              <button type="button" class="action-btn fetch-btn" data-role="verifyGaps">確認する（抜け漏れチェック）</button>
+              <span class="fetch-status" data-role="verifyHint">会社情報.md／運用状況.md／チーム別手順書が実際にできているか確認します</span>
+            </div>
+            <input type="hidden" data-role="verifyRequestedAt">
+            <div class="editable verify-result" contenteditable="false" data-role="verifyResult" data-placeholder="まだ確認していません"></div>
           </div>
 
           <div class="field"><label>Day0 キックオフ実施日</label><input type="date" data-role="day0At"></div>
@@ -2493,6 +2508,23 @@
         if (gStatus) { gStatus.textContent = '完了'; gStatus.setAttribute('data-tone', toneForStatus('wontask', '完了')); }
         applyPanel('wontask');
         applyPanel('ops');
+      }
+      return;
+    }
+    var verifyBtn = e.target.closest('[data-role="verifyGaps"]');
+    if (verifyBtn) {
+      var vCard = verifyBtn.closest('.card');
+      if (vCard) {
+        var vHint = vCard.querySelector('[data-role="verifyHint"]');
+        var folderInput = vCard.querySelector('[data-role="customerFolder"]');
+        if (!folderInput || !folderInput.value.trim()) {
+          if (vHint) vHint.textContent = '先に「顧客フォルダ名」を入力してください（docs/できるAIチーム＋_実装/配下のフォルダ名）';
+          return;
+        }
+        var requestedAt = vCard.querySelector('[data-role="verifyRequestedAt"]');
+        if (requestedAt) requestedAt.value = new Date().toISOString();
+        if (window.__app && window.__app.requestVerify) window.__app.requestVerify(vCard);
+        if (vHint) vHint.textContent = '確認依頼を送信しました。結果が反映されるまで少し時間がかかります（目安：最大1時間程度）。';
       }
       return;
     }

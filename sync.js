@@ -53,6 +53,10 @@
       Day0At: { role: "day0At", kind: "date" },
       Day15At: { role: "day15At", kind: "date" },
       Day30At: { role: "day30At", kind: "date" },
+      CustomerFolder: { role: "customerFolder", kind: "input" },
+      VerifyRequestedAt: { role: "verifyRequestedAt", kind: "datetime" },
+      VerifyResult: { role: "verifyResult", kind: "editable" },
+      VerifyResultAt: { role: "verifyResultAt", kind: "datetime" },
       Memo: { role: "memo", kind: "editable" }
     },
     ops: {
@@ -339,11 +343,70 @@
     }
   }
 
+  // 成約管理タスクの「確認する」ボタン。ルーティンはSharePointリストを読めないため、
+  // 確認したい内容（チェック済み項目）をキューフォルダへJSONで置く。結果はdrainVerifyResultが拾う。
+  async function requestVerify(card) {
+    var itemId = card.getAttribute("data-item-id");
+    if (!itemId) { log("verify request: card has no item id yet (unsaved card)"); return; }
+    var company = (getRoleEl(card, "company") || {}).value || "";
+    var customerFolder = (getRoleEl(card, "customerFolder") || {}).value || "";
+    var checkedProductionSteps = [];
+    card.querySelectorAll('[data-role="productionSteps"]:checked').forEach(function (cb) { checkedProductionSteps.push(cb.value); });
+    var checkedTeams = [];
+    card.querySelectorAll('[data-role="customInstructionTeams"]:checked').forEach(function (cb) { checkedTeams.push(cb.value); });
+    var payload = {
+      type: "verifyRequest",
+      itemId: itemId,
+      company: company,
+      customerFolder: customerFolder,
+      checkedProductionSteps: checkedProductionSteps,
+      checkedTeams: checkedTeams
+    };
+    var filename = "verify-request-" + itemId + "-" + Date.now() + ".json";
+    try {
+      await graph("/drives/" + QUEUE_DRIVE_ID + "/root:/" + encodeURIComponent(QUEUE_FOLDER) + "/" + encodeURIComponent(filename) + ":/content", {
+        method: "PUT",
+        body: payload
+      });
+    } catch (e) { log("verify request upload failed: " + e.message); }
+  }
+
+  // 成約管理タスクの「確認する」ボタンの結果。ルーティンはSharePointリストに書けないため、
+  // ここ（ブラウザ）でitemIdから該当カードを探し、リストへ反映する。
+  async function drainVerifyResult(file, data) {
+    var itemId = data.itemId || "";
+    var card = itemId && document.querySelector('.card[data-kind="wontask"][data-item-id="' + itemId + '"]');
+    if (card && itemId) {
+      var resultAtIso = new Date().toISOString();
+      var fields = { VerifyResult: data.result || "", VerifyResultAt: resultAtIso };
+      try {
+        await graph("/sites/" + siteId + "/lists/" + listIds.wontask + "/items/" + itemId + "/fields", { method: "PATCH", body: fields });
+        applying = true;
+        writeField(card, "wontask", FIELD_MAP.wontask.VerifyResult, data.result || "");
+        writeField(card, "wontask", FIELD_MAP.wontask.VerifyResultAt, resultAtIso);
+        applying = false;
+        window.__app.applyAll();
+      } catch (e) { log("verify result write failed (" + file.name + "): " + e.message); }
+    } else {
+      log("verify result: card not found for itemId " + itemId);
+    }
+    try {
+      await graph("/drives/" + QUEUE_DRIVE_ID + "/items/" + file.id, {
+        method: "PATCH",
+        body: { parentReference: { path: "/drives/" + QUEUE_DRIVE_ID + "/root:/" + QUEUE_PROCESSED_FOLDER } }
+      });
+    } catch (e) { log("verify result queue move failed (" + file.name + "): " + e.message); }
+  }
+
   async function drainOne(file) {
     var data;
     try {
       data = await graph("/drives/" + QUEUE_DRIVE_ID + "/items/" + file.id + "/content");
     } catch (e) { log("queue read failed (" + file.name + "): " + e.message); return; }
+    if (data.type === "verifyResult") { await drainVerifyResult(file, data); return; }
+    // verifyRequestはルーティン向けの依頼ファイル。ブラウザ側では何もせず無視する
+    // （ルーティンが処理後にprocessedへ移動するまで、ここで新規問い合わせと誤認しないようにする）。
+    if (data.type === "verifyRequest") return;
     var srcId = data.srcId || "";
     var already = srcId && document.querySelector('.card[data-src-id="' + srcId + '"]');
     if (!already) {
@@ -518,6 +581,8 @@
       if (card) setTimeout(function () { scheduleSave(card); }, 0);
     });
   }
+
+  if (window.__app) window.__app.requestVerify = requestVerify;
 
   async function afterSignIn() {
     document.getElementById("authGate").hidden = true;
