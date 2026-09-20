@@ -14,8 +14,10 @@
 $ErrorActionPreference = 'Stop'
 
 $TenantId = 'd829c7a3-e07a-4b34-954f-d7c3c17aaa62'
-# Azure CLI の公開クライアント。デバイスコードに対応しており、多くのテナントで同意済み。
-$ClientId = '04b07795-8ddb-461a-bbee-02f9e1bf7b46'
+# Microsoft Graph Command Line Tools。Microsoft公式の公開クライアントで、
+# デバイスコードと Graph スコープの都度同意に対応している。
+# （Azure CLI のID 04b07795-... はGraphの個別スコープを要求できず AADSTS65002 になる）
+$ClientId = '14d82eec-204b-4c2f-b7e8-296a70dab67e'
 $Scope    = 'https://graph.microsoft.com/Sites.Manage.All offline_access'
 $SiteHost = 'busilabo.sharepoint.com'
 $SitePath = '/sites/msteams_f7ddf8'

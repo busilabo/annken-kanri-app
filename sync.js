@@ -470,14 +470,23 @@
     } catch (e) { log("queue move failed (" + file.name + "): " + e.message); }
   }
 
+  // Customer列を足す前の運用状況カードは、顧客名がTitleにしか入っていない。
+  // そのまま読むと顧客名が空欄になるので、Titleから戻す。次の保存でCustomerにも入る。
+  function applyItemFields(card, kind, f) {
+    var map = FIELD_MAP[kind];
+    for (var col in map) writeField(card, kind, map[col], f[col]);
+    if (kind === "ops" && !f.Customer && f.Title && f.Title !== "無題") {
+      writeField(card, kind, FIELD_MAP.ops.Customer, f.Title);
+    }
+  }
+
   function buildCardFromItem(kind, item) {
     var card = window.__app.buildCard(kind);
     if (!card) return null;
     card.setAttribute("data-item-id", item.id);
     var f = item.fields || {};
     if (kind === "inquiry" && f.SrcId) card.setAttribute("data-src-id", f.SrcId);
-    var map = FIELD_MAP[kind];
-    for (var col in map) writeField(card, kind, map[col], f[col]);
+    applyItemFields(card, kind, f);
     renderHistory(card, f.History);
     if (f.Deleted) {
       card.setAttribute("data-deleted", "true");
@@ -525,8 +534,7 @@
           var existing = document.querySelector('.card[data-item-id="' + item.id + '"]');
           if (existing) {
             if (!cardHasFocus(existing)) {
-              var map = FIELD_MAP[kind];
-              for (var col in map) writeField(existing, kind, map[col], item.fields[col]);
+              applyItemFields(existing, kind, item.fields);
               renderHistory(existing, item.fields.History);
               var deleted = !!item.fields.Deleted;
               var wasDeleted = existing.hasAttribute("data-deleted");
