@@ -600,10 +600,51 @@
     font-weight: 700;
   }
 
+  /* 担当・並び替えの選択欄。複数人で回すため、担当は自由入力ではなく一覧から選ぶ */
+  .toolbar-select {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    border-radius: 8px;
+    padding: 9px 10px;
+    font-size: 13px;
+    font-family: inherit;
+    color: var(--text);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .toolbar-select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .field select {
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 7px 9px;
+    font-size: 13.5px;
+    font-family: inherit;
+    color: var(--text);
+    background: var(--surface);
+  }
+  .field select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .field select[data-unassigned] { color: var(--text-muted); }
+
+  /* 申し送り欄。次に出勤した人が最初に読む場所なので、メモ欄とは見た目を分ける */
+  .handover > label { font-weight: 700; color: var(--text); font-size: 12.5px; }
+  .handover .editable {
+    border: 1px solid var(--warn);
+    border-left-width: 4px;
+    min-height: 44px;
+  }
+  .handover-by {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 3px;
+    font-variant-numeric: tabular-nums;
+  }
+  .handover-by:empty { display: none; }
+
   .trash-toggle-row { margin: 4px 0 10px; }
   .trash-list[data-local-hidden] { display: none; }
   .trash-list:empty:before {
-    content: "削除済みの問い合わせはありません";
+    content: attr(data-empty-text);
     font-size: 12.5px;
     color: var(--text-muted);
   }
@@ -707,6 +748,13 @@
     <div class="stats" data-local data-stats="inquiry"></div>
     <div class="toolbar">
       <input class="search" data-local data-search="inquiry" type="text" placeholder="会社名・担当・メールアドレス・内容で検索">
+      <select class="toolbar-select" data-local data-owner-filter="inquiry" aria-label="担当で絞り込む"></select>
+      <select class="toolbar-select" data-local data-sort="inquiry" aria-label="並び替え">
+        <option value="">並び替え：既定</option>
+        <option value="due">期限が近い順</option>
+        <option value="receivedDesc">受付が新しい順</option>
+        <option value="owner">担当別</option>
+      </select>
       <button type="button" class="add-btn" data-add="inquiry">＋ 追加</button>
     </div>
     <div class="list" data-list="inquiry">
@@ -716,9 +764,9 @@
     <!-- 削除した問い合わせの置き場。カードを消さずここへ移動するだけなので、data-src-id は残り続け、
          自動反映ルーティンの「反映済みIDの一覧」に自然に含まれて再作成されない。 -->
     <div class="trash-toggle-row">
-      <button type="button" class="action-btn" data-role="toggleTrash">🗑 削除済み <span class="tab-count" data-local-count="inquiryDeleted">0</span></button>
+      <button type="button" class="action-btn" data-role="toggleTrash" data-trash-kind="inquiry">🗑 削除済み <span class="tab-count" data-local-count="inquiryDeleted">0</span></button>
     </div>
-    <div class="list trash-list" data-list="inquiryDeleted" data-trash-panel data-local-hidden></div>
+    <div class="list trash-list" data-list="inquiryDeleted" data-trash-panel="inquiry" data-empty-text="削除済みの問い合わせはありません" data-local-hidden></div>
 
     <!-- カードのひな型。表示されない。＋追加ボタンと自動反映ルーティンの両方がここを正として使う -->
     <template data-card-template="inquiry">
@@ -741,6 +789,8 @@
           <div class="field"><label>担当者名</label><input type="text" data-role="contactName"></div>
           <div class="field"><label>メールアドレス</label><input type="text" data-role="contact"></div>
           <div class="field"><label>期限</label><input type="date" data-role="due"></div>
+          <!-- 「担当者名」は先方の担当者。こちらは自社側の担当なので名前を分けている -->
+          <div class="field"><label>自社担当</label><select data-role="owner" data-staff-select></select></div>
           <div class="field wide">
             <label>企業情報</label>
             <div class="company-panel" data-company-panel data-local-hidden>
@@ -830,6 +880,11 @@
             <label>アクション履歴</label>
             <div class="history-list" data-history></div>
           </div>
+          <div class="field wide handover">
+            <label>申し送り（次に出勤した人へ）</label>
+            <div class="editable" contenteditable="true" data-role="handover" data-placeholder="どこまで終わったか・次に何をすればよいか・何を待っているかを書く"></div>
+            <div class="handover-by" data-role="handoverBy"></div>
+          </div>
           <div class="field wide">
             <label>メモ</label>
             <div class="editable" contenteditable="true" data-role="memo" data-placeholder="次にやること・所感などのメモ"></div>
@@ -847,10 +902,21 @@
     <div class="stats" data-local data-stats="wontask"></div>
     <div class="toolbar">
       <input class="search" data-local data-search="wontask" type="text" placeholder="会社名・担当で検索">
+      <select class="toolbar-select" data-local data-owner-filter="wontask" aria-label="担当で絞り込む"></select>
+      <select class="toolbar-select" data-local data-sort="wontask" aria-label="並び替え">
+        <option value="">並び替え：既定</option>
+        <option value="contract">契約日が古い順</option>
+        <option value="owner">担当別</option>
+      </select>
       <button type="button" class="add-btn" data-add="wontask">＋ 追加</button>
     </div>
     <div class="list" data-list="wontask"></div>
     <p class="empty-msg" data-local data-empty="wontask" hidden>該当する成約管理タスクはありません</p>
+
+    <div class="trash-toggle-row">
+      <button type="button" class="action-btn" data-role="toggleTrash" data-trash-kind="wontask">🗑 削除済み <span class="tab-count" data-local-count="wontaskDeleted">0</span></button>
+    </div>
+    <div class="list trash-list" data-list="wontaskDeleted" data-trash-panel="wontask" data-empty-text="削除済みの成約管理タスクはありません" data-local-hidden></div>
 
     <template data-card-template="wontask">
       <article class="card" data-kind="wontask">
@@ -862,7 +928,7 @@
         </div>
         <div class="grid">
           <div class="field"><label>会社名</label><input type="text" data-role="company"></div>
-          <div class="field"><label>担当</label><input type="text" data-role="owner" value="未定"></div>
+          <div class="field"><label>担当</label><select data-role="owner" data-staff-select></select></div>
           <div class="field"><label>契約日</label><input type="date" data-role="contractDate"></div>
           <div class="field wide"><label>契約プラン（参考表示）</label><input type="text" data-role="plan"></div>
           <div class="field wide">
@@ -976,6 +1042,11 @@
             </div>
           </div>
 
+          <div class="field wide handover">
+            <label>申し送り（次に出勤した人へ）</label>
+            <div class="editable" contenteditable="true" data-role="handover" data-placeholder="どこまで終わったか・次に何をすればよいか・何を待っているかを書く"></div>
+            <div class="handover-by" data-role="handoverBy"></div>
+          </div>
           <div class="field wide">
             <label>メモ</label>
             <div class="editable" contenteditable="true" data-role="memo" data-placeholder="進捗・所感などのメモ"></div>
@@ -993,10 +1064,22 @@
     <div class="stats" data-local data-stats="ops"></div>
     <div class="toolbar">
       <input class="search" data-local data-search="ops" type="text" placeholder="顧客名・プランで検索">
+      <select class="toolbar-select" data-local data-owner-filter="ops" aria-label="担当で絞り込む"></select>
+      <select class="toolbar-select" data-local data-sort="ops" aria-label="並び替え">
+        <option value="">並び替え：既定</option>
+        <option value="due">次回接触が近い順</option>
+        <option value="startDesc">契約開始が新しい順</option>
+        <option value="owner">担当別</option>
+      </select>
       <button type="button" class="add-btn" data-add="ops">＋ 追加</button>
     </div>
     <div class="list" data-list="ops"></div>
     <p class="empty-msg" data-local data-empty="ops" hidden>該当する顧客はありません</p>
+
+    <div class="trash-toggle-row">
+      <button type="button" class="action-btn" data-role="toggleTrash" data-trash-kind="ops">🗑 削除済み <span class="tab-count" data-local-count="opsDeleted">0</span></button>
+    </div>
+    <div class="list trash-list" data-list="opsDeleted" data-trash-panel="ops" data-empty-text="削除済みの顧客はありません" data-local-hidden></div>
 
     <template data-card-template="ops">
       <article class="card" data-kind="ops">
@@ -1011,7 +1094,7 @@
           <div class="field"><label>プラン</label><input type="text" data-role="plan"></div>
           <div class="field"><label>契約開始日</label><input type="date" data-role="startAt"></div>
           <div class="field"><label>次回接触予定</label><input type="date" data-role="nextTouch"></div>
-          <div class="field"><label>担当</label><input type="text" data-role="owner" value="未定"></div>
+          <div class="field"><label>担当</label><select data-role="owner" data-staff-select></select></div>
           <div class="field wide">
             <label>次のアクション</label>
             <div class="suggest" artifact-local data-suggest hidden>
@@ -1036,6 +1119,11 @@
             <label>アクション履歴</label>
             <div class="history-list" data-history></div>
           </div>
+          <div class="field wide handover">
+            <label>申し送り（次に出勤した人へ）</label>
+            <div class="editable" contenteditable="true" data-role="handover" data-placeholder="どこまで終わったか・次に何をすればよいか・何を待っているかを書く"></div>
+            <div class="handover-by" data-role="handoverBy"></div>
+          </div>
           <div class="field wide">
             <label>メモ</label>
             <div class="editable" contenteditable="true" data-role="memo" data-placeholder="活用状況などのメモ"></div>
@@ -1053,10 +1141,22 @@
     <div class="stats" data-local data-stats="task"></div>
     <div class="toolbar">
       <input class="search" data-local data-search="task" type="text" placeholder="タスク内容・担当で検索">
+      <select class="toolbar-select" data-local data-owner-filter="task" aria-label="担当で絞り込む"></select>
+      <select class="toolbar-select" data-local data-sort="task" aria-label="並び替え">
+        <option value="">並び替え：既定</option>
+        <option value="due">期限が近い順</option>
+        <option value="priority">優先度が高い順</option>
+        <option value="owner">担当別</option>
+      </select>
       <button type="button" class="add-btn" data-add="task">＋ 追加</button>
     </div>
     <div class="list" data-list="task"></div>
     <p class="empty-msg" data-local data-empty="task" hidden>該当するタスクはありません</p>
+
+    <div class="trash-toggle-row">
+      <button type="button" class="action-btn" data-role="toggleTrash" data-trash-kind="task">🗑 削除済み <span class="tab-count" data-local-count="taskDeleted">0</span></button>
+    </div>
+    <div class="list trash-list" data-list="taskDeleted" data-trash-panel="task" data-empty-text="削除済みのタスクはありません" data-local-hidden></div>
 
     <template data-card-template="task">
       <article class="card" data-kind="task">
@@ -1068,7 +1168,7 @@
           <artifact-local><button type="button" class="action-btn refresh-btn" data-role="refresh">更新</button></artifact-local>
         </div>
         <div class="grid">
-          <div class="field"><label>担当</label><input type="text" data-role="owner" value="未定"></div>
+          <div class="field"><label>担当</label><select data-role="owner" data-staff-select></select></div>
           <div class="field"><label>期限</label><input type="date" data-role="due"></div>
           <div class="field"><label>関連（顧客・問い合わせ）</label><input type="text" data-role="related"></div>
           <div class="field wide">
@@ -1094,6 +1194,11 @@
                 <span class="memo-prompt-hint">押すまで反映されません（Enterで記録／Shift+Enterで改行）</span>
               </div>
             </div>
+          </div>
+          <div class="field wide handover">
+            <label>申し送り（次に出勤した人へ）</label>
+            <div class="editable" contenteditable="true" data-role="handover" data-placeholder="どこまで終わったか・次に何をすればよいか・何を待っているかを書く"></div>
+            <div class="handover-by" data-role="handoverBy"></div>
           </div>
           <div class="field wide">
             <label>アクション履歴</label>
@@ -1154,26 +1259,94 @@
     }
   };
 
+  // 担当の一覧。週2〜3日勤務の人が入れ替わり立ち替わり触るため、自由入力にすると
+  // 「坂中」「坂中さん」「匠太郎」のように表記が割れて絞り込みが効かなくなる。
+  // 人が増えたらこの配列に足す。先頭の「未定」は未割り当てを表す。
+  var STAFF = ["未定", "坂中", "上田", "石﨑"];
+  var UNASSIGNED = "未定";
+
+  // サインイン中の本人。sync.js が Microsoft 365 のアカウント表示名を渡してくる。
+  var currentUser = "";
+
+  function setCurrentUser(displayName) {
+    var name = (displayName || "").replace(/\s+/g, "");
+    currentUser = "";
+    for (var i = 0; i < STAFF.length; i++) {
+      if (STAFF[i] === UNASSIGNED) continue;
+      if (name.indexOf(STAFF[i]) !== -1) { currentUser = STAFF[i]; break; }
+    }
+    document.querySelectorAll('[data-owner-filter]').forEach(function (sel) {
+      renderOwnerFilter(sel, sel.getAttribute('data-owner-filter'));
+    });
+    applyAll();
+  }
+
+  // 一覧にない名前（過去データ・担当を外れた人など）を選択肢に足す。
+  // これをしないと select に無い値は空になり、担当が黙って消える。
+  function ensureStaffOption(sel, value) {
+    if (!value) return;
+    for (var i = 0; i < sel.options.length; i++) {
+      if (sel.options[i].value === value) return;
+    }
+    var opt = document.createElement('option');
+    opt.value = value;
+    opt.textContent = value;
+    sel.appendChild(opt);
+  }
+
+  function fillStaffSelect(sel) {
+    if (sel.options.length) return;
+    STAFF.forEach(function (name) {
+      var opt = document.createElement('option');
+      opt.value = name;
+      opt.textContent = name;
+      sel.appendChild(opt);
+    });
+    sel.value = UNASSIGNED;
+  }
+
+  function ownerOf(card) {
+    var el = card.querySelector('[data-role="owner"]');
+    var v = el ? (el.value || "").trim() : "";
+    return v || UNASSIGNED;
+  }
+
   // カードのひな型は本文中の <template data-card-template="..."> を正とする。
   // ＋追加ボタンも自動反映ルーティンも同じ場所を見るので、構造の二重管理をしない。
   function buildCard(kind) {
     var tpl = document.querySelector('template[data-card-template="' + kind + '"]');
     var src = tpl && tpl.content && tpl.content.firstElementChild;
     if (!src) return null;
-    return src.cloneNode(true);
+    var card = src.cloneNode(true);
+    card.querySelectorAll('[data-staff-select]').forEach(fillStaffSelect);
+    return card;
   }
 
-  // 問い合わせカードは削除しても消さず「削除済み」置き場へ移すだけにする。
-  // data-src-id を持ったままDOMに残るので、自動反映ルーティンの反映済みID一覧に含まれ続け、
-  // 元データ（Forms/メール等）が残っていても作り直されない。
-  function updateTrashCount() {
-    var trashList = document.querySelector('[data-list="inquiryDeleted"]');
-    var countEl = document.querySelector('[data-local-count="inquiryDeleted"]');
-    if (countEl) countEl.textContent = trashList ? trashList.querySelectorAll('.card').length : 0;
+  var ALL_KINDS = ["inquiry", "wontask", "ops", "task"];
+
+  var DELETE_LABELS = {
+    inquiry: "この問い合わせを削除",
+    wontask: "この成約管理タスクを削除",
+    ops: "この顧客を削除",
+    task: "このタスクを削除"
+  };
+
+  // カードは削除しても消さず「削除済み」置き場へ移すだけにする。
+  // 問い合わせは data-src-id を持ったままDOMに残るので、自動反映ルーティンの反映済みID一覧に
+  // 含まれ続け、元データ（Forms/メール等）が残っていても作り直されない。
+  // 他の3タブは以前は即時削除で復元できなかったため、誤操作の取り返しがつかなかった。
+  function updateTrashCount(kind) {
+    var kinds = kind ? [kind] : ALL_KINDS;
+    kinds.forEach(function (k) {
+      var trashList = document.querySelector('[data-list="' + k + 'Deleted"]');
+      var countEl = document.querySelector('[data-local-count="' + k + 'Deleted"]');
+      if (countEl) countEl.textContent = trashList ? trashList.querySelectorAll('.card').length : 0;
+    });
   }
 
   function moveToTrash(card) {
-    var trashList = document.querySelector('[data-list="inquiryDeleted"]');
+    var kind = card.getAttribute('data-kind');
+    var trashList = document.querySelector('[data-list="' + kind + 'Deleted"]');
     if (!trashList) { card.remove(); return; }
     card.setAttribute('data-deleted', 'true');
     var del = card.querySelector('[data-role="delete"]');
@@ -1185,20 +1358,21 @@
       del.textContent = '元に戻す';
     }
     trashList.insertBefore(card, trashList.firstChild);
-    updateTrashCount();
+    updateTrashCount(kind);
   }
 
   function restoreFromTrash(card) {
-    var list = document.querySelector('[data-list="inquiry"]');
+    var kind = card.getAttribute('data-kind');
+    var list = document.querySelector('[data-list="' + kind + '"]');
     if (!list) return;
     card.removeAttribute('data-deleted');
     var btn = card.querySelector('[data-role="restoreCard"]');
     if (btn) {
       btn.setAttribute('data-role', 'delete');
-      btn.textContent = btn.getAttribute('data-idle-label') || 'この問い合わせを削除';
+      btn.textContent = DELETE_LABELS[kind] || 'このカードを削除';
     }
     list.insertBefore(card, list.firstChild);
-    updateTrashCount();
+    updateTrashCount(kind);
   }
 
   // 現ステータスごとに出し分ける「次のアクション」
@@ -1300,7 +1474,100 @@
   };
 
   var filters = { inquiry: null, ops: null, task: null, wontask: null };
-  var todayStr = new Date().toISOString().slice(0, 10);
+  var ownerFilters = { inquiry: "", ops: "", task: "", wontask: "" };
+  var sortModes = { inquiry: "", ops: "", task: "", wontask: "" };
+
+  // toISOString() はUTCを返すので、日本時間の0時〜9時のあいだ前日の日付になっていた。
+  // 端末のローカル日付（＝日本時間）を使い、applyAll のたびに取り直して日付またぎにも追従する。
+  var todayStr = fmtDate(new Date());
+
+  // 担当の絞り込み。「自分の担当だけ」「未割り当てだけ」をここで出す。
+  function renderOwnerFilter(sel, kind) {
+    var current = ownerFilters[kind] || "";
+    var opts = [{ v: "", t: "担当：すべて" }];
+    if (currentUser) opts.push({ v: "__me__", t: "自分の担当（" + currentUser + "）" });
+    opts.push({ v: "__unassigned__", t: "未割り当て" });
+    STAFF.forEach(function (n) { if (n !== UNASSIGNED) opts.push({ v: n, t: n }); });
+    sel.innerHTML = opts.map(function (o) {
+      return '<option value="' + o.v + '">' + o.t + '</option>';
+    }).join('');
+    sel.value = current;
+    if (sel.value !== current) { ownerFilters[kind] = ""; sel.value = ""; }
+  }
+
+  function matchesOwnerFilter(card, kind) {
+    var f = ownerFilters[kind];
+    if (!f) return true;
+    var owner = ownerOf(card);
+    if (f === "__unassigned__") return owner === UNASSIGNED;
+    if (f === "__me__") return !!currentUser && owner === currentUser;
+    return owner === f;
+  }
+
+  // 並び替え。DOMの順序を入れ替えるが、同じリスト内での移動は sync.js の MutationObserver 側で
+  // 「追加」と「削除」が相殺されるため、保存や再作成は走らない。
+  var FAR_FUTURE = "9999-12-31";
+  var DESC_MODES = { receivedDesc: true, startDesc: true };
+  var PRIORITY_RANK = { "高": "1", "中": "2", "低": "3" };
+
+  function sortKeyOf(card, kind, mode) {
+    var val = function (role) {
+      var el = card.querySelector('[data-role="' + role + '"]');
+      return el && el.value ? el.value : "";
+    };
+    if (mode === "due") return (kind === "ops" ? val("nextTouch") : val("due")) || FAR_FUTURE;
+    if (mode === "receivedDesc") return val("receivedAt");
+    if (mode === "startDesc") return val("startAt");
+    if (mode === "contract") return val("contractDate") || FAR_FUTURE;
+    if (mode === "priority") {
+      var p = card.querySelector('[data-role="priority"]');
+      return PRIORITY_RANK[p ? p.textContent.trim() : ""] || "9";
+    }
+    if (mode === "owner") {
+      // 文字コード順だと「上田→坂中」のように並びが直感に合わないので、
+      // STAFF に書いた並び順をそのまま使う。一覧にない名前はその後ろ、未割り当ては最後。
+      var o = ownerOf(card);
+      if (o === UNASSIGNED) return "z";
+      var idx = STAFF.indexOf(o);
+      return idx === -1 ? ("y" + o) : ("a" + pad2(idx));
+    }
+    return "";
+  }
+
+  function sortCards(list, cards, kind, mode) {
+    if (!mode || cards.length < 2) return;
+    var desc = !!DESC_MODES[mode];
+    var decorated = cards.map(function (card, i) {
+      return { card: card, key: sortKeyOf(card, kind, mode), i: i };
+    });
+    decorated.sort(function (a, b) {
+      if (a.key === b.key) return a.i - b.i;
+      var r = a.key < b.key ? -1 : 1;
+      return desc ? -r : r;
+    });
+    // 並びが変わっていなければDOMに触らない（5秒ごとの再描画で毎回並べ直さないため）
+    var changed = false;
+    for (var i = 0; i < decorated.length; i++) { if (decorated[i].i !== i) { changed = true; break; } }
+    if (!changed) return;
+    decorated.forEach(function (d) { list.appendChild(d.card); });
+  }
+
+  // 申し送りは「誰がいつ書いたか」が分からないと引き継ぎに使えないので、書いた時点で記名する
+  function stampHandover(card) {
+    var by = card.querySelector('[data-role="handoverBy"]');
+    if (!by) return;
+    var now = new Date();
+    by.textContent = (currentUser ? currentUser + "　" : "") + "記入 " +
+      (now.getMonth() + 1) + "/" + pad2(now.getDate()) + " " + pad2(now.getHours()) + ":" + pad2(now.getMinutes());
+  }
+
+  // select（担当）にも値を入れられるようにした版。選択肢にない名前は足してから入れる。
+  function setRoleValue(card, role, val) {
+    var el = card.querySelector('[data-role="' + role + '"]');
+    if (!el || !val) return;
+    if (el.tagName === 'SELECT') ensureStaffOption(el, val);
+    el.value = val;
+  }
 
   function cycleChip(btn, kind, role) {
     var states = CYCLES[kind][role];
@@ -1812,10 +2079,7 @@
     };
     var opsCard = buildCard('ops');
     if (!opsCard) return;
-    var write = function (role, val) {
-      var el = opsCard.querySelector('[data-role="' + role + '"]');
-      if (el && val) el.value = val;
-    };
+    var write = function (role, val) { setRoleValue(opsCard, role, val); };
     write('customer', read('company'));
     write('owner', read('owner'));
     write('startAt', todayStr);
@@ -1842,10 +2106,7 @@
     card.querySelectorAll('[data-role="plan"]:checked').forEach(function (cb) { planVals.push(cb.value); });
     var wonCard = buildCard('wontask');
     if (!wonCard) return;
-    var write = function (role, val) {
-      var el = wonCard.querySelector('[data-role="' + role + '"]');
-      if (el && val) el.value = val;
-    };
+    var write = function (role, val) { setRoleValue(wonCard, role, val); };
     write('company', read('company'));
     write('owner', read('owner'));
     write('contractDate', todayStr);
@@ -2284,6 +2545,8 @@
       if (kind === 'inquiry' && isDownloadLead(card)) counts.download++;
     });
 
+    sortCards(list, cards, kind, sortModes[kind]);
+
     var visibleCount = 0;
     cards.forEach(function (card) {
       var label = statusOf(card);
@@ -2294,7 +2557,7 @@
       else if (activeFilter === "download") matchesFilter = isDownloadLead(card);
       else if (activeFilter) matchesFilter = label === activeFilter;
       var matchesSearch = cardMatchesSearch(card, query);
-      var show = matchesFilter && matchesSearch;
+      var show = matchesFilter && matchesSearch && matchesOwnerFilter(card, kind);
       if (show) { card.removeAttribute("data-local-hidden"); visibleCount++; }
       else card.setAttribute("data-local-hidden", "true");
     });
@@ -2345,6 +2608,7 @@
   }
 
   function applyAll() {
+    todayStr = fmtDate(new Date());   // 日付をまたいでも期限判定が古い日付のままにならないように
     Object.keys(CYCLES).forEach(applyPanel);
     updateTrashCount();
   }
@@ -2383,6 +2647,23 @@
 
   document.querySelectorAll('[data-search]').forEach(function (input) {
     input.addEventListener('input', function () { applyPanel(input.getAttribute('data-search')); });
+  });
+
+  document.querySelectorAll('[data-sort]').forEach(function (sel) {
+    sel.addEventListener('change', function () {
+      var kind = sel.getAttribute('data-sort');
+      sortModes[kind] = sel.value;
+      applyPanel(kind);
+    });
+  });
+
+  document.querySelectorAll('[data-owner-filter]').forEach(function (sel) {
+    var kind = sel.getAttribute('data-owner-filter');
+    renderOwnerFilter(sel, kind);
+    sel.addEventListener('change', function () {
+      ownerFilters[kind] = sel.value;
+      applyPanel(kind);
+    });
   });
 
   document.body.addEventListener('click', function (e) {
@@ -2545,7 +2826,8 @@
     }
     var toggleTrashBtn = e.target.closest('[data-role="toggleTrash"]');
     if (toggleTrashBtn) {
-      var trashPanel = document.querySelector('[data-trash-panel]');
+      var trashKind = toggleTrashBtn.getAttribute('data-trash-kind') || 'inquiry';
+      var trashPanel = document.querySelector('[data-trash-panel="' + trashKind + '"]');
       if (trashPanel) {
         if (trashPanel.hasAttribute('data-local-hidden')) trashPanel.removeAttribute('data-local-hidden');
         else trashPanel.setAttribute('data-local-hidden', 'true');
@@ -2555,7 +2837,7 @@
     var restoreBtn = e.target.closest('[data-role="restoreCard"]');
     if (restoreBtn) {
       var rCard2 = restoreBtn.closest('.card');
-      if (rCard2) { restoreFromTrash(rCard2); applyPanel('inquiry'); }
+      if (rCard2) { restoreFromTrash(rCard2); applyPanel(rCard2.getAttribute('data-kind')); }
       return;
     }
     var del = e.target.closest('[data-role="delete"]');
@@ -2564,8 +2846,8 @@
         if (del._armTimer) clearTimeout(del._armTimer);
         var dcard = del.closest('.card');
         var dkind = dcard.getAttribute('data-kind');
-        if (dkind === 'inquiry') moveToTrash(dcard);
-        else dcard.remove();
+        // 4タブとも「削除済み」へ移すだけにして、誤操作を元に戻せるようにする
+        moveToTrash(dcard);
         applyPanel(dkind);
         return;
       }
@@ -2599,6 +2881,7 @@
     var card = e.target.closest('.card');
     if (!card) return;
     if (e.target.getAttribute('data-role') === 'meetingAt') syncDueToMeeting(card);
+    if (e.target.getAttribute('data-role') === 'handover') stampHandover(card);
     updateContactLinks(card);
     updateMeetingBadge(card);
     updateGraduateButton(card);
@@ -2622,6 +2905,13 @@
     }
   });
 
+  // 担当を変えたらその場で絞り込み・並び替えに反映する（「更新」を押さなくてよい）
+  document.body.addEventListener('change', function (e) {
+    if (!e.target.getAttribute || e.target.getAttribute('data-role') !== 'owner') return;
+    var card = e.target.closest('.card');
+    if (card) applyPanel(card.getAttribute('data-kind'));
+  });
+
   document.addEventListener('claude:edit', function () { applyAll(); });
 
   applyAll();
@@ -2633,7 +2923,9 @@
     moveToTrash: moveToTrash,
     restoreFromTrash: restoreFromTrash,
     addHistoryEntry: addHistoryEntry,
-    registerToOps: registerToOps
+    registerToOps: registerToOps,
+    setCurrentUser: setCurrentUser,
+    ensureStaffOption: ensureStaffOption
   };
   document.dispatchEvent(new CustomEvent('app:ready'));
 })();

@@ -27,6 +27,9 @@
       Company: { role: "company", kind: "input" },
       ContactName: { role: "contactName", kind: "input" },
       ContactEmail: { role: "contact", kind: "input" },
+      Owner: { role: "owner", kind: "input" },
+      Handover: { role: "handover", kind: "editable" },
+      HandoverBy: { role: "handoverBy", kind: "editable" },
       Due: { role: "due", kind: "date" },
       Address: { role: "address", kind: "input" },
       CompanyPhone: { role: "companyPhone", kind: "input" },
@@ -57,14 +60,20 @@
       VerifyRequestedAt: { role: "verifyRequestedAt", kind: "datetime" },
       VerifyResult: { role: "verifyResult", kind: "editable" },
       VerifyResultAt: { role: "verifyResultAt", kind: "datetime" },
+      Handover: { role: "handover", kind: "editable" },
+      HandoverBy: { role: "handoverBy", kind: "editable" },
       Memo: { role: "memo", kind: "editable" }
     },
     ops: {
       Status: { role: "status", kind: "chip" },
+      // 顧客名は以前 Title にしか保存しておらず、読み戻す処理がなかったため再読込で消えていた
+      Customer: { role: "customer", kind: "input" },
       Plan: { role: "plan", kind: "input" },
       StartAt: { role: "startAt", kind: "date" },
       NextTouch: { role: "nextTouch", kind: "date" },
       Owner: { role: "owner", kind: "input" },
+      Handover: { role: "handover", kind: "editable" },
+      HandoverBy: { role: "handoverBy", kind: "editable" },
       Memo: { role: "memo", kind: "editable" }
     },
     task: {
@@ -73,6 +82,8 @@
       Owner: { role: "owner", kind: "input" },
       Due: { role: "due", kind: "date" },
       Related: { role: "related", kind: "input" },
+      Handover: { role: "handover", kind: "editable" },
+      HandoverBy: { role: "handoverBy", kind: "editable" },
       Content: { role: "content", kind: "editable" }
     }
   };
@@ -138,7 +149,17 @@
     }
     if (spec.kind === "input") {
       var el2 = getRoleEl(card, spec.role);
-      if (el2) el2.value = value || "";
+      if (!el2) return;
+      if (el2.tagName === "SELECT") {
+        // 担当は select。選択肢にない名前（過去データ・担当を外れた人）は足してから入れる。
+        // そうしないと value が一致せず、担当が黙って空になる。
+        var sv = value || "";
+        if (sv && window.__app && window.__app.ensureStaffOption) window.__app.ensureStaffOption(el2, sv);
+        el2.value = sv;
+        if (el2.selectedIndex < 0) el2.selectedIndex = 0;   // 未設定は先頭（未定）に戻す
+        return;
+      }
+      el2.value = value || "";
       return;
     }
     if (spec.kind === "date") {
@@ -236,11 +257,12 @@
       fields[col] = v;
     }
     fields.History = serializeHistory(card);
+    // 4タブとも「削除済み」へ移すだけの運用にしたので、削除フラグは全種類で保存する
+    fields.Deleted = card.hasAttribute("data-deleted");
     if (kind === "inquiry") {
       var companyEl = getRoleEl(card, "company");
       fields.Title = (companyEl && companyEl.value) || "無題";
       fields.SrcId = card.getAttribute("data-src-id") || "";
-      fields.Deleted = card.hasAttribute("data-deleted");
     } else if (kind === "wontask") {
       var wonCompanyEl = getRoleEl(card, "company");
       fields.Title = (wonCompanyEl && wonCompanyEl.value) || "無題";
@@ -457,7 +479,7 @@
     var map = FIELD_MAP[kind];
     for (var col in map) writeField(card, kind, map[col], f[col]);
     renderHistory(card, f.History);
-    if (kind === "inquiry" && f.Deleted) {
+    if (f.Deleted) {
       card.setAttribute("data-deleted", "true");
       var del = card.querySelector('[data-role="delete"]');
       if (del) { del.setAttribute("data-role", "restoreCard"); del.textContent = "元に戻す"; }
@@ -473,13 +495,13 @@
       if (!listIds[kind]) continue;
       var res = await graph("/sites/" + siteId + "/lists/" + listIds[kind] + "/items?expand=fields&$top=500");
       var mainList = document.querySelector('[data-list="' + kind + '"]');
-      var trashList = kind === "inquiry" ? document.querySelector('[data-list="inquiryDeleted"]') : null;
+      var trashList = document.querySelector('[data-list="' + kind + 'Deleted"]');
       if (mainList) mainList.innerHTML = "";
       if (trashList) trashList.innerHTML = "";
       res.value.forEach(function (item) {
         var card = buildCardFromItem(kind, item);
         if (!card) return;
-        if (kind === "inquiry" && item.fields && item.fields.Deleted) {
+        if (item.fields && item.fields.Deleted) {
           if (trashList) trashList.appendChild(card);
         } else if (mainList) {
           mainList.appendChild(card);
@@ -506,7 +528,7 @@
               var map = FIELD_MAP[kind];
               for (var col in map) writeField(existing, kind, map[col], item.fields[col]);
               renderHistory(existing, item.fields.History);
-              var deleted = kind === "inquiry" && !!item.fields.Deleted;
+              var deleted = !!item.fields.Deleted;
               var wasDeleted = existing.hasAttribute("data-deleted");
               if (deleted && !wasDeleted) window.__app.moveToTrash(existing);
               if (!deleted && wasDeleted) window.__app.restoreFromTrash(existing);
@@ -514,8 +536,8 @@
           } else {
             var card = buildCardFromItem(kind, item);
             if (card) {
-              var deleted2 = kind === "inquiry" && !!item.fields.Deleted;
-              var list = deleted2 ? document.querySelector('[data-list="inquiryDeleted"]') : document.querySelector('[data-list="' + kind + '"]');
+              var deleted2 = !!item.fields.Deleted;
+              var list = deleted2 ? document.querySelector('[data-list="' + kind + 'Deleted"]') : document.querySelector('[data-list="' + kind + '"]');
               if (list) list.appendChild(card);
             }
           }
@@ -587,6 +609,10 @@
   async function afterSignIn() {
     document.getElementById("authGate").hidden = true;
     document.getElementById("authStatus").textContent = "";
+    // 「自分の担当だけ」を出すために、サインイン中の本人を画面側へ渡す
+    if (window.__app && window.__app.setCurrentUser) {
+      window.__app.setCurrentUser((account && (account.name || account.username)) || "");
+    }
     await resolveSiteAndLists();
     watchLists();
     watchInteractions();
