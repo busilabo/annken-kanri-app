@@ -798,6 +798,8 @@
   var CAL_SCOPES = ["Calendars.Read", "Calendars.Read.Shared"];
   var SHIFT_REFRESH_MS = 10 * 60 * 1000;
   var SHIFT_WORD = /出勤|勤務/;
+  // 出勤の予定が入っているメールボックス。busilabo@ に共有されていれば、Outlookに追加していなくても名前で直接読む
+  var SHIFT_MAILBOXES = ["staff@busilabo.com"];
   // 代表の不在（出張・旅行・休み）。代表の予定表の終日予定の件名で判断する
   var AWAY_WORD = /出張|ツアー|旅行|休/;
 
@@ -885,25 +887,41 @@
       var events = [];
       var repAway = {};
       var failed = [];
-      for (var i = 0; i < calendars.length; i++) {
-        var cal = calendars[i];
+      // どの予定表から何件読めたか（出勤予定タブに出して、読めていないときの原因を画面で確かめられるようにする）
+      var report = [];
+      var sources = calendars.map(function (cal) {
+        var owner = cal.owner && cal.owner.address ? cal.owner.address : "";
+        return { label: cal.name + (owner ? "（" + owner + "）" : ""), path: "/me/calendars/" + encodeURIComponent(cal.id) + "/calendarView?", isDefault: !!cal.isDefaultCalendar, owner: owner.toLowerCase() };
+      });
+      SHIFT_MAILBOXES.forEach(function (mb) {
+        var already = sources.some(function (src) { return src.owner === mb.toLowerCase(); });
+        if (!already) sources.push({ label: mb + " の予定表（直接）", path: "/users/" + encodeURIComponent(mb) + "/calendar/calendarView?", isDefault: false, owner: mb });
+      });
+      for (var i = 0; i < sources.length; i++) {
+        var cal = sources[i];
         var list;
         try {
-          list = await calGetAll("/me/calendars/" + encodeURIComponent(cal.id) + "/calendarView?" + range, token);
+          list = await calGetAll(cal.path + range, token);
         } catch (e) {
           // 祝日など読めない予定表は飛ばす（1つ読めなくても他は表示する）
-          failed.push(cal.name);
-          log("calendar read failed (" + cal.name + "): " + e.message);
+          failed.push(cal.label);
+          var status = (/^(\d{3})/.exec(e.message) || [])[1] || "";
+          report.push({ label: cal.label, ok: false, reason: status === "404" || status === "403" ? "busilabo@ に共有されていません" : e.message.slice(0, 80) });
+          log("calendar read failed (" + cal.label + "): " + e.message);
           continue;
         }
+        var matched = 0;
         list.forEach(function (ev) {
-          events = events.concat(parseShiftEvent(ev));
-          if (cal.isDefaultCalendar && ev.isAllDay && !ev.isCancelled && AWAY_WORD.test(ev.subject || "") && !SHIFT_WORD.test(ev.subject || "")) {
+          var parsed = parseShiftEvent(ev);
+          matched += parsed.length;
+          events = events.concat(parsed);
+          if (cal.isDefault && ev.isAllDay && !ev.isCancelled && AWAY_WORD.test(ev.subject || "") && !SHIFT_WORD.test(ev.subject || "")) {
             var d = new Date(String(ev.start.dateTime).slice(0, 10) + "T00:00:00");
             var last = new Date(String(ev.end.dateTime).slice(0, 10) + "T00:00:00");
             for (var guard = 0; d < last && guard < 62; d.setDate(d.getDate() + 1), guard++) repAway[ymd(d)] = true;
           }
         });
+        report.push({ label: cal.label, ok: true, total: list.length, matched: matched });
       }
       // 同じ予定が複数の予定表に見えることがあるので、名前・日・時刻で重複を除く
       var seen = {};
@@ -913,7 +931,7 @@
         seen[k] = true;
         return true;
       });
-      app.setOutlookShifts({ loaded: true, error: "", needsConsent: false, events: events, repAway: repAway, at: new Date(), failed: failed });
+      app.setOutlookShifts({ loaded: true, error: "", needsConsent: false, events: events, repAway: repAway, at: new Date(), failed: failed, report: report });
     } catch (e) {
       log("shift load failed: " + (e.errorCode || e.message));
       // 許可の窓が開けなかった・閉じられた・断られたときも、もう一度押せるようにボタンを出す
