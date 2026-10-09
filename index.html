@@ -1094,6 +1094,32 @@
   .shift-err { color: var(--crit); font-weight: 700; }
   .shift-help { color: var(--text-muted); }
   .shift-status .add-btn { padding: 8px 14px; }
+  .shift-wait {
+    width: 100%;
+    padding: 14px 16px;
+    background: var(--warn-soft);
+    border: 1px solid var(--warn);
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .shift-wait p { margin: 0; }
+  .shift-wait .shift-err { color: var(--warn); }
+  .shift-detail { font-size: 11.5px; }
+  .shift-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; align-items: center; }
+  a.add-btn { display: inline-flex; align-items: center; text-decoration: none; padding: 8px 14px; }
+  .consent-banner {
+    margin: 0 0 14px;
+    padding: 12px 16px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 700;
+    background: var(--ok-soft);
+    color: var(--ok);
+    border: 1px solid var(--ok);
+  }
+  .consent-banner[data-tone="crit"] { background: var(--crit-soft); color: var(--crit); border-color: var(--crit); }
 
   /* 顧客台帳の「この顧客の案件・仕事」 */
   .related-list { display: flex; flex-direction: column; gap: 5px; }
@@ -3545,6 +3571,15 @@
     return out;
   }
 
+  // 管理者が会社全体に予定表の読み取りを許可するページ（Microsoft の画面）。一度許可すれば、誰にも確認の窓が出なくなる
+  function adminConsentUrl() {
+    var here = window.location.origin + window.location.pathname;
+    return "https://login.microsoftonline.com/d829c7a3-e07a-4b34-954f-d7c3c17aaa62/v2.0/adminconsent" +
+      "?client_id=462922c9-e6eb-4004-9570-63dbceb2b1c5" +
+      "&scope=" + encodeURIComponent("https://graph.microsoft.com/Calendars.Read https://graph.microsoft.com/Calendars.Read.Shared") +
+      "&redirect_uri=" + encodeURIComponent(here);
+  }
+
   function renderShift() {
     var status = document.querySelector('[data-shift-status]');
     var statusHtml;
@@ -3554,12 +3589,17 @@
         (at ? '（' + pad2(at.getHours()) + ':' + pad2(at.getMinutes()) + '）' : '') + '</span>' +
         '<span class="shift-help">予定を変えるときは Outlook 側を直してください。10分ごとに読み直します。</span>';
     } else if (shiftState.error) {
-      statusHtml = '<span class="shift-err">出勤予定を読み込めませんでした：' + esc(shiftState.error) + '</span>' +
-        (shiftState.needsConsent ? '<button type="button" class="add-btn" data-role="connectCalendar">Outlook の予定表を読む許可をする</button>' : '');
+      // パートさんは許可の操作ができない。代表が管理者として会社全体に一度だけ許可すれば、全員そのまま見られる
+      statusHtml = '<div class="shift-wait">' +
+        '<p class="shift-err">出勤予定は、代表の設定待ちです（パートさんの操作は不要です）</p>' +
+        '<p class="shift-help">代表が管理者として一度だけ許可すると、全員がサインインするだけで見られるようになります。</p>' +
+        '<p class="shift-help shift-detail">くわしい理由：' + esc(shiftState.error) + '</p>' +
+        '<div class="shift-actions">' +
+        '<a class="add-btn" href="' + esc(adminConsentUrl()) + '" target="_blank" rel="noopener">代表用：会社全体で許可する</a>' +
+        '<button type="button" class="action-btn" data-role="connectCalendar">許可のあと、読み込み直す</button>' +
+        '</div></div>';
     } else {
-      // 読み込み中でも許可ボタンは出しておく（裏での読み込みが止まっても、押せば先に進めるように）
-      statusHtml = '<span class="shift-help">Outlook の予定表を読み込み中です…</span>' +
-        '<button type="button" class="add-btn" data-role="connectCalendar">Outlook の予定表を読む許可をする</button>';
+      statusHtml = '<span class="shift-help">Outlook の予定表を読み込み中です…</span>';
     }
     setHtml(status, statusHtml);
 
@@ -4256,6 +4296,23 @@
   document.querySelectorAll('.tab-btn').forEach(function (btn) {
     btn.addEventListener('click', function () { activateTab(btn.getAttribute('data-tab')); });
   });
+
+  // 代表が「会社全体で許可する」から戻ってきたとき（Microsoft がこのページに ?admin_consent=True を付けて戻す）
+  (function showConsentResult() {
+    var q = new URLSearchParams(window.location.search);
+    if (!q.has("admin_consent") && !q.has("error")) return;
+    var ok = q.get("admin_consent") === "True";
+    var banner = document.createElement("p");
+    banner.className = "consent-banner";
+    if (!ok) banner.setAttribute("data-tone", "crit");
+    banner.textContent = ok
+      ? "会社全体への許可が完了しました。パートさんは、サインインするだけで出勤予定が見られます。このタブは閉じて構いません。"
+      : "許可できませんでした：" + (q.get("error_description") || q.get("error") || "") ;
+    var header = document.querySelector("header.top");
+    if (header) header.parentNode.insertBefore(banner, header.nextSibling);
+    // 再読み込みで同じ案内が出続けないよう、アドレスから外す
+    history.replaceState(null, "", window.location.pathname);
+  })();
 
   document.querySelectorAll('.section-btn').forEach(function (btn) {
     btn.addEventListener('click', function () { activateTab(lastTabOf[btn.getAttribute('data-section')]); });
