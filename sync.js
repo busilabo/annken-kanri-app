@@ -12,7 +12,7 @@
   var SCOPES = ["Sites.ReadWrite.All"];
   var SITE_HOST = "busilabo.sharepoint.com";
   var SITE_PATH = "/sites/msteams_f7ddf8";
-  var LIST_NAMES = { inquiry: "問い合わせ管理", wontask: "成約管理タスク", ops: "運用状況", task: "タスク" };
+  var LIST_NAMES = { inquiry: "問い合わせ管理", wontask: "成約管理タスク", ops: "運用状況", task: "タスク", customer: "顧客台帳", skill: "スキル表" };
   var POLL_MS = 5000;
   var QUEUE_DRIVE_ID = "b!wbAWUnf6KkGVCCMpzpid5mjD2eweyyFPkqQ-wGokg-I25eWJtTuGQ7bhpfZRHTvP";
   var QUEUE_FOLDER = "案件管理キュー/queue";
@@ -82,9 +82,32 @@
       Owner: { role: "owner", kind: "input" },
       Due: { role: "due", kind: "date" },
       Related: { role: "related", kind: "input" },
+      Category: { role: "category", kind: "input" },
+      RequiredSkill: { role: "skill", kind: "input" },
+      // Teams から来た仕事の出どころ（依頼した人・元の投稿）。進み具合を元の投稿のスレッドへ返すのに使う
+      Requester: { role: "requester", kind: "input" },
+      TeamsMessageId: { role: "teamsMessageId", kind: "input" },
+      TeamsLink: { role: "teamsLink", kind: "input" },
       Handover: { role: "handover", kind: "editable" },
       HandoverBy: { role: "handoverBy", kind: "editable" },
       Content: { role: "content", kind: "editable" }
+    },
+    skill: {
+      Staff: { role: "staff", kind: "input" },
+      // 各スキルの段階を {"スキル名": 段階} の JSON 1列にまとめる（項目を増やしても列を足さずに済むように）
+      Levels: { role: "levels", kind: "skillLevels" },
+      Want: { role: "want", kind: "editable" }
+    },
+    customer: {
+      Name: { role: "name", kind: "input" },
+      Business: { role: "business", kind: "input" },
+      Stage: { role: "stage", kind: "input" },
+      Owner: { role: "owner", kind: "input" },
+      ContactName: { role: "contactName", kind: "input" },
+      Email: { role: "email", kind: "input" },
+      Phone: { role: "phone", kind: "input" },
+      Folder: { role: "folder", kind: "input" },
+      Memo: { role: "memo", kind: "editable" }
     }
   };
 
@@ -108,6 +131,7 @@
   var account = null;
   var siteId = null;
   var listIds = {};
+  var listColumns = {};
   var applying = false;
   var saveTimers = {};
 
@@ -131,6 +155,11 @@
       if (!el4.value) return null;
       var d = new Date(el4.value);
       return isNaN(d.getTime()) ? null : d.toISOString();
+    }
+    if (spec.kind === "skillLevels") {
+      var levels = {};
+      card.querySelectorAll("[data-skill-level]").forEach(function (sel) { if (sel.value && sel.value !== "0") levels[sel.getAttribute("data-skill-level")] = parseInt(sel.value, 10); });
+      return JSON.stringify(levels);
     }
     if (spec.kind === "checkboxGroup") {
       var vals = [];
@@ -186,6 +215,12 @@
       if (meetingPanel) meetingPanel.hidden = false;
       var toggleMeetingBtn = card.querySelector('[data-role="toggleMeeting"]');
       if (toggleMeetingBtn) toggleMeetingBtn.textContent = '商談日時を閉じる';
+      return;
+    }
+    if (spec.kind === "skillLevels") {
+      var parsed = {};
+      try { parsed = JSON.parse(value || "{}") || {}; } catch (e) { parsed = {}; }
+      card.querySelectorAll("[data-skill-level]").forEach(function (sel) { sel.value = String(parsed[sel.getAttribute("data-skill-level")] || 0); });
       return;
     }
     if (spec.kind === "checkboxGroup") {
@@ -273,8 +308,28 @@
       var contentEl = getRoleEl(card, "content");
       var text = contentEl ? contentEl.innerText.trim() : "";
       fields.Title = text.slice(0, 60) || "タスク";
+    } else if (kind === "customer") {
+      fields.Title = fields.Name || "無題";
+    } else if (kind === "skill") {
+      fields.Title = fields.Staff || "スキル表";
+    }
+    // SharePoint に列がまだ無い項目を送ると Graph が 400 を返し、そのカードの保存がまるごと失敗する。
+    // 画面だけ先に新しくなっても既存の項目は保存できるように、リストに実在する列だけを送る。
+    var cols = listColumns[kind];
+    if (cols) {
+      for (var name in fields) {
+        if (!cols[name]) { delete fields[name]; warnMissingColumn(kind, name); }
+      }
     }
     return fields;
+  }
+
+  var warnedColumns = {};
+  function warnMissingColumn(kind, name) {
+    var key = kind + "." + name;
+    if (warnedColumns[key]) return;
+    warnedColumns[key] = true;
+    log("column missing, not saved: " + LIST_NAMES[kind] + " / " + name + "（scripts/setup-lists.ps1 を実行してください）");
   }
 
   async function graph(path, opts) {
@@ -312,8 +367,15 @@
       var res = await graph("/sites/" + siteId + "/lists?$filter=" + encodeURIComponent("displayName eq '" + LIST_NAMES[kind] + "'"));
       if (res.value && res.value[0]) {
         listIds[kind] = res.value[0].id;
+        try {
+          var colRes = await graph("/sites/" + siteId + "/lists/" + listIds[kind] + "/columns?$select=name");
+          var set = {};
+          (colRes.value || []).forEach(function (c) { set[c.name] = true; });
+          listColumns[kind] = set;
+        } catch (e) { log("columns lookup failed (" + LIST_NAMES[kind] + "): " + e.message); }
       } else {
         log("list not found, skipping: " + LIST_NAMES[kind]);
+        if (window.__app && window.__app.markListMissing) window.__app.markListMissing(kind);
       }
     }
   }
@@ -324,8 +386,10 @@
     var itemId = card.getAttribute("data-item-id");
     if (!itemId) return;
     var fields = collectFields(card, kind);
+    var notice = kind === "task" ? teamsNotice(card, fields) : null;
     try {
       await graph("/sites/" + siteId + "/lists/" + listIds[kind] + "/items/" + itemId + "/fields", { method: "PATCH", body: fields });
+      if (notice) postTeamsReply(card, notice);
     } catch (e) { log("save failed: " + e.message); }
   }
 
@@ -429,6 +493,7 @@
     // verifyRequestはルーティン向けの依頼ファイル。ブラウザ側では何もせず無視する
     // （ルーティンが処理後にprocessedへ移動するまで、ここで新規問い合わせと誤認しないようにする）。
     if (data.type === "verifyRequest") return;
+    if (data.type === "teamsTask") { await drainTeamsTask(file, data); return; }
     var srcId = data.srcId || "";
     var already = srcId && document.querySelector('.card[data-src-id="' + srcId + '"]');
     if (!already) {
@@ -470,11 +535,124 @@
     } catch (e) { log("queue move failed (" + file.name + "): " + e.message); }
   }
 
+  // ---- Teams からの依頼（「ビジラボ」チームの「一般」チャネル）----
+  // Power Automate が「#仕事」の付いた投稿を teamsTask としてキューに置く。ここで仕事一覧に「次の走者募集」として登録する。
+  // バトンの受け取り・渡し・完了は、outbox にファイルを置き、Power Automate が元の投稿のスレッドに返信する。
+  var OUTBOX_FOLDER = "案件管理キュー/outbox";
+  var TEAMS_KEYWORD = /[#＃]仕事/g;
+
+  // Teams の本文は HTML で届くので、改行を残して文字だけにする
+  function teamsText(html) {
+    var div = document.createElement("div");
+    div.innerHTML = String(html || "").replace(/<br\s*\/?>/gi, "\n").replace(/<\/(p|div|li)>/gi, "\n");
+    return (div.textContent || "").replace(/ /g, " ").replace(/\n{3,}/g, "\n\n").trim();
+  }
+
+  // 本文の「10/15まで」「10月15日」「明日まで」などから期限を読む。読めなければ空（受け取った人が決める）
+  function parseDue(text, postedAt) {
+    var base = postedAt ? new Date(postedAt) : new Date();
+    if (isNaN(base.getTime())) base = new Date();
+    base.setHours(0, 0, 0, 0);
+    var d = null;
+    var m = /(\d{1,2})\s*[\/月]\s*(\d{1,2})\s*日?/.exec(text);
+    if (m) {
+      d = new Date(base.getFullYear(), +m[1] - 1, +m[2]);
+      if ((base - d) / 86400000 > 180) d.setFullYear(d.getFullYear() + 1);
+    } else if (/明後日/.test(text)) { d = new Date(base); d.setDate(d.getDate() + 2); }
+    else if (/明日/.test(text)) { d = new Date(base); d.setDate(d.getDate() + 1); }
+    else if (/今日中|本日中|今日まで/.test(text)) { d = new Date(base); }
+    if (!d || isNaN(d.getTime())) return null;
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0") + "T00:00:00.000Z";
+  }
+
+  // SharePoint にまだ無い列を外す（collectFields と同じ理由）
+  function keepExistingColumns(kind, fields) {
+    var cols = listColumns[kind];
+    if (!cols) return fields;
+    for (var name in fields) if (!cols[name]) { delete fields[name]; warnMissingColumn(kind, name); }
+    return fields;
+  }
+
+  async function drainTeamsTask(file, data) {
+    var threadId = data.threadId || data.messageId || "";
+    var exists = threadId && Array.prototype.some.call(document.querySelectorAll('.card[data-kind="task"] [data-role="teamsMessageId"]'), function (el) { return el.value === threadId; });
+    if (!exists && listIds.task) {
+      var content = teamsText(data.text).replace(TEAMS_KEYWORD, "").trim() || "（内容なし）";
+      var from = (data.from || "").replace(/\s+/g, "");
+      var now = new Date();
+      var stamp = (now.getMonth() + 1) + "/" + String(now.getDate()).padStart(2, "0") + " " + String(now.getHours()).padStart(2, "0") + ":" + String(now.getMinutes()).padStart(2, "0");
+      var fields = keepExistingColumns("task", {
+        Title: content.split("\n")[0].slice(0, 60),
+        Status: "未着手",
+        Priority: "中",
+        Owner: "未定",
+        Category: "未分類",
+        Content: content,
+        Requester: from,
+        TeamsMessageId: threadId,
+        TeamsLink: data.link || "",
+        History: JSON.stringify([{ time: stamp, action: "Teamsで依頼", status: "未着手", tone: "neutral", due: "", memo: (from ? from + "さんから" : "") }]),
+        Deleted: false
+      });
+      var due = parseDue(content, data.postedAt);
+      if (due) fields.Due = due;
+      var created;
+      try {
+        created = await graph("/sites/" + siteId + "/lists/" + listIds.task + "/items", { method: "POST", body: { fields: fields } });
+      } catch (e) { log("teams task create failed (" + file.name + "): " + e.message); return; }
+      applying = true;
+      var card = buildCardFromItem("task", { id: created.id, fields: fields });
+      var list = document.querySelector('[data-list="task"]');
+      if (card && list) list.appendChild(card);
+      applying = false;
+      window.__app.applyAll();
+    }
+    try {
+      await graph("/drives/" + QUEUE_DRIVE_ID + "/items/" + file.id, {
+        method: "PATCH",
+        body: { parentReference: { path: "/drives/" + QUEUE_DRIVE_ID + "/root:/" + QUEUE_PROCESSED_FOLDER } }
+      });
+    } catch (e) { log("teams task move failed (" + file.name + "): " + e.message); }
+  }
+
+  // 保存のたびに、Teams から来た仕事の「バトンを持っている人」「状態」の変化を見て、元の投稿のスレッドに返す文を作る
+  function teamsNotice(card, fields) {
+    var threadEl = getRoleEl(card, "teamsMessageId");
+    var threadId = threadEl ? threadEl.value : "";
+    var last = card._last || {};
+    var now = { owner: fields.Owner || "", status: fields.Status || "" };
+    card._last = now;
+    if (!threadId || last.owner === undefined) return null;
+    var title = (fields.Title || "").slice(0, 40);
+    var handover = (fields.Handover || "").split("\n")[0].slice(0, 80);
+    if (now.status === "完了" && last.status !== "完了") {
+      return "🏁 「" + title + "」が完了しました（" + (now.owner && now.owner !== "未定" ? now.owner + "さん" : "チーム") + "）";
+    }
+    if (now.owner !== last.owner) {
+      if (now.owner === "未定") return "🔁 " + last.owner + "さんが申し送りを書いて、次の走者募集に戻しました。" + (handover ? "\n申し送り：" + handover : "");
+      if (!last.owner || last.owner === "未定") return "🏃 " + now.owner + "さんがバトンを受け取りました。";
+      return "🔁 " + last.owner + "さんから" + now.owner + "さんへ、バトンが渡りました。" + (handover ? "\n申し送り：" + handover : "");
+    }
+    return null;
+  }
+
+  async function postTeamsReply(card, text) {
+    var threadEl = getRoleEl(card, "teamsMessageId");
+    var linkEl = getRoleEl(card, "teamsLink");
+    var payload = { type: "teamsReply", threadId: threadEl ? threadEl.value : "", link: linkEl ? linkEl.value : "", text: text };
+    var filename = "reply-" + (card.getAttribute("data-item-id") || "x") + "-" + Date.now() + ".json";
+    try {
+      await graph("/drives/" + QUEUE_DRIVE_ID + "/root:/" + encodeURIComponent(OUTBOX_FOLDER) + "/" + encodeURIComponent(filename) + ":/content", { method: "PUT", body: payload });
+    } catch (e) { log("teams reply upload failed: " + e.message); }
+  }
+
   // Customer列を足す前の運用状況カードは、顧客名がTitleにしか入っていない。
   // そのまま読むと顧客名が空欄になるので、Titleから戻す。次の保存でCustomerにも入る。
   function applyItemFields(card, kind, f) {
     var map = FIELD_MAP[kind];
     for (var col in map) writeField(card, kind, map[col], f[col]);
+    // Teams への返信は「保存した値からの変化」で決めるので、読み込んだ値を覚えておく（他の人の変更で二重に返信しないように）
+    if (kind === "task") card._last = { owner: f.Owner || "", status: f.Status || "" };
     if (kind === "ops" && !f.Customer && f.Title && f.Title !== "無題") {
       writeField(card, kind, FIELD_MAP.ops.Customer, f.Title);
     }
@@ -612,6 +790,133 @@
     });
   }
 
+  // ---- 出勤予定（Outlook）----
+  // パートさんは各自のメールアドレスの予定表に出勤を入れ、busilabo@ の Outlook に重ねて表示している。
+  // ここでは、サインイン中の人から見える予定表（自分の予定表＋共有されている予定表）をすべて読み、
+  // 件名に「出勤」「勤務」を含む予定だけを拾う。予定表の追加・削除をしてもアプリ側の設定は要らない。
+  // 予定表を読む権限は SharePoint とは別に同意が要るので、トークンも別に取る。
+  var CAL_SCOPES = ["Calendars.Read", "Calendars.Read.Shared"];
+  var SHIFT_REFRESH_MS = 10 * 60 * 1000;
+  var SHIFT_WORD = /出勤|勤務/;
+  // 代表の不在（出張・旅行・休み）。代表の予定表の終日予定の件名で判断する
+  var AWAY_WORD = /出張|ツアー|旅行|休/;
+
+  async function getCalToken(interactive) {
+    try {
+      var r = await msalApp.acquireTokenSilent({ scopes: CAL_SCOPES, account: account });
+      return r.accessToken;
+    } catch (e) {
+      // ポップアップはボタンを押したときにしか開けない（自動で開くとブラウザに止められる）
+      if (!interactive) { var err = new Error("consent"); err.consent = true; throw err; }
+      var r2 = await msalApp.acquireTokenPopup({ scopes: CAL_SCOPES, account: account });
+      return r2.accessToken;
+    }
+  }
+
+  async function calGetAll(path, token) {
+    var url = "https://graph.microsoft.com/v1.0" + path;
+    var out = [];
+    while (url) {
+      var res = await fetch(url, { headers: { "Authorization": "Bearer " + token, "Prefer": 'outlook.timezone="Tokyo Standard Time"' } });
+      if (!res.ok) throw new Error(res.status + " " + (await res.text()).slice(0, 200));
+      var json = await res.json();
+      out = out.concat(json.value || []);
+      url = json["@odata.nextLink"] || "";
+    }
+    return out;
+  }
+
+  function ymd(d) { return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+
+  // 件名「植野　出勤」→ 名前「植野」。「上田　出勤可能(坂中商店)」→ 勤務先「坂中商店」（ビジラボ以外なので other）
+  function parseShiftEvent(ev) {
+    var subject = (ev.subject || "").trim();
+    if (ev.isCancelled || !SHIFT_WORD.test(subject)) return [];
+    var name = subject.split(/[\s　]+/)[0].replace(/(さん|様)$/, "");
+    if (!name || SHIFT_WORD.test(name)) return [];
+    var pm = /[(（]([^)）]*)[)）]/.exec(subject);
+    var place = pm ? pm[1].trim() : "";
+    var other = !!place && !/ビジラボ/.test(place);
+    var start = String(ev.start && ev.start.dateTime || "");
+    var end = String(ev.end && ev.end.dateTime || "");
+    var out = [];
+    if (ev.isAllDay) {
+      // 終日予定は終了日を含まない
+      var d = new Date(start.slice(0, 10) + "T00:00:00");
+      var last = new Date(end.slice(0, 10) + "T00:00:00");
+      for (var guard = 0; d < last && guard < 31; d.setDate(d.getDate() + 1), guard++) {
+        out.push({ name: name, date: ymd(d), start: "", end: "", allDay: true, place: place, other: other });
+      }
+    } else {
+      // 「09:00」は「9:00」と出す
+      var hm = function (t) { return t.slice(11, 16).replace(/^0/, ""); };
+      out.push({ name: name, date: start.slice(0, 10), start: hm(start), end: hm(end), allDay: false, place: place, other: other });
+    }
+    return out;
+  }
+
+  async function loadShifts(interactive) {
+    var app = window.__app;
+    if (!app || !app.setOutlookShifts) return;
+    try {
+      var token = await getCalToken(interactive);
+      // 今週の月曜から2週間
+      var from = new Date();
+      from.setHours(0, 0, 0, 0);
+      var dow = from.getDay();
+      from.setDate(from.getDate() - (dow === 0 ? 6 : dow - 1));
+      var to = new Date(from);
+      to.setDate(to.getDate() + 14);
+      var range = "startDateTime=" + encodeURIComponent(from.toISOString()) + "&endDateTime=" + encodeURIComponent(to.toISOString()) +
+        "&$select=subject,start,end,isAllDay,isCancelled&$top=200";
+
+      var calendars = await calGetAll("/me/calendars?$select=id,name,isDefaultCalendar,owner&$top=100", token);
+      var events = [];
+      var repAway = {};
+      var failed = [];
+      for (var i = 0; i < calendars.length; i++) {
+        var cal = calendars[i];
+        var list;
+        try {
+          list = await calGetAll("/me/calendars/" + encodeURIComponent(cal.id) + "/calendarView?" + range, token);
+        } catch (e) {
+          // 祝日など読めない予定表は飛ばす（1つ読めなくても他は表示する）
+          failed.push(cal.name);
+          log("calendar read failed (" + cal.name + "): " + e.message);
+          continue;
+        }
+        list.forEach(function (ev) {
+          events = events.concat(parseShiftEvent(ev));
+          if (cal.isDefaultCalendar && ev.isAllDay && !ev.isCancelled && AWAY_WORD.test(ev.subject || "") && !SHIFT_WORD.test(ev.subject || "")) {
+            var d = new Date(String(ev.start.dateTime).slice(0, 10) + "T00:00:00");
+            var last = new Date(String(ev.end.dateTime).slice(0, 10) + "T00:00:00");
+            for (var guard = 0; d < last && guard < 62; d.setDate(d.getDate() + 1), guard++) repAway[ymd(d)] = true;
+          }
+        });
+      }
+      // 同じ予定が複数の予定表に見えることがあるので、名前・日・時刻で重複を除く
+      var seen = {};
+      events = events.filter(function (e) {
+        var k = e.name + "|" + e.date + "|" + e.start + "|" + e.end + "|" + e.place;
+        if (seen[k]) return false;
+        seen[k] = true;
+        return true;
+      });
+      app.setOutlookShifts({ loaded: true, error: "", needsConsent: false, events: events, repAway: repAway, at: new Date(), failed: failed });
+    } catch (e) {
+      log("shift load failed: " + e.message);
+      app.setOutlookShifts({
+        loaded: false, events: [], repAway: {}, at: null,
+        needsConsent: !!e.consent,
+        error: e.consent ? "Outlook の予定表を読む許可がまだありません" : e.message
+      });
+    }
+  }
+
+  document.body.addEventListener("click", function (e) {
+    if (e.target.closest('[data-role="connectCalendar"]')) loadShifts(true);
+  });
+
   if (window.__app) window.__app.requestVerify = requestVerify;
 
   async function afterSignIn() {
@@ -628,6 +933,9 @@
     setInterval(pollRefresh, POLL_MS);
     await drainQueue();
     setInterval(drainQueue, QUEUE_DRAIN_MS);
+    // 出勤予定（Outlook）。許可がまだなら「出勤予定」タブに許可ボタンが出る
+    loadShifts(false);
+    setInterval(function () { loadShifts(false); }, SHIFT_REFRESH_MS);
   }
 
   async function boot() {

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>できるAIチーム＋ 案件管理</title>
+<title>ビジラボ 仕事管理</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@500&display=swap">
 <style>
   :root {
@@ -86,7 +86,7 @@
   .tabular { font-family: "JetBrains Mono", monospace; font-variant-numeric: tabular-nums; }
 
   .page {
-    max-width: 880px;
+    max-width: 1240px;
     margin: 0 auto;
     padding: 28px 20px 80px;
   }
@@ -680,6 +680,567 @@
     border-radius: 10px;
   }
 
+  /* 上段の大分類（仕事管理／案件管理／システム構築管理／運用状況管理）。下段の nav.tabs がその中の小分類 */
+  nav.sections {
+    display: flex;
+    gap: 6px;
+    margin: 20px 0 0;
+    flex-wrap: wrap;
+  }
+  .section-btn {
+    appearance: none;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-muted);
+    font-family: "Zen Kaku Gothic New", "Noto Sans JP", sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    padding: 8px 14px;
+    border-radius: 9px;
+    cursor: pointer;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+  .section-btn:hover { color: var(--text); border-color: var(--accent); }
+  .section-btn[data-local-active] { background: var(--accent); border-color: var(--accent); color: var(--surface); }
+  .section-btn[data-local-active] .tab-count { background: var(--surface); color: var(--accent); }
+  nav.tabs[hidden] { display: none; }
+  nav.sections + nav.tabs, nav.tabs + nav.tabs { margin-top: 10px; }
+  .toolbar { flex-wrap: wrap; }
+  .toolbar-hint { flex: 1; min-width: 220px; font-size: 12.5px; color: var(--text-muted); align-self: center; }
+
+  .howto { margin: 0 0 14px; font-size: 13px; color: var(--text-muted); }
+  .howto summary { cursor: pointer; color: var(--accent); font-weight: 700; }
+  .howto p { margin: 6px 0 0; }
+
+  .missing-list {
+    margin: 0 0 14px;
+    padding: 10px 12px;
+    border: 1px solid var(--warn);
+    background: var(--warn-soft);
+    color: var(--warn);
+    border-radius: 9px;
+    font-size: 13px;
+  }
+  .missing-list[hidden] { display: none; }
+
+  /* 今日 */
+  .today-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px 20px;
+    margin-bottom: 12px;
+  }
+  .today-date { font-family: "Zen Kaku Gothic New", "Noto Sans JP", sans-serif; font-size: 20px; font-weight: 700; }
+  .today-me { font-size: 13px; color: var(--text-muted); }
+  .today-block {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 16px;
+    box-shadow: var(--shadow);
+    margin-bottom: 12px;
+  }
+  .today-block h2 {
+    margin: 0 0 10px;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .today-empty { font-size: 13px; color: var(--text-muted); }
+  .today-done { margin: 0; font-size: 13.5px; color: var(--ok); font-weight: 700; }
+  .today-note { margin: -6px 0 10px; font-size: 12px; color: var(--text-muted); }
+
+  /* 上部の大きな数字。ここだけ見ればチーム全体の今日の状況が分かるようにする */
+  .today-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin-bottom: 16px; }
+  .kpi {
+    appearance: none;
+    font: inherit;
+    color: inherit;
+    text-align: left;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-top: 4px solid var(--neutral);
+    border-radius: 12px;
+    padding: 10px 14px;
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+  }
+  .kpi-num { font-size: 32px; font-weight: 700; line-height: 1.15; }
+  .kpi-label { font-size: 12.5px; color: var(--text-muted); font-weight: 700; }
+  .kpi[data-tone="crit"] { border-top-color: var(--crit); }
+  .kpi[data-tone="crit"] .kpi-num { color: var(--crit); }
+  .kpi[data-tone="warn"] { border-top-color: var(--warn); }
+  .kpi[data-tone="warn"] .kpi-num { color: var(--warn); }
+  .kpi[data-tone="ok"] { border-top-color: var(--ok); }
+  .kpi[data-tone="ok"] .kpi-num { color: var(--ok); }
+  .kpi[data-tone="accent"] { border-top-color: var(--accent); }
+  .kpi[data-tone="accent"] .kpi-num { color: var(--accent); }
+
+  /* 1件1行。左に仕事名、右に札とボタン */
+  .rows { display: flex; flex-direction: column; }
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 0 8px 12px;
+    border-left: 4px solid var(--neutral);
+    border-bottom: 1px solid var(--border);
+  }
+  .row:last-child { border-bottom: none; }
+  .row[data-tone="crit"] { border-left-color: var(--crit); }
+  .row[data-tone="warn"] { border-left-color: var(--warn); }
+  .row[data-tone="ok"] { border-left-color: var(--ok); }
+  .row[data-tone="accent"] { border-left-color: var(--accent); }
+  .row-main {
+    appearance: none;
+    flex: 1;
+    min-width: 0;
+    border: none;
+    background: none;
+    padding: 0;
+    font: inherit;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+  }
+  .row-main:hover .row-title { color: var(--accent); text-decoration: underline; }
+  .row-title { font-size: 14.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row-meta { font-size: 11.5px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row-note { font-size: 12px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row-side { display: flex; align-items: center; gap: 6px; flex: none; }
+  .row-badge {
+    font-size: 11.5px;
+    font-weight: 700;
+    padding: 2px 9px;
+    border-radius: 999px;
+    white-space: nowrap;
+    background: var(--neutral-soft);
+    color: var(--neutral);
+  }
+  .row-badge[data-tone="crit"] { background: var(--crit-soft); color: var(--crit); }
+  .row-badge[data-tone="warn"] { background: var(--warn-soft); color: var(--warn); }
+  .row-badge[data-tone="ok"] { background: var(--ok-soft); color: var(--ok); }
+  .row-badge[data-tone="accent"] { background: var(--accent-soft); color: var(--accent); }
+  .rows-more { margin: 8px 0 0; font-size: 12.5px; color: var(--text-muted); }
+
+  /* 仕事ボード。人ごとの列。自分の名前の列を見れば自分の仕事が分かる */
+  .board { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(380px, 100%), 1fr)); gap: 12px; margin-bottom: 12px; align-items: start; }
+  .lane {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 14px;
+    box-shadow: var(--shadow);
+    min-width: 0;
+  }
+  .lane-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 2px solid var(--accent); }
+  .lane-name { font-family: "Zen Kaku Gothic New", "Noto Sans JP", sans-serif; font-size: 18px; font-weight: 700; }
+  .lane-label { font-size: 12.5px; color: var(--ok); font-weight: 700; }
+  .lane-count { margin-left: auto; font-size: 13px; color: var(--text-muted); }
+  .lane[data-state="unassigned"] { background: var(--accent-soft); border-color: var(--accent); }
+  .lane[data-state="unassigned"] .lane-label { color: var(--accent); }
+  .lane[data-state="absent"] .lane-head { border-bottom-color: var(--warn); }
+  .lane[data-state="absent"] .lane-label { color: var(--warn); }
+  .lane[data-state="absent"] .lane-name { color: var(--text-muted); }
+  .lane[data-state="unknown"] .lane-head { border-bottom-color: var(--border); }
+  .lane[data-state="unknown"] .lane-label { color: var(--text-muted); font-weight: 500; }
+  .lane .row-side { flex-wrap: wrap; justify-content: flex-end; max-width: 55%; }
+  .picker {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 10px;
+    margin: 0 0 6px 16px;
+    background: var(--surface-2);
+    border-radius: 8px;
+  }
+  .picker-label { font-size: 12.5px; font-weight: 700; margin-right: 4px; }
+  .picker-btn {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    font: inherit;
+    font-size: 13px;
+    border-radius: 999px;
+    padding: 3px 12px;
+    cursor: pointer;
+  }
+  .picker-btn[data-here] { border-color: var(--accent); color: var(--accent); font-weight: 700; }
+  .picker-btn:hover { background: var(--accent); color: var(--surface); }
+  .pass-btn {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-muted);
+    font: inherit;
+    font-size: 12px;
+    border-radius: 8px;
+    padding: 3px 10px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .pass-btn:hover { border-color: var(--accent); color: var(--accent); }
+  /* 「渡す」欄。申し送りを書いてから、走者募集に戻すか、出勤中の人に渡す */
+  .passer {
+    margin: 0 0 6px 16px;
+    padding: 10px 12px;
+    background: var(--warn-soft);
+    border: 1px solid var(--warn);
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .passer-label { font-size: 12.5px; font-weight: 700; }
+  .passer-text {
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 7px 9px;
+    font: inherit;
+    font-size: 13.5px;
+    color: var(--text);
+    background: var(--surface);
+    resize: vertical;
+  }
+  .passer-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .passer-hint { font-size: 12px; color: var(--crit); font-weight: 700; }
+  .today-head .today-shiftline { margin-bottom: 0; }
+  .today-more { margin: 4px 0 0; }
+  .today-more > summary {
+    cursor: pointer;
+    font-size: 13.5px;
+    font-weight: 700;
+    color: var(--accent);
+    padding: 6px 0;
+  }
+  .today-more .rows { margin-top: 6px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 4px 12px; }
+  .today-more .row-note { white-space: normal; }
+  @media (max-width: 560px) {
+    .row { flex-wrap: wrap; }
+    .row-side { width: 100%; justify-content: flex-end; }
+    .kpi-num { font-size: 26px; }
+  }
+  .today-shiftline {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 18px;
+    align-items: baseline;
+    font-size: 13.5px;
+    margin-bottom: 12px;
+  }
+  .today-shiftline b { color: var(--text-muted); font-weight: 500; margin-right: 6px; }
+  .today-shiftline .off { color: var(--crit); }
+  .today-shift-label { font-weight: 700; }
+  .claim-btn {
+    flex: none;
+    border: 1px solid var(--accent);
+    background: var(--surface);
+    color: var(--accent);
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 700;
+    border-radius: 8px;
+    padding: 5px 12px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .claim-btn:hover { background: var(--accent); color: var(--surface); }
+  .health-summary { display: flex; gap: 12px; align-items: center; font-size: 13px; margin-bottom: 8px; }
+  .health-pct { font-size: 28px; font-weight: 700; flex: none; }
+  .health-pct[data-tone="ok"] { color: var(--ok); }
+  .health-pct[data-tone="warn"] { color: var(--warn); }
+  .health-pct[data-tone="crit"] { color: var(--crit); }
+  .health-warn {
+    margin: 0 0 8px;
+    padding: 7px 10px;
+    border-radius: 8px;
+    background: var(--warn-soft);
+    color: var(--warn);
+    font-size: 12.5px;
+    font-weight: 700;
+  }
+  .health-scroll { overflow-x: auto; }
+  .health-table { width: 100%; border-collapse: collapse; font-size: 12.5px; min-width: 380px; }
+  .health-table th, .health-table td { padding: 5px 8px; border-bottom: 1px solid var(--border); text-align: left; white-space: nowrap; }
+  .health-table thead th { color: var(--text-muted); font-weight: 500; }
+  .health-table td[data-tone="crit"] { color: var(--crit); font-weight: 700; }
+  .health-table td:nth-child(3) { width: 45%; }
+  .health-bar {
+    display: inline-block;
+    width: calc(100% - 2.5em);
+    height: 8px;
+    background: var(--surface-2);
+    border-radius: 999px;
+    margin-right: 6px;
+    vertical-align: middle;
+    overflow: hidden;
+  }
+  .health-bar > span { display: block; height: 100%; background: var(--accent); border-radius: 999px; }
+  .health-sub { margin: 12px 0 6px; font-size: 13px; }
+  .teams-origin { font-size: 12.5px; color: var(--accent); font-weight: 700; }
+  .teams-origin[hidden] { display: none; }
+  .teams-origin a { color: var(--accent); margin-left: 6px; }
+  .health-skill { margin: 10px 0 0; font-size: 12.5px; color: var(--text-muted); }
+  .health-skill[data-tone="warn"] { color: var(--warn); font-weight: 700; }
+  .link-inline {
+    border: none;
+    background: none;
+    padding: 0;
+    font: inherit;
+    color: var(--accent);
+    text-decoration: underline;
+    cursor: pointer;
+  }
+
+  /* スキル表 */
+  .skill-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 4px 18px;
+  }
+  .skill-group {
+    grid-column: 1 / -1;
+    margin-top: 8px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--accent);
+  }
+  .skill-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; }
+  .field .skill-row select { width: auto; padding: 4px 6px; font-size: 12.5px; }
+  .skill-matrix { overflow-x: auto; margin-bottom: 14px; }
+  .skill-matrix:empty { display: none; }
+  .skill-matrix table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    font-size: 12.5px;
+  }
+  .skill-matrix th, .skill-matrix td { border: 1px solid var(--border); padding: 5px 8px; text-align: center; white-space: nowrap; }
+  .skill-matrix tbody th { text-align: left; font-weight: 500; }
+  .skill-matrix thead th { background: var(--surface-2); }
+  .skill-matrix .skill-cat th { background: var(--surface-2); color: var(--accent); font-weight: 700; text-align: left; }
+  .skill-matrix td[data-level="0"] { color: var(--text-muted); }
+  .skill-matrix td[data-level="2"], .skill-matrix td[data-level="3"] { color: var(--ok); font-weight: 700; }
+  .skill-matrix tr[data-risk] > th, .skill-matrix tr[data-risk] > td:last-child { color: var(--crit); font-weight: 700; }
+  .skill-risk:empty { display: none; }
+  .skill-risk {
+    margin-bottom: 14px;
+    padding: 10px 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--crit);
+    border-radius: 10px;
+    font-size: 13px;
+  }
+  .skill-risk h3 { margin: 0 0 6px; font-size: 14px; color: var(--crit); }
+  .skill-risk h3.skill-ok { color: var(--ok); margin: 0; }
+  .skill-risk ul { margin: 0; padding-left: 1.2em; }
+  .skill-risk li { margin: 2px 0; }
+  .skill-plan { color: var(--text-muted); }
+  .skill-who[hidden] { display: none; }
+  .who-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+  .who-learn { margin-top: 6px; align-items: center; }
+  .who-learn-label { font-size: 11.5px; color: var(--text-muted); }
+  .who {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 4px 3px 10px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    font-size: 12.5px;
+    background: var(--surface-2);
+  }
+  .who .claim-btn { padding: 3px 10px; border-radius: 999px; font-size: 11.5px; }
+  .who-tag { font-size: 10.5px; color: var(--text-muted); border: 1px solid var(--border); border-radius: 999px; padding: 0 6px; background: var(--surface); }
+  .who-tag[data-tone="ok"] { color: var(--ok); border-color: var(--ok); }
+  .who-owner { font-size: 11px; color: var(--text-muted); padding-right: 8px; }
+  .card[data-local-flash] { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+  /* 出勤予定 */
+  .shift-week { overflow-x: auto; margin-bottom: 14px; }
+  .shift-week:empty { display: none; }
+  .shift-week table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    font-size: 12.5px;
+    min-width: 520px;
+  }
+  .shift-week th, .shift-week td { border: 1px solid var(--border); padding: 6px 8px; text-align: left; vertical-align: top; }
+  .shift-week th { background: var(--surface-2); font-weight: 700; white-space: nowrap; }
+  .shift-week td[data-today] { background: var(--accent-soft); }
+  .shift-week th[data-today] { background: var(--accent); color: var(--surface); }
+  .shift-week tbody th { display: table-cell; }
+  .shift-week tbody th .avatar { width: 22px; height: 22px; font-size: 11.5px; vertical-align: middle; }
+  .shift-week-title { margin: 14px 0 6px; font-size: 14px; }
+  .shift-chip { display: block; font-size: 12.5px; font-weight: 700; color: var(--ok); white-space: nowrap; }
+  .shift-chip[data-other] { color: var(--text-muted); font-weight: 500; }
+  .shift-chip small { display: block; font-size: 10.5px; }
+  .shift-status { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin-bottom: 6px; font-size: 13px; }
+  .shift-ok { color: var(--ok); font-weight: 700; }
+  .shift-err { color: var(--crit); font-weight: 700; }
+  .shift-help { color: var(--text-muted); }
+  .shift-status .add-btn { padding: 8px 14px; }
+
+  /* 顧客台帳の「この顧客の案件・仕事」 */
+  .related-list { display: flex; flex-direction: column; gap: 5px; }
+  .related-list:empty:before { content: "ひも付く案件・仕事はまだありません（会社名が同じものを自動で集めます）"; font-size: 12.5px; color: var(--text-muted); }
+
+
+  /* ---- リレーボード（今日） ---- */
+  :root {
+    --p1: #2C5F8A; --p2: #24714B; --p3: #A6371F; --p4: #7A4FA3; --p5: #93650C; --p6: #1F7A80;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --p1: #7FB0DD; --p2: #6BCB98; --p3: #E58370; --p4: #C29BE8; --p5: #E0B255; --p6: #6CC7CC; }
+  }
+  :root[data-theme="dark"] { --p1: #7FB0DD; --p2: #6BCB98; --p3: #E58370; --p4: #C29BE8; --p5: #E0B255; --p6: #6CC7CC; }
+
+  .avatar {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    font-family: "Zen Kaku Gothic New", "Noto Sans JP", sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    color: #fff;
+    background: var(--neutral);
+  }
+  .avatar[data-color="1"] { background: var(--p1); }
+  .avatar[data-color="2"] { background: var(--p2); }
+  .avatar[data-color="3"] { background: var(--p3); }
+  .avatar[data-color="4"] { background: var(--p4); }
+  .avatar[data-color="5"] { background: var(--p5); }
+  .avatar[data-color="6"] { background: var(--p6); }
+  .avatar[data-color="none"] { background: var(--surface-2); color: var(--text-muted); border: 1px dashed var(--border); }
+  .avatar[data-off] { opacity: 0.35; }
+  .avatar-big { width: 42px; height: 42px; font-size: 19px; }
+
+  .today-top {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px 24px;
+    margin-bottom: 14px;
+  }
+  .today-date { display: flex; flex-direction: column; line-height: 1.1; }
+  .today-md { font-family: "Zen Kaku Gothic New", "Noto Sans JP", sans-serif; font-size: 34px; font-weight: 700; }
+  .today-dow { font-size: 13px; color: var(--text-muted); font-weight: 700; }
+  .roster { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .roster-person {
+    appearance: none;
+    font: inherit;
+    color: inherit;
+    display: grid;
+    grid-template-columns: auto auto;
+    grid-template-rows: auto auto;
+    column-gap: 8px;
+    align-items: center;
+    text-align: left;
+    padding: 6px 12px 6px 6px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    cursor: pointer;
+    box-shadow: var(--shadow);
+  }
+  .roster-person .avatar { grid-row: 1 / 3; }
+  .roster-person:hover { border-color: var(--accent); }
+  .roster-person[data-on] { border-color: var(--accent); background: var(--accent-soft); outline: 2px solid var(--accent); }
+  .roster-person[data-off] { background: transparent; box-shadow: none; }
+  .roster-name { font-weight: 700; font-size: 14px; }
+  .roster-state { font-size: 11.5px; color: var(--text-muted); }
+  .roster-person[data-off] .roster-name { color: var(--text-muted); }
+
+  .kanban {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+    align-items: start;
+    margin-bottom: 14px;
+  }
+  @media (max-width: 900px) { .kanban { grid-template-columns: 1fr; } }
+  .kb-col {
+    background: var(--surface-2);
+    border-radius: 14px;
+    padding: 12px;
+    min-width: 0;
+  }
+  .kb-col[data-col="recruit"] { background: var(--accent-soft); }
+  .kb-col[data-col="goal"] { background: var(--ok-soft); }
+  .kb-head { display: flex; align-items: center; gap: 8px; }
+  .kb-title { font-family: "Zen Kaku Gothic New", "Noto Sans JP", sans-serif; font-size: 16px; font-weight: 700; }
+  .kb-count {
+    margin-left: auto;
+    min-width: 28px;
+    text-align: center;
+    font-size: 14px;
+    font-weight: 700;
+    background: var(--surface);
+    border-radius: 999px;
+    padding: 1px 9px;
+  }
+  .kb-hint { margin: 2px 0 10px; font-size: 12px; color: var(--text-muted); }
+  .kb-head + .kb-list { margin-top: 10px; }
+  .kb-list { display: flex; flex-direction: column; gap: 8px; }
+  .kb-empty { margin: 4px 0; font-size: 13px; color: var(--text-muted); }
+
+  .tile {
+    background: var(--surface);
+    border-radius: 10px;
+    border-left: 5px solid var(--border);
+    box-shadow: var(--shadow);
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    transition: opacity .15s;
+  }
+  .tile[data-tone="crit"] { border-left-color: var(--crit); }
+  .tile[data-tone="warn"] { border-left-color: var(--warn); }
+  .tile[data-tone="ok"] { border-left-color: var(--ok); }
+  .tile[data-tone="accent"] { border-left-color: var(--accent); }
+  .tile[data-dim] { opacity: 0.3; }
+  .tile-main {
+    appearance: none;
+    border: none;
+    background: none;
+    padding: 0;
+    font: inherit;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+  }
+  .tile-main:hover .tile-title { color: var(--accent); text-decoration: underline; }
+  .tile-title { font-size: 14.5px; font-weight: 700; overflow-wrap: anywhere; }
+  .tile-meta { font-size: 11.5px; color: var(--text-muted); }
+  .tile-note { font-size: 12px; color: var(--text); background: var(--warn-soft); border-radius: 6px; padding: 3px 7px; margin-top: 4px; }
+  .tile-foot { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .tile-badges { display: flex; flex-wrap: wrap; gap: 4px; flex: 1; min-width: 0; }
+  .tile .claim-btn, .tile .pass-btn { padding: 3px 10px; font-size: 12px; }
+  .kb-list .picker, .kb-list .passer { margin: -4px 0 0; }
+
   footer.note {
     margin-top: 26px;
     font-size: 12px;
@@ -729,22 +1290,70 @@
 
 <div class="page">
   <header class="top">
-    <span class="eyebrow">BUSILABO AI Team</span>
-    <h1>できるAIチーム＋ 案件管理</h1>
-    <p class="lede">「次のアクション」には、いまのステータスで選べるボタンだけが並びます。押すとメモ欄が開き、「履歴に記録」を押した時点でステータスの移動・期限の設定・履歴への記録がまとめて行われます。「取り消し」を押せば何も起きません。期限（運用状況は次回接触予定）はアクションに応じて自動で入ります。手で書き換えても構いません。各カードには状況と、問い合わせ内容・メモ・履歴コメントの文面から判断した「次はこれ」を表示し、★の付いたボタンがおすすめの1手です。読み取った手がかりは提案の下にタグで出ます。ステータスの右にある「問い合わせ／資料DL」は流入の種別で、押すと切り替わります。資料DLは資料請求だけで本文がないため、資料を送り直すのではなく電話で要件を引き出す流れを提案します。上部の「要対応」で急ぎのカードだけ、「資料DL」で資料請求だけを絞り込めます。次にやることや所感は、カード下部の「メモ」欄にまとめて書いてください。入力欄は直接編集してください（内容は自動保存され、全員にリアルタイムで共有されます）。編集したら右上の「更新」を押すと、その内容をもとに提案を出し直します。</p>
+    <span class="eyebrow">BUSILABO</span>
+    <h1>ビジラボ 仕事管理</h1>
+    <details class="howto lede-howto">
+      <summary>使い方</summary>
+      <p>出勤したら「今日」を開き、上から順に見てください。①自分の仕事を進める ②手が空いたら「チームで拾う仕事」を引き受ける ③帰る前に、進めた仕事の「申し送り」欄に、どこまで進んだか・次に何をするか・資料の場所を書く。この3つだけで、誰が休んでも仕事が止まらなくなります。</p>
+    </details>
   </header>
 
-  <nav class="tabs">
-    <button type="button" class="tab-btn" data-tab="inquiry" data-local-active>問い合わせ管理 <span class="tab-count" data-local-count="inquiry">0</span></button>
-    <button type="button" class="tab-today-btn" data-local data-role="meetingTodayNav">📅 本日商談 <span class="tab-count" data-local-count="meetingToday">0</span></button>
-    <button type="button" class="tab-today-btn" data-local data-role="wonNav">✅ 成約 <span class="tab-count" data-local-count="won">0</span></button>
-    <button type="button" class="tab-btn" data-tab="wontask">成約管理タスク <span class="tab-count" data-local-count="wontask">0</span></button>
-    <button type="button" class="tab-btn" data-tab="ops">運用状況 <span class="tab-count" data-local-count="ops">0</span></button>
-    <button type="button" class="tab-btn" data-tab="task">タスク <span class="tab-count" data-local-count="task">0</span></button>
+  <nav class="sections">
+    <button type="button" class="section-btn" data-section="work" data-local-active>仕事管理</button>
+    <button type="button" class="section-btn" data-section="deal">案件管理 <span class="tab-count" data-local-count="inquiry">0</span></button>
+    <button type="button" class="section-btn" data-section="build">システム構築管理 <span class="tab-count" data-local-count="wontask">0</span></button>
+    <button type="button" class="section-btn" data-section="ops">運用状況管理 <span class="tab-count" data-local-count="ops">0</span></button>
   </nav>
 
+  <nav class="tabs" data-subnav="work">
+    <button type="button" class="tab-btn" data-tab="today" data-local-active>🏠 今日 <span class="tab-count" data-local-count="today">0</span></button>
+    <button type="button" class="tab-btn" data-tab="task">仕事一覧 <span class="tab-count" data-local-count="task">0</span></button>
+    <button type="button" class="tab-btn" data-tab="shift">出勤予定</button>
+    <button type="button" class="tab-btn" data-tab="team">チーム状況</button>
+    <button type="button" class="tab-btn" data-tab="skill">スキル表</button>
+    <button type="button" class="tab-btn" data-tab="customer">顧客 <span class="tab-count" data-local-count="customer">0</span></button>
+  </nav>
+  <nav class="tabs" data-subnav="deal" hidden>
+    <button type="button" class="tab-btn" data-tab="inquiry">問い合わせ管理</button>
+    <button type="button" class="tab-today-btn" data-local data-role="meetingTodayNav">📅 本日商談 <span class="tab-count" data-local-count="meetingToday">0</span></button>
+    <button type="button" class="tab-today-btn" data-local data-role="wonNav">✅ 成約 <span class="tab-count" data-local-count="won">0</span></button>
+  </nav>
+  <nav class="tabs" data-subnav="build" hidden>
+    <button type="button" class="tab-btn" data-tab="wontask">成約後の構築タスク</button>
+  </nav>
+  <nav class="tabs" data-subnav="ops" hidden>
+    <button type="button" class="tab-btn" data-tab="ops">運用中の顧客</button>
+  </nav>
+
+  <!-- 今日（仕事管理のトップ）。全員が同じ画面を見る「リレーボード」。サインインした人には依存しない
+       （同じアカウントを共用していても使えるように）。誰の仕事かは顔アイコンで見分ける -->
+  <section class="panel" data-panel="today">
+    <div class="today-top">
+      <div class="today-date" data-today-date></div>
+      <div class="roster" data-roster></div>
+    </div>
+    <div class="today-kpis" data-today-kpis></div>
+    <div class="kanban" data-kanban></div>
+    <details class="today-more">
+      <summary>みんなの申し送りを読む <span class="tab-count" data-today-count="handover">0</span></summary>
+      <div class="today-body" data-today-body="handover"></div>
+    </details>
+  </section>
+
+  <!-- チーム状況。代表が全体を見る画面（引き継ぎの準備・仕事の偏り・一人しかできないスキル） -->
+  <section class="panel" data-panel="team" data-local-hidden>
+    <div class="today-block" data-today-block="health">
+      <h2>引き継ぎの状態</h2>
+      <div class="today-body" data-today-body="health"></div>
+    </div>
+  </section>
+
   <!-- 問い合わせ管理 -->
-  <section class="panel" data-panel="inquiry">
+  <section class="panel" data-panel="inquiry" data-local-hidden>
+    <details class="howto">
+      <summary>問い合わせ管理の使い方</summary>
+      <p>「次のアクション」には、いまのステータスで選べるボタンだけが並びます。押すとメモ欄が開き、「履歴に記録」を押した時点でステータスの移動・期限の設定・履歴への記録がまとめて行われます。「取り消し」を押せば何も起きません。期限（運用状況は次回接触予定）はアクションに応じて自動で入ります。手で書き換えても構いません。各カードには状況と、問い合わせ内容・メモ・履歴コメントの文面から判断した「次はこれ」を表示し、★の付いたボタンがおすすめの1手です。読み取った手がかりは提案の下にタグで出ます。ステータスの右にある「問い合わせ／資料DL」は流入の種別で、押すと切り替わります。資料DLは資料請求だけで本文がないため、資料を送り直すのではなく電話で要件を引き出す流れを提案します。上部の「要対応」で急ぎのカードだけ、「資料DL」で資料請求だけを絞り込めます。次にやることや所感は、カード下部の「メモ」欄にまとめて書いてください。入力欄は直接編集してください（内容は自動保存され、全員にリアルタイムで共有されます）。編集したら右上の「更新」を押すと、その内容をもとに提案を出し直します。</p>
+    </details>
     <div class="stats" data-local data-stats="inquiry"></div>
     <div class="toolbar">
       <input class="search" data-local data-search="inquiry" type="text" placeholder="会社名・担当・メールアドレス・内容で検索">
@@ -928,7 +1537,7 @@
         </div>
         <div class="grid">
           <div class="field"><label>会社名</label><input type="text" data-role="company"></div>
-          <div class="field"><label>担当</label><select data-role="owner" data-staff-select></select></div>
+          <div class="field"><label>担当（窓口）</label><select data-role="owner" data-staff-select></select></div>
           <div class="field"><label>契約日</label><input type="date" data-role="contractDate"></div>
           <div class="field wide"><label>契約プラン（参考表示）</label><input type="text" data-role="plan"></div>
           <div class="field wide">
@@ -1094,7 +1703,7 @@
           <div class="field"><label>プラン</label><input type="text" data-role="plan"></div>
           <div class="field"><label>契約開始日</label><input type="date" data-role="startAt"></div>
           <div class="field"><label>次回接触予定</label><input type="date" data-role="nextTouch"></div>
-          <div class="field"><label>担当</label><select data-role="owner" data-staff-select></select></div>
+          <div class="field"><label>担当（窓口）</label><select data-role="owner" data-staff-select></select></div>
           <div class="field wide">
             <label>次のアクション</label>
             <div class="suggest" artifact-local data-suggest hidden>
@@ -1140,7 +1749,10 @@
   <section class="panel" data-panel="task" data-local-hidden>
     <div class="stats" data-local data-stats="task"></div>
     <div class="toolbar">
-      <input class="search" data-local data-search="task" type="text" placeholder="タスク内容・担当で検索">
+      <input class="search" data-local data-search="task" type="text" placeholder="仕事の内容・担当・顧客で検索">
+      <select class="toolbar-select" data-local data-category-filter="task" aria-label="種類で絞り込む">
+        <option value="">種類：すべて</option>
+      </select>
       <select class="toolbar-select" data-local data-owner-filter="task" aria-label="担当で絞り込む"></select>
       <select class="toolbar-select" data-local data-sort="task" aria-label="並び替え">
         <option value="">並び替え：既定</option>
@@ -1151,12 +1763,12 @@
       <button type="button" class="add-btn" data-add="task">＋ 追加</button>
     </div>
     <div class="list" data-list="task"></div>
-    <p class="empty-msg" data-local data-empty="task" hidden>該当するタスクはありません</p>
+    <p class="empty-msg" data-local data-empty="task" hidden>該当する仕事はありません</p>
 
     <div class="trash-toggle-row">
       <button type="button" class="action-btn" data-role="toggleTrash" data-trash-kind="task">🗑 削除済み <span class="tab-count" data-local-count="taskDeleted">0</span></button>
     </div>
-    <div class="list trash-list" data-list="taskDeleted" data-trash-panel="task" data-empty-text="削除済みのタスクはありません" data-local-hidden></div>
+    <div class="list trash-list" data-list="taskDeleted" data-trash-panel="task" data-empty-text="削除済みの仕事はありません" data-local-hidden></div>
 
     <template data-card-template="task">
       <article class="card" data-kind="task">
@@ -1168,12 +1780,24 @@
           <artifact-local><button type="button" class="action-btn refresh-btn" data-role="refresh">更新</button></artifact-local>
         </div>
         <div class="grid">
-          <div class="field"><label>担当</label><select data-role="owner" data-staff-select></select></div>
+          <div class="field"><label>種類</label><select data-role="category" data-category-select></select></div>
+          <div class="field"><label>バトンを持っている人</label><select data-role="owner" data-staff-select></select></div>
           <div class="field"><label>期限</label><input type="date" data-role="due"></div>
-          <div class="field"><label>関連（顧客・問い合わせ）</label><input type="text" data-role="related"></div>
+          <div class="field"><label>関連する顧客</label><input type="text" data-role="related" list="customerNames"></div>
+          <div class="field"><label>必要なスキル</label><select data-role="skill" data-skill-select></select></div>
+          <div class="field wide skill-who" data-skill-who hidden></div>
+          <div class="field wide teams-origin" data-teams-origin hidden></div>
+          <input type="hidden" data-role="requester">
+          <input type="hidden" data-role="teamsMessageId">
+          <input type="hidden" data-role="teamsLink">
           <div class="field wide">
-            <label>タスク内容</label>
-            <div class="editable" contenteditable="true" data-role="content" data-placeholder="タスクの内容を入力"></div>
+            <label>仕事の内容</label>
+            <div class="editable" contenteditable="true" data-role="content" data-placeholder="何をする仕事か。担当でない人が読んでも分かるように、資料の場所も書く"></div>
+          </div>
+          <div class="field wide handover">
+            <label>申し送り（次にバトンを受け取る人へ）</label>
+            <div class="editable" contenteditable="true" data-role="handover" data-placeholder="帰る前に書く：どこまで終わったか・次にやること・資料の場所・何を待っているか"></div>
+            <div class="handover-by" data-role="handoverBy"></div>
           </div>
           <div class="field wide">
             <label>次のアクション</label>
@@ -1195,24 +1819,108 @@
               </div>
             </div>
           </div>
-          <div class="field wide handover">
-            <label>申し送り（次に出勤した人へ）</label>
-            <div class="editable" contenteditable="true" data-role="handover" data-placeholder="どこまで終わったか・次に何をすればよいか・何を待っているかを書く"></div>
-            <div class="handover-by" data-role="handoverBy"></div>
-          </div>
           <div class="field wide">
             <label>アクション履歴</label>
             <div class="history-list" data-history></div>
           </div>
         </div>
         <div class="danger-zone">
-          <button type="button" class="danger-btn" data-role="delete" data-confirm-label="本当に削除しますか？（もう一度クリック）">このタスクを削除</button>
+          <button type="button" class="danger-btn" data-role="delete" data-confirm-label="本当に削除しますか？（もう一度クリック）">この仕事を削除</button>
         </div>
       </article>
     </template>
   </section>
 
-  <footer class="note">できるAIチーム＋ 販売・運用管理ツール — BUSILABO INC.</footer>
+  <!-- 出勤予定。Outlook の予定表（各パートさんの予定表）から読む表示専用の画面。予定の変更は Outlook 側で行う -->
+  <section class="panel" data-panel="shift" data-local-hidden>
+    <div class="shift-status" data-shift-status></div>
+    <div class="shift-week" data-shift-week></div>
+  </section>
+
+  <!-- スキル表。1人1枚。誰に何を頼めるか・一人しかできない仕事はどれかを見えるようにする -->
+  <section class="panel" data-panel="skill" data-local-hidden>
+    <p class="missing-list" data-missing-list="skill" hidden>SharePoint に「スキル表」リストがまだありません。scripts/setup-lists.ps1 を実行してください。</p>
+    <div class="skill-risk" data-skill-risk></div>
+    <div class="skill-matrix" data-skill-matrix></div>
+    <div class="toolbar">
+      <span class="toolbar-hint">1人1枚です。各スキルを「－ 未経験／△ 教われば可／○ 一人で可／◎ 教えられる」で付けてください。仕事一覧で「必要なスキル」を選ぶと、ここをもとに頼める人が出ます。</span>
+      <button type="button" class="add-btn" data-add="skill">＋ 追加</button>
+    </div>
+    <div class="list" data-list="skill"></div>
+    <p class="empty-msg" data-local data-empty="skill" hidden>スキル表が登録されていません</p>
+
+    <div class="trash-toggle-row">
+      <button type="button" class="action-btn" data-role="toggleTrash" data-trash-kind="skill">🗑 削除済み <span class="tab-count" data-local-count="skillDeleted">0</span></button>
+    </div>
+    <div class="list trash-list" data-list="skillDeleted" data-trash-panel="skill" data-empty-text="削除済みのスキル表はありません" data-local-hidden></div>
+
+    <template data-card-template="skill">
+      <article class="card" data-kind="skill">
+        <div class="grid">
+          <div class="field"><label>名前</label><select data-role="staff" data-staff-select></select></div>
+          <div class="field wide">
+            <label>スキル</label>
+            <div class="skill-grid" data-skill-grid></div>
+          </div>
+          <div class="field wide">
+            <label>これから覚えたいこと</label>
+            <div class="editable" contenteditable="true" data-role="want" data-placeholder="例：Canva画像作成を一人でできるようになりたい"></div>
+          </div>
+        </div>
+        <div class="danger-zone">
+          <button type="button" class="danger-btn" data-role="delete" data-confirm-label="本当に削除しますか？（もう一度クリック）">このスキル表を削除</button>
+        </div>
+      </article>
+    </template>
+  </section>
+
+  <!-- 顧客台帳。会社ごとに、各タブに散らばった案件・仕事を名前でまとめて見せる -->
+  <section class="panel" data-panel="customer" data-local-hidden>
+    <p class="missing-list" data-missing-list="customer" hidden>SharePoint に「顧客台帳」リストがまだありません。scripts/setup-lists.ps1 を実行してください。</p>
+    <div class="toolbar">
+      <input class="search" data-local data-search="customer" type="text" placeholder="会社名・担当・メモで検索">
+      <select class="toolbar-select" data-local data-owner-filter="customer" aria-label="担当で絞り込む"></select>
+      <button type="button" class="action-btn" data-role="importCustomers">案件から取り込む</button>
+      <button type="button" class="add-btn" data-add="customer">＋ 追加</button>
+    </div>
+    <div class="list" data-list="customer"></div>
+    <p class="empty-msg" data-local data-empty="customer" hidden>該当する顧客はありません</p>
+
+    <div class="trash-toggle-row">
+      <button type="button" class="action-btn" data-role="toggleTrash" data-trash-kind="customer">🗑 削除済み <span class="tab-count" data-local-count="customerDeleted">0</span></button>
+    </div>
+    <div class="list trash-list" data-list="customerDeleted" data-trash-panel="customer" data-empty-text="削除済みの顧客はありません" data-local-hidden></div>
+
+    <template data-card-template="customer">
+      <article class="card" data-kind="customer">
+        <div class="grid">
+          <div class="field"><label>会社名</label><input type="text" data-role="name"></div>
+          <div class="field"><label>事業</label><select data-role="business" data-choice-select="business"></select></div>
+          <div class="field"><label>状況</label><select data-role="stage" data-choice-select="stage"></select></div>
+          <div class="field"><label>担当（窓口）</label><select data-role="owner" data-staff-select></select></div>
+          <div class="field"><label>先方のご担当者</label><input type="text" data-role="contactName"></div>
+          <div class="field"><label>メール</label><input type="text" data-role="email"></div>
+          <div class="field"><label>電話</label><input type="text" data-role="phone"></div>
+          <div class="field"><label>資料の置き場所（URL）</label><input type="text" data-role="folder"></div>
+          <div class="field wide">
+            <label>この顧客の案件・仕事</label>
+            <div class="related-list" data-related></div>
+          </div>
+          <div class="field wide">
+            <label>メモ（この会社について、誰が読んでも分かるように）</label>
+            <div class="editable" contenteditable="true" data-role="memo" data-placeholder="経緯・注意点・好みなど"></div>
+          </div>
+        </div>
+        <div class="danger-zone">
+          <button type="button" class="danger-btn" data-role="delete" data-confirm-label="本当に削除しますか？（もう一度クリック）">この顧客を削除</button>
+        </div>
+      </article>
+    </template>
+  </section>
+
+  <datalist id="customerNames"></datalist>
+
+  <footer class="note">ビジラボ 仕事管理 — BUSILABO INC.</footer>
 </div>
 
 <script>
@@ -1262,7 +1970,7 @@
   // 担当の一覧。週2〜3日勤務の人が入れ替わり立ち替わり触るため、自由入力にすると
   // 「坂中」「坂中さん」「匠太郎」のように表記が割れて絞り込みが効かなくなる。
   // 人が増えたらこの配列に足す。先頭の「未定」は未割り当てを表す。
-  var STAFF = ["未定", "坂中", "上田", "石﨑"];
+  var STAFF = ["未定", "坂中", "植野", "上田", "石﨑", "川合"];
   var UNASSIGNED = "未定";
 
   // サインイン中の本人。sync.js が Microsoft 365 のアカウント表示名を渡してくる。
@@ -1305,6 +2013,61 @@
     sel.value = UNASSIGNED;
   }
 
+  // 仕事の種類。「未分類」は種類を足す前に作った仕事のための受け皿
+  var CATEGORIES = ["未分類", "問い合わせ・営業", "制作", "発信", "事務・その他"];
+
+  // 顧客台帳の選択肢。担当と同じ理由（表記の割れ）で自由入力にしない
+  var CHOICES = {
+    category: CATEGORIES,
+    business: ["できるAIチーム＋", "その他"],
+    stage: ["見込み", "構築中", "運用中", "休止", "終了"]
+  };
+
+  // スキル表の項目。仕事の種類ごとに並べる。項目を足す・名前を変えるときはここだけ直す
+  // （名前を変えると、その項目に付けた段階は引き継がれないので注意）
+  var SKILLS = [
+    { category: "問い合わせ・営業", items: ["問い合わせメールの返信", "電話ヒアリング", "商談の準備・同席", "見積書・提案書の作成"] },
+    { category: "制作", items: ["Claude導入設定（アカウント・環境）", "スキル作成", "AI社員カスタム指示の作成", "Project構築・動作確認", "Day15/Day30資料の作成"] },
+    { category: "発信", items: ["Instagram運用", "Facebook運用", "TikTok・YouTube運用", "記事・コラム作成", "メルマガ作成・配信", "Canva画像作成"] },
+    { category: "事務・その他", items: ["請求書・入金確認", "日程調整", "仕事管理アプリ・SharePointの更新"] }
+  ];
+  // 段階。2以上を「頼める」とみなす
+  var SKILL_LEVELS = [
+    { v: "0", mark: "－", label: "未経験" },
+    { v: "1", mark: "△", label: "教われば可" },
+    { v: "2", mark: "○", label: "一人で可" },
+    { v: "3", mark: "◎", label: "教えられる" }
+  ];
+  var CAN_DO = 2;
+
+  function fillSkillGrid(grid) {
+    if (grid.children.length) return;
+    grid.innerHTML = SKILLS.map(function (g) {
+      return '<div class="skill-group">' + g.category + '</div>' + g.items.map(function (name) {
+        return '<label class="skill-row"><span>' + name + '</span><select data-skill-level="' + name + '">' +
+          SKILL_LEVELS.map(function (l) { return '<option value="' + l.v + '">' + l.mark + ' ' + l.label + '</option>'; }).join('') +
+          '</select></label>';
+      }).join('');
+    }).join('');
+  }
+
+  function fillSkillSelect(sel) {
+    if (sel.options.length) return;
+    sel.innerHTML = '<option value="">（指定なし）</option>' + SKILLS.map(function (g) {
+      return '<optgroup label="' + g.category + '">' + g.items.map(function (n) { return '<option value="' + n + '">' + n + '</option>'; }).join('') + '</optgroup>';
+    }).join('');
+  }
+
+  function fillChoiceSelect(sel, key) {
+    if (sel.options.length) return;
+    (CHOICES[key] || []).forEach(function (v) {
+      var opt = document.createElement('option');
+      opt.value = v;
+      opt.textContent = v;
+      sel.appendChild(opt);
+    });
+  }
+
   function ownerOf(card) {
     var el = card.querySelector('[data-role="owner"]');
     var v = el ? (el.value || "").trim() : "";
@@ -1319,16 +2082,22 @@
     if (!src) return null;
     var card = src.cloneNode(true);
     card.querySelectorAll('[data-staff-select]').forEach(fillStaffSelect);
+    card.querySelectorAll('[data-category-select]').forEach(function (sel) { fillChoiceSelect(sel, 'category'); });
+    card.querySelectorAll('[data-choice-select]').forEach(function (sel) { fillChoiceSelect(sel, sel.getAttribute('data-choice-select')); });
+    card.querySelectorAll('[data-skill-grid]').forEach(fillSkillGrid);
+    card.querySelectorAll('[data-skill-select]').forEach(fillSkillSelect);
     return card;
   }
 
-  var ALL_KINDS = ["inquiry", "wontask", "ops", "task"];
+  var ALL_KINDS = ["inquiry", "wontask", "ops", "task", "customer", "skill"];
 
   var DELETE_LABELS = {
     inquiry: "この問い合わせを削除",
     wontask: "この成約管理タスクを削除",
     ops: "この顧客を削除",
-    task: "このタスクを削除"
+    task: "この仕事を削除",
+    customer: "この顧客を削除",
+    skill: "このスキル表を削除"
   };
 
   // カードは削除しても消さず「削除済み」置き場へ移すだけにする。
@@ -1474,7 +2243,8 @@
   };
 
   var filters = { inquiry: null, ops: null, task: null, wontask: null };
-  var ownerFilters = { inquiry: "", ops: "", task: "", wontask: "" };
+  var ownerFilters = { inquiry: "", ops: "", task: "", wontask: "", customer: "" };
+  var categoryFilter = "";
   var sortModes = { inquiry: "", ops: "", task: "", wontask: "" };
 
   // toISOString() はUTCを返すので、日本時間の0時〜9時のあいだ前日の日付になっていた。
@@ -1484,9 +2254,11 @@
   // 担当の絞り込み。「自分の担当だけ」「未割り当てだけ」をここで出す。
   function renderOwnerFilter(sel, kind) {
     var current = ownerFilters[kind] || "";
-    var opts = [{ v: "", t: "担当：すべて" }];
-    if (currentUser) opts.push({ v: "__me__", t: "自分の担当（" + currentUser + "）" });
-    opts.push({ v: "__unassigned__", t: "未割り当て" });
+    // 仕事一覧はリレー方式（バトン）、お客様の窓口がある画面は担当
+    var relay = kind === "task";
+    var opts = [{ v: "", t: relay ? "バトン：すべて" : "担当：すべて" }];
+    if (currentUser) opts.push({ v: "__me__", t: (relay ? "自分が持つバトン（" : "自分の担当（") + currentUser + "）" });
+    opts.push({ v: "__unassigned__", t: relay ? "次の走者募集" : "未割り当て" });
     STAFF.forEach(function (n) { if (n !== UNASSIGNED) opts.push({ v: n, t: n }); });
     sel.innerHTML = opts.map(function (o) {
       return '<option value="' + o.v + '">' + o.t + '</option>';
@@ -1557,7 +2329,10 @@
     var by = card.querySelector('[data-role="handoverBy"]');
     if (!by) return;
     var now = new Date();
-    by.textContent = (currentUser ? currentUser + "　" : "") + "記入 " +
+    // アカウントを共用していると、サインインした人＝書いた人とは限らない。申し送りは担当が書くものなので担当名で記名する
+    var owner = ownerOf(card);
+    var writer = owner !== UNASSIGNED ? owner : currentUser;
+    by.textContent = (writer ? writer + "　" : "") + "記入 " +
       (now.getMonth() + 1) + "/" + pad2(now.getDate()) + " " + pad2(now.getHours()) + ":" + pad2(now.getMinutes());
   }
 
@@ -2515,6 +3290,10 @@
   }
 
   function applyPanel(kind) {
+    // 出勤予定・顧客台帳には「次のアクション」がないので、表示専用の描画に回す
+    if (kind === 'shift') { renderShift(); return; }
+    if (kind === 'customer') { renderCustomers(); return; }
+    if (kind === 'skill') { renderSkills(); return; }
     var panel = document.querySelector('.panel[data-panel="' + kind + '"]');
     var list = panel.querySelector('[data-list="' + kind + '"]');
     var cards = Array.prototype.slice.call(list.querySelectorAll('.card'));
@@ -2557,7 +3336,8 @@
       else if (activeFilter === "download") matchesFilter = isDownloadLead(card);
       else if (activeFilter) matchesFilter = label === activeFilter;
       var matchesSearch = cardMatchesSearch(card, query);
-      var show = matchesFilter && matchesSearch && matchesOwnerFilter(card, kind);
+      var matchesCategory = kind !== 'task' || !categoryFilter || roleVal(card, 'category') === categoryFilter;
+      var show = matchesFilter && matchesSearch && matchesOwnerFilter(card, kind) && matchesCategory;
       if (show) { card.removeAttribute("data-local-hidden"); visibleCount++; }
       else card.setAttribute("data-local-hidden", "true");
     });
@@ -2609,11 +3389,859 @@
 
   function applyAll() {
     todayStr = fmtDate(new Date());   // 日付をまたいでも期限判定が古い日付のままにならないように
-    Object.keys(CYCLES).forEach(applyPanel);
+    ["inquiry", "wontask", "ops", "task"].forEach(applyPanel);
+    renderShift();
+    renderCustomers();
+    renderSkills();
+    renderTaskOrigins();
+    renderToday();
     updateTrashCount();
   }
 
+  // ---- 仕事管理（今日・出勤予定・顧客台帳）------------------------------------------
+  // どれも他のタブのカードを読んで組み立てるだけで、独自の保存先は持たない（出勤予定・顧客台帳のカードを除く）。
+
+  var DONE_LABELS = ["成約", "完了", "失注"];
+  var KIND_LABELS = { inquiry: "問い合わせ", wontask: "構築", ops: "運用", task: "仕事", customer: "顧客" };
+  var WORK_KINDS = ["task", "inquiry", "wontask", "ops"];
+  var WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
+  var SLOTS = ["午前", "午後"];
+
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  function roleVal(card, role) {
+    var el = card.querySelector('[data-role="' + role + '"]');
+    if (!el) return "";
+    if (el.tagName === 'INPUT' || el.tagName === 'SELECT') return (el.value || "").trim();
+    return (el.innerText || el.textContent || "").trim();
+  }
+
+  function liveCards(kind) {
+    return Array.prototype.slice.call(document.querySelectorAll('[data-list="' + kind + '"] > .card'));
+  }
+
+  function cardTitle(card) {
+    var kind = card.getAttribute('data-kind');
+    if (kind === 'task') return roleVal(card, 'content').split('\n')[0].slice(0, 60) || "（内容が未入力の仕事）";
+    if (kind === 'ops') return roleVal(card, 'customer') || "（顧客名が未入力）";
+    if (kind === 'customer') return roleVal(card, 'name') || "（会社名が未入力）";
+    return roleVal(card, 'company') || "（会社名が未入力）";
+  }
+
+  function cardDue(card) {
+    return roleVal(card, card.getAttribute('data-kind') === 'ops' ? 'nextTouch' : 'due');
+  }
+
+  function isDone(card) { return DONE_LABELS.indexOf(statusOf(card)) !== -1; }
+
+  function shortDate(dateStr) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateStr || "");
+    return m ? (parseInt(m[2], 10) + "/" + parseInt(m[3], 10)) : "";
+  }
+
+  // 「今日」や顧客台帳から元のカードへ飛ぶための登録簿。5秒ごとの再描画でボタンが作り直されても、
+  // カード側に付けたキーは変わらないので、押した瞬間に正しいカードを引ける。
+  var jumpRegistry = {};
+  var jumpSeq = 0;
+  function jumpKeyOf(card) {
+    if (!card._jumpKey) { card._jumpKey = "j" + (++jumpSeq); jumpRegistry[card._jumpKey] = card; }
+    return card._jumpKey;
+  }
+
+  // 同じ内容なら DOM を触らない（5秒ごとの再描画でホバーやスクロールが乱れないように）
+  function setHtml(el, html) {
+    if (!el || el._html === html) return;
+    el._html = html;
+    el.innerHTML = html;
+  }
+
+  function byDue(a, b) {
+    var da = cardDue(a.card) || FAR_FUTURE, db = cardDue(b.card) || FAR_FUTURE;
+    return da < db ? -1 : da > db ? 1 : 0;
+  }
+
+  // 申し送りの記名「坂中　記入 10/08 14:05」から並び替え用のキーを作る
+  function handoverStampKey(card) {
+    var m = /(\d{1,2})\/(\d{1,2})\s+(\d{1,2}):(\d{2})/.exec(roleVal(card, 'handoverBy'));
+    return m ? (pad2(+m[1]) + pad2(+m[2]) + pad2(+m[3]) + m[4]) : "";
+  }
+
+  // ---- 出勤予定（Outlook から読む）----
+  // パートさんは各自のメールアドレスの予定表に「植野　出勤」「石﨑　勤務」「上田　出勤可能(ビジラボ…)」のような件名で入れ、
+  // それを busilabo@ の Outlook に重ねて表示している。sync.js が busilabo@ から見える予定表をすべて読み、
+  // 件名に「出勤」「勤務」を含む予定の先頭を名前として setOutlookShifts に渡してくる。
+  // 「(坂中商店…)」のようにビジラボ以外の勤務先が書かれた予定は、ビジラボの出勤には数えない。
+
+  // 代表。出勤の予定は入れないので、代表自身の予定表の終日の「出張・ツアー・休み」でお休みを判断する
+  var REP = "坂中";
+  // loaded: 読めたか / error: 読めなかった理由 / needsConsent: 許可ボタンを出すか
+  // events: [{ name, date, start, end, allDay, place, other }] / repAway: { "2026-10-23": true }
+  var shiftState = { loaded: false, error: "", needsConsent: false, events: [], repAway: {}, at: null };
+
+  // ふだんはビジラボ以外で働いている人。件名に勤務先が書かれていない「出勤」はこの勤務先とみなし、
+  // 「(ビジラボ)」と書かれた日だけビジラボの出勤に数える（植野さんは坂中商店が中心で、ビジラボは月1〜2回）
+  var HOME_PLACE = { "植野": "坂中商店" };
+
+  function setOutlookShifts(state) {
+    (state.events || []).forEach(function (e) {
+      if (!e.place && HOME_PLACE[e.name]) {
+        e.place = HOME_PLACE[e.name];
+        e.other = true;
+      }
+    });
+    shiftState = state;
+    applyAll();
+  }
+
+  function shiftsOf(name, dateStr) {
+    return shiftState.events.filter(function (e) { return e.name === name && e.date === dateStr; });
+  }
+
+  // ビジラボの出勤（他の勤務先の予定を除く）
+  function bizShiftsOf(name, dateStr) {
+    return shiftsOf(name, dateStr).filter(function (e) { return !e.other; });
+  }
+
+  function shiftNames() {
+    var names = STAFF.filter(function (n) { return n !== UNASSIGNED; });
+    shiftState.events.forEach(function (e) { if (names.indexOf(e.name) === -1) names.push(e.name); });
+    return names;
+  }
+
+  // 名前 → 今日ビジラボに来るか。予定表が読めていないときは誰も判定しない（全員 undefined）
+  function presenceMap() {
+    var map = {};
+    if (!shiftState.loaded) return map;
+    shiftNames().forEach(function (n) {
+      if (n === REP) { if (shiftState.repAway[todayStr]) map[n] = false; return; }
+      map[n] = bizShiftsOf(n, todayStr).length > 0;
+    });
+    return map;
+  }
+
+  function shiftTimeText(list) {
+    return list.map(function (e) { return e.allDay ? "終日" : (e.start + "〜" + e.end); }).join(" / ");
+  }
+
+  // 顔ぶれに出す一言（今日の出勤時刻、休み など）
+  function rosterState(name, presence) {
+    if (name === REP) return presence[name] === false ? "不在（出張など）" : "代表";
+    if (!shiftState.loaded) return "出勤予定を読み込み中";
+    if (presence[name] === true) return shiftTimeText(bizShiftsOf(name, todayStr));
+    var other = shiftsOf(name, todayStr).filter(function (e) { return e.other; });
+    return other.length ? ("休み（" + other[0].place + "）") : "休み";
+  }
+
+  function weekDates(offsetWeeks) {
+    var d = new Date(todayStr + "T00:00:00");
+    var dow = d.getDay();
+    d.setDate(d.getDate() - (dow === 0 ? 6 : dow - 1) + (offsetWeeks || 0) * 7);   // その週の月曜
+    var out = [];
+    for (var i = 0; i < 6; i++) { out.push(fmtDate(d)); d.setDate(d.getDate() + 1); }
+    return out;
+  }
+
+  function renderShift() {
+    var status = document.querySelector('[data-shift-status]');
+    var statusHtml;
+    if (shiftState.loaded) {
+      var at = shiftState.at;
+      statusHtml = '<span class="shift-ok">Outlook の予定表（各パートさんの予定表）から読み込みました' +
+        (at ? '（' + pad2(at.getHours()) + ':' + pad2(at.getMinutes()) + '）' : '') + '</span>' +
+        '<span class="shift-help">予定を変えるときは Outlook 側を直してください。10分ごとに読み直します。</span>';
+    } else if (shiftState.error) {
+      statusHtml = '<span class="shift-err">出勤予定を読み込めませんでした：' + esc(shiftState.error) + '</span>' +
+        (shiftState.needsConsent ? '<button type="button" class="add-btn" data-role="connectCalendar">Outlook の予定表を読む許可をする</button>' : '');
+    } else {
+      statusHtml = '<span class="shift-help">Outlook の予定表を読み込み中です…</span>';
+    }
+    setHtml(status, statusHtml);
+
+    var html = "";
+    if (shiftState.loaded) {
+      var names = shiftNames().filter(function (n) { return n !== REP; });
+      var table = function (title, dates) {
+        return '<h3 class="shift-week-title">' + title + '</h3><table><thead><tr><th></th>' + dates.map(function (ds) {
+          return '<th' + (ds === todayStr ? ' data-today' : '') + '>' + shortDate(ds) + '（' + WEEKDAYS[new Date(ds + "T00:00:00").getDay()] + '）</th>';
+        }).join('') + '</tr></thead><tbody>' + names.map(function (n) {
+          return '<tr><th>' + avatarHtml(n) + ' ' + esc(n) + '</th>' + dates.map(function (ds) {
+            var list = shiftsOf(n, ds);
+            var cell = list.map(function (e) {
+              return '<span class="shift-chip"' + (e.other ? ' data-other' : '') + '>' + esc(e.allDay ? "終日" : e.start + "〜" + e.end) +
+                (e.other ? '<small>' + esc(e.place) + '</small>' : '') + '</span>';
+            }).join('');
+            return '<td' + (ds === todayStr ? ' data-today' : '') + '>' + cell + '</td>';
+          }).join('') + '</tr>';
+        }).join('') + '</tbody></table>';
+      };
+      html = table("今週", weekDates(0)) + table("来週", weekDates(1));
+    }
+    setHtml(document.querySelector('[data-shift-week]'), html);
+  }
+
+  // ---- 顧客台帳 ----
+  // 各タブの会社名は自由入力なので、「株式会社」や空白の違いを無視して突き合わせる
+  function normName(s) {
+    return String(s || "").replace(/株式会社|有限会社|合同会社|\(株\)|（株）|㈱|御中|様|\s|　/g, "").toLowerCase();
+  }
+
+  function sameCompany(a, b) {
+    if (!a || !b) return false;
+    if (a === b) return true;
+    return a.length >= 3 && b.length >= 3 && (a.indexOf(b) !== -1 || b.indexOf(a) !== -1);
+  }
+
+  function companyKeyOf(card) {
+    var kind = card.getAttribute('data-kind');
+    if (kind === 'task') return normName(roleVal(card, 'related'));
+    if (kind === 'ops') return normName(roleVal(card, 'customer'));
+    return normName(roleVal(card, 'company'));
+  }
+
+  function renderCustomers() {
+    var cards = liveCards('customer');
+    var panel = document.querySelector('.panel[data-panel="customer"]');
+    var searchInput = panel && panel.querySelector('[data-search="customer"]');
+    var query = searchInput ? searchInput.value : "";
+
+    var names = cards.map(function (c) { return roleVal(c, 'name'); }).filter(Boolean);
+    setHtml(document.getElementById('customerNames'), names.map(function (n) { return '<option value="' + esc(n) + '"></option>'; }).join(''));
+
+    var workCards = [];
+    WORK_KINDS.forEach(function (k) { workCards = workCards.concat(liveCards(k)); });
+
+    var visible = 0;
+    cards.forEach(function (card) {
+      var key = normName(roleVal(card, 'name'));
+      var related = key ? workCards.filter(function (w) { return sameCompany(key, companyKeyOf(w)); }) : [];
+      related.sort(function (a, b) { return (isDone(a) ? 1 : 0) - (isDone(b) ? 1 : 0); });
+      setHtml(card.querySelector('[data-related]'), related.map(function (w) {
+        return rowHtml({ card: w, tone: isDone(w) ? 'ok' : 'accent', meta: KIND_LABELS[w.getAttribute('data-kind')] + " · " + statusOf(w) + " · 担当 " + ownerOf(w), badges: [isDone(w) ? { text: "完了", tone: "ok" } : dueBadge(w)] });
+      }).join(''));
+      var show = cardMatchesSearch(card, query) && matchesOwnerFilter(card, 'customer');
+      if (show) { card.removeAttribute('data-local-hidden'); visible++; }
+      else card.setAttribute('data-local-hidden', 'true');
+    });
+
+    var emptyMsg = document.querySelector('[data-empty="customer"]');
+    if (emptyMsg) emptyMsg.hidden = visible !== 0;
+    var tabCount = document.querySelector('[data-local-count="customer"]');
+    if (tabCount) tabCount.textContent = cards.length;
+  }
+
+  // 既存の案件（運用状況・成約管理タスク・商談中/成約の問い合わせ）にある会社を、顧客台帳へまとめて登録する
+  function customerCandidates() {
+    var existing = liveCards('customer').map(function (c) { return normName(roleVal(c, 'name')); });
+    var picked = [];
+    var add = function (card, name, stage) {
+      var key = normName(name);
+      if (!key) return;
+      var dup = existing.concat(picked.map(function (p) { return p.key; })).some(function (k) { return sameCompany(k, key); });
+      if (dup) return;
+      picked.push({
+        key: key, name: name.trim(), stage: stage, owner: ownerOf(card),
+        contactName: roleVal(card, 'contactName'), email: roleVal(card, 'contact')
+      });
+    };
+    // 先に見たものが優先されるので、進んでいる順（運用→構築→商談）に見る
+    liveCards('ops').forEach(function (c) { add(c, roleVal(c, 'customer'), '運用中'); });
+    liveCards('wontask').forEach(function (c) { add(c, roleVal(c, 'company'), statusOf(c) === '完了' ? '運用中' : '構築中'); });
+    liveCards('inquiry').forEach(function (c) {
+      var st = statusOf(c);
+      if (st === '成約') add(c, roleVal(c, 'company'), '構築中');
+      else if (st === '商談中') add(c, roleVal(c, 'company'), '見込み');
+    });
+    return picked;
+  }
+
+  function importCustomers() {
+    var list = document.querySelector('[data-list="customer"]');
+    if (!list) return 0;
+    var picked = customerCandidates();
+    picked.forEach(function (p) {
+      var card = buildCard('customer');
+      if (!card) return;
+      setRoleValue(card, 'name', p.name);
+      setRoleValue(card, 'business', 'できるAIチーム＋');
+      setRoleValue(card, 'stage', p.stage);
+      if (p.owner !== UNASSIGNED) setRoleValue(card, 'owner', p.owner);
+      setRoleValue(card, 'contactName', p.contactName);
+      setRoleValue(card, 'email', p.email);
+      list.appendChild(card);
+    });
+    return picked.length;
+  }
+
+  // ---- Teams から来た仕事 ----
+  // 依頼した人と元の投稿へのリンクをカードの上に出す（「誰の、どの話か」を Teams に戻って確かめられるように）
+  function renderTaskOrigins() {
+    liveCards('task').forEach(function (card) {
+      var box = card.querySelector('[data-teams-origin]');
+      if (!box) return;
+      var from = roleVal(card, 'requester');
+      var link = roleVal(card, 'teamsLink');
+      if (!from && !link) { box.hidden = true; return; }
+      box.hidden = false;
+      var safeLink = /^https:\/\//.test(link) ? link : '';
+      setHtml(box, '📨 ' + (from ? esc(from) + 'さんからの依頼' : '依頼') + '（Teams）' +
+        (safeLink ? ' <a href="' + esc(safeLink) + '" target="_blank" rel="noopener">元の投稿を見る</a>' : ''));
+    });
+  }
+
+  // ---- スキル表 ----
+  // 名前 → { スキル名: 段階(0〜3) }
+  function skillTable() {
+    var table = {};
+    liveCards('skill').forEach(function (card) {
+      var name = roleVal(card, 'staff');
+      if (!name || name === UNASSIGNED) return;
+      var levels = {};
+      card.querySelectorAll('[data-skill-level]').forEach(function (sel) { levels[sel.getAttribute('data-skill-level')] = parseInt(sel.value, 10) || 0; });
+      table[name] = levels;
+    });
+    return table;
+  }
+
+  // そのスキルを持つ人。段階の高い順、同じなら今日出勤している人を先に
+  function whoCan(skill, table, presence) {
+    return Object.keys(table).map(function (n) {
+      return { name: n, level: table[n][skill] || 0, present: presence[n] };
+    }).filter(function (p) { return p.level > 0; }).sort(function (a, b) {
+      if (a.level !== b.level) return b.level - a.level;
+      return (b.present === true ? 1 : 0) - (a.present === true ? 1 : 0);
+    });
+  }
+
+  function levelMark(level) { return (SKILL_LEVELS[level] || SKILL_LEVELS[0]).mark; }
+
+  // 一人で可（○）以上が1人以下のスキル。その人が休むと止まる
+  function riskySkills(table) {
+    var names = Object.keys(table);
+    var out = [];
+    SKILLS.forEach(function (g) {
+      g.items.forEach(function (skill) {
+        var able = names.filter(function (n) { return (table[n][skill] || 0) >= CAN_DO; });
+        if (able.length > 1) return;
+        var teachers = names.filter(function (n) { return (table[n][skill] || 0) >= CAN_DO; });
+        // 教わる人は「△ 教われば可」の人を優先し、いなければ未経験の人
+        var learners = names.filter(function (n) { return (table[n][skill] || 0) === 1; });
+        if (!learners.length) learners = names.filter(function (n) { return !(table[n][skill] || 0); });
+        out.push({ skill: skill, able: able, teacher: teachers[0] || "", learner: learners[0] || "" });
+      });
+    });
+    return out;
+  }
+
+  function renderSkills() {
+    var table = skillTable();
+    var people = Object.keys(table);
+    var presence = presenceMap();
+    var emptyMsg = document.querySelector('[data-empty="skill"]');
+    if (emptyMsg) emptyMsg.hidden = liveCards('skill').length !== 0;
+
+    // スキル×人の一覧
+    var matrixHtml = "";
+    if (people.length) {
+      matrixHtml = '<table><thead><tr><th>スキル</th>' + people.map(function (n) { return '<th>' + esc(n) + '</th>'; }).join('') + '<th>頼める人数</th></tr></thead><tbody>' +
+        SKILLS.map(function (g) {
+          return '<tr class="skill-cat"><th colspan="' + (people.length + 2) + '">' + esc(g.category) + '</th></tr>' + g.items.map(function (skill) {
+            var able = people.filter(function (n) { return (table[n][skill] || 0) >= CAN_DO; }).length;
+            return '<tr' + (able <= 1 ? ' data-risk' : '') + '><th>' + esc(skill) + '</th>' + people.map(function (n) {
+              var lv = table[n][skill] || 0;
+              return '<td data-level="' + lv + '">' + levelMark(lv) + '</td>';
+            }).join('') + '<td class="tabular">' + able + '</td></tr>';
+          }).join('');
+        }).join('') + '</tbody></table>';
+    }
+    setHtml(document.querySelector('[data-skill-matrix]'), matrixHtml);
+
+    // 属人化リスクと、誰が誰に教えれば解消するか
+    var riskHtml = "";
+    if (people.length) {
+      var risks = riskySkills(table);
+      // 「1人だけ」は誰が誰に教えるかを1件ずつ、「誰もできない」は数が多くなりがちなので1行にまとめる
+      var single = risks.filter(function (r) { return r.able.length === 1; });
+      var none = risks.filter(function (r) { return !r.able.length; });
+      riskHtml = risks.length
+        ? '<h3>属人化リスク：一人しかできない（またはできる人がいない）スキル ' + risks.length + '項目</h3><ul>' +
+          single.map(function (r) {
+            var plan = r.learner ? ("→ " + r.teacher + "さんが" + r.learner + "さんに教えると2人になります") : "";
+            return '<li><b>' + esc(r.skill) + '</b>：' + esc(r.able[0]) + 'さんだけ <span class="skill-plan">' + esc(plan) + '</span></li>';
+          }).join('') +
+          (none.length ? '<li><b>できる人がいない（' + none.length + '項目）</b>：' + esc(none.map(function (r) { return r.skill; }).join("、")) +
+            ' <span class="skill-plan">→ やり方をノウハウに残し、誰かに覚えてもらう必要があります。スキル表の付け忘れでないかも確認してください</span></li>' : '') +
+          '</ul>'
+        : '<h3 class="skill-ok">どのスキルも2人以上が一人でできます。属人化していません。</h3>';
+    }
+    setHtml(document.querySelector('[data-skill-risk]'), riskHtml);
+
+    // 仕事一覧の各カードに「頼める人」を出す
+    liveCards('task').forEach(function (card) {
+      var box = card.querySelector('[data-skill-who]');
+      if (!box) return;
+      var skill = roleVal(card, 'skill');
+      if (!skill) { box.hidden = true; setHtml(box, ""); return; }
+      box.hidden = false;
+      var list = whoCan(skill, table, presence);
+      var owner = ownerOf(card);
+      var key = jumpKeyOf(card);
+      var btn = function (p) {
+        var tag = p.present === true ? '<span class="who-tag" data-tone="ok">今日出勤</span>' : p.present === false ? '<span class="who-tag">今日不在</span>' : '';
+        var action = p.name === owner ? '<span class="who-owner">担当中</span>'
+          : '<button type="button" class="claim-btn" data-assign-key="' + key + '" data-assign-to="' + esc(p.name) + '">' + esc(p.name) + 'さんに頼む</button>';
+        return '<span class="who">' + levelMark(p.level) + ' ' + esc(p.name) + tag + action + '</span>';
+      };
+      var able = list.filter(function (p) { return p.level >= CAN_DO; });
+      var learn = list.filter(function (p) { return p.level < CAN_DO; });
+      var html = '<label>頼める人（スキル表より）</label>';
+      if (!people.length) html += '<p class="today-empty">スキル表が未登録です。「スキル表」タブで登録すると、ここに頼める人が出ます。</p>';
+      else {
+        html += able.length ? '<div class="who-list">' + able.map(btn).join('') + '</div>'
+          : '<p class="today-empty">このスキルを一人でできる人がいません。代表に相談するか、教われる人に練習として任せてください。</p>';
+        if (learn.length) html += '<div class="who-list who-learn"><span class="who-learn-label">練習として任せられる人</span>' + learn.map(btn).join('') + '</div>';
+      }
+      setHtml(box, html);
+    });
+  }
+
+  // ---- 今日 ----
+  // トップ画面の考え方：仕事を「人」ではなく「チーム」で持つ。パッと見て3秒で分かることを最優先にし、
+  // 欄は「あなたの仕事」「チームで拾う仕事」「帰る前の申し送り」の3つ、1件は1行（仕事名＋色付きの札）に絞る。
+  // 全体の分析（引き継ぎの準備・仕事の偏り・一人しかできないスキル）は「チーム状況」タブに分ける。
+
+  // 「進行中」とみなすステータス。ここにある仕事は途中なので、申し送りが無いと担当以外が続きを触れない
+  var IN_PROGRESS = { task: ["進行中"], inquiry: ["対応中", "商談中"], wontask: ["進行中"], ops: ["要フォロー", "停滞"] };
+  var ROW_LIMIT = 6;
+
+  function isInProgress(card) {
+    return (IN_PROGRESS[card.getAttribute('data-kind')] || []).indexOf(statusOf(card)) !== -1;
+  }
+
+  function hasHandover(card) { return !!roleVal(card, 'handover'); }
+
+  // 申し送りが今日書かれた（更新された）か。記名「坂中　記入 10/08 14:05」の日付で見る
+  function handoverDate(card) {
+    var m = /(\d{1,2})\/(\d{1,2})\s+\d{1,2}:\d{2}/.exec(roleVal(card, 'handoverBy'));
+    return m ? { m: +m[1], d: +m[2] } : null;
+  }
+  function handoverWrittenToday(card) {
+    var hd = handoverDate(card);
+    var now = new Date(todayStr + "T00:00:00");
+    return !!hd && hd.m === now.getMonth() + 1 && hd.d === now.getDate();
+  }
+
+
+  // 期限の札。超過は赤、今日・明日は黄色、それより先は日付だけ
+  function dueBadge(card) {
+    var d = cardDue(card);
+    if (!d) return null;
+    var diff = dayDiffFromToday(d);
+    if (diff === null) return null;
+    if (diff < 0) return { text: (-diff) + "日超過", tone: "crit" };
+    if (diff === 0) return { text: "今日まで", tone: "warn" };
+    if (diff === 1) return { text: "明日まで", tone: "warn" };
+    return { text: shortDate(d) + "まで", tone: "neutral" };
+  }
+
+  function shortMeta(card) {
+    var kind = card.getAttribute('data-kind');
+    var parts = [kind === 'task' ? (roleVal(card, 'category') || "仕事") : KIND_LABELS[kind]];
+    parts.push((card.getAttribute('data-kind') === 'task' ? "バトン " : "担当 ") + ownerOf(card));
+    return parts.join(" · ");
+  }
+
+  // 1件1行。左に仕事名と小さな補足、右に札とボタン
+  function rowHtml(it) {
+    var key = jumpKeyOf(it.card);
+    var badges = (it.badges || []).filter(Boolean).map(function (b) {
+      return '<span class="row-badge" data-tone="' + b.tone + '">' + esc(b.text) + '</span>';
+    }).join('');
+    var claim = it.claim ? '<button type="button" class="claim-btn" data-pick-key="' + key + '">バトンを受け取る</button>' : '';
+    var pass = it.pass ? '<button type="button" class="pass-btn" data-pass-key="' + key + '">渡す</button>' : '';
+    var tone = (it.badges || []).filter(Boolean).some(function (b) { return b.tone === 'crit'; }) ? 'crit' : (it.tone || 'neutral');
+    return '<div class="row" data-tone="' + tone + '">' +
+      '<button type="button" class="row-main" data-jump-key="' + key + '"' + (it.focus ? ' data-jump-focus="' + it.focus + '"' : '') + '>' +
+      '<span class="row-title">' + esc(cardTitle(it.card)) + '</span>' +
+      '<span class="row-meta">' + esc(it.meta || shortMeta(it.card)) + '</span>' +
+      (it.note ? '<span class="row-note">' + esc(it.note) + '</span>' : '') +
+      '</button>' +
+      '<span class="row-side">' + badges + claim + pass + '</span>' +
+      '</div>';
+  }
+
+  function renderRows(key, items, emptyText, more) {
+    var countEl = document.querySelector('[data-today-count="' + key + '"]');
+    if (countEl) countEl.textContent = items.length;
+    var shown = items.slice(0, ROW_LIMIT);
+    var html = shown.length
+      ? '<div class="rows">' + shown.map(rowHtml).join('') + '</div>' +
+        (items.length > shown.length ? '<p class="rows-more">ほか ' + (items.length - shown.length) + ' 件' + (more || '') + '</p>' : '')
+      : '<p class="today-done">✓ ' + esc(emptyText) + '</p>';
+    setHtml(document.querySelector('[data-today-body="' + key + '"]'), html);
+  }
+
+  function renderKpis(kpis) {
+    setHtml(document.querySelector('[data-today-kpis]'), kpis.map(function (k) {
+      return '<div class="kpi" data-tone="' + k.tone + '">' +
+        '<span class="kpi-num tabular">' + esc(k.value) + '</span>' +
+        '<span class="kpi-label">' + esc(k.label) + '</span></div>';
+    }).join(''));
+  }
+
+  // 顔アイコン。名前の1文字目と、人ごとに決まった色。STAFF の並び順で色を割り当てる
+  var AVATAR_COLORS = 6;
+  function avatarHtml(name, opts) {
+    opts = opts || {};
+    if (!name || name === UNASSIGNED) return '<span class="avatar" data-color="none" title="次の走者募集">？</span>';
+    var idx = STAFF.indexOf(name);
+    var color = idx > 0 ? ((idx - 1) % AVATAR_COLORS) + 1 : 0;
+    return '<span class="avatar' + (opts.big ? ' avatar-big' : '') + '" data-color="' + color + '"' + (opts.off ? ' data-off' : '') + ' title="' + esc(name) + '">' + esc(name.slice(0, 1)) + '</span>';
+  }
+
+  // 顔ぶれで選んだ人。その人の仕事だけを濃く見せる（画面ごと・保存しない）
+  var focusRunner = "";
+
+  // 今週（月曜から）完了した日。履歴の「→ 完了」の記録から読む。履歴が無い完了は日付が分からないので出さない
+  function completedThisWeek(card) {
+    if (statusOf(card) !== "完了") return false;
+    var monday = new Date(todayStr + "T00:00:00");
+    var dow = monday.getDay();
+    monday.setDate(monday.getDate() - (dow === 0 ? 6 : dow - 1));
+    var entries = card.querySelectorAll('[data-history] .history-entry');
+    for (var i = 0; i < entries.length; i++) {
+      var st = entries[i].querySelector('.history-status');
+      if (!st || st.textContent.trim() !== "完了") continue;
+      var m = /(\d{1,2})\/(\d{1,2})/.exec((entries[i].querySelector('.history-time') || {}).textContent || "");
+      if (!m) return false;
+      var d = new Date(monday.getFullYear(), +m[1] - 1, +m[2]);
+      return d >= monday;
+    }
+    return false;
+  }
+
+  // カード型の1件。左端の線の色で急ぎかどうか、右下の顔アイコンで走者が分かる
+  function tileHtml(it) {
+    var key = jumpKeyOf(it.card);
+    var badges = (it.badges || []).filter(Boolean);
+    var tone = badges.some(function (b) { return b.tone === 'crit'; }) ? 'crit' : badges.some(function (b) { return b.tone === 'warn'; }) ? 'warn' : (it.tone || 'neutral');
+    var owner = ownerOf(it.card);
+    var dim = focusRunner && owner !== focusRunner;
+    return '<div class="tile" data-tone="' + tone + '"' + (dim ? ' data-dim' : '') + '>' +
+      '<button type="button" class="tile-main" data-jump-key="' + key + '">' +
+      '<span class="tile-title">' + esc(cardTitle(it.card)) + '</span>' +
+      '<span class="tile-meta">' + esc(it.meta || "") + '</span>' +
+      (it.note ? '<span class="tile-note">' + esc(it.note) + '</span>' : '') +
+      '</button>' +
+      '<div class="tile-foot">' +
+      '<span class="tile-badges">' + badges.map(function (b) { return '<span class="row-badge" data-tone="' + b.tone + '">' + esc(b.text) + '</span>'; }).join('') + '</span>' +
+      (it.claim ? '<button type="button" class="claim-btn" data-pick-key="' + key + '">バトンを受け取る</button>' : '') +
+      (it.pass ? '<button type="button" class="pass-btn" data-pass-key="' + key + '">渡す</button>' : '') +
+      (it.avatar !== false ? avatarHtml(owner, { off: it.ownerOff }) : '') +
+      '</div></div>';
+  }
+
+  function renderToday() {
+    var now = new Date(todayStr + "T00:00:00");
+    var dateEl = document.querySelector('[data-today-date]');
+    if (dateEl) dateEl.innerHTML = '<span class="today-md">' + (now.getMonth() + 1) + '/' + now.getDate() + '</span><span class="today-dow">' + WEEKDAYS[now.getDay()] + '曜日</span>';
+
+    var presence = presenceMap();
+    var skills = skillTable();
+
+    var all = [];
+    WORK_KINDS.forEach(function (k) { all = all.concat(liveCards(k)); });
+    var open = all.filter(function (c) { return !isDone(c); });
+
+    var dueDiff = function (c) { var d = cardDue(c); return d ? dayDiffFromToday(d) : null; };
+    var isUrgent = function (c) {
+      var diff = dueDiff(c);
+      return c.getAttribute('data-local-urgent') === 'true' || (diff !== null && diff < 0);
+    };
+    var isSoon = function (c) { var d = dueDiff(c); return d !== null && d >= 0 && d <= 1; };
+    // 運用状況の「順調」は次回接触が近いときだけ動けばよいので、普段はボードに出さない
+    var needsMove = function (c) {
+      if (c.getAttribute('data-kind') === 'ops' && statusOf(c) === '順調') {
+        var d = dueDiff(c);
+        return d !== null && d <= 3;
+      }
+      return true;
+    };
+    var noHandover = function (c) { return isInProgress(c) && !hasHandover(c); };
+    var canDoToday = function (c) {
+      var skill = c.getAttribute('data-kind') === 'task' ? roleVal(c, 'skill') : "";
+      if (!skill || !Object.keys(skills).length) return "";
+      var names = whoCan(skill, skills, presence).filter(function (p) { return p.level >= CAN_DO && p.present === true; }).map(function (p) { return p.name; });
+      return "今日できる人 " + (names.length ? names.join("・") : "なし");
+    };
+    var firstLine = function (text, n) { var t = (text || "").split("\n")[0]; return t.length > n ? t.slice(0, n) + "…" : t; };
+    var kindMeta = function (c) {
+      var kind = c.getAttribute('data-kind');
+      return kind === 'task' ? (roleVal(c, 'category') || "仕事") : KIND_LABELS[kind];
+    };
+    var baseBadges = function (c) {
+      var due = dueBadge(c);
+      var urgentOnly = c.getAttribute('data-local-urgent') === 'true' && !(due && due.tone === 'crit');
+      return [urgentOnly ? { text: "要対応", tone: "crit" } : null, due];
+    };
+    var urgency = function (c) { return isUrgent(c) ? 0 : isSoon(c) ? 1 : 2; };
+    var byUrgency = function (a, b) { return urgency(a.card) - urgency(b.card) || byDue(a, b); };
+
+    // 今日の顔ぶれ。出勤している人は色付き、お休みの人は薄く。押すとその人の仕事だけを濃く見せる
+    var people = shiftNames();
+    open.forEach(function (c) { var o = ownerOf(c); if (o !== UNASSIGNED && people.indexOf(o) === -1) people.push(o); });
+    // ふだん他の勤務先にいる人は、ビジラボに来る日か、バトンを持っているときだけ顔ぶれに出す
+    people = people.filter(function (n) {
+      if (!HOME_PLACE[n] || presence[n] === true) return true;
+      return open.some(function (c) { return ownerOf(c) === n; });
+    });
+    var rosterOrder = people.slice().sort(function (a, b) {
+      var r = function (n) { return presence[n] === true ? 0 : presence[n] === false ? 2 : 1; };
+      return r(a) - r(b);
+    });
+    var rosterHtml = rosterOrder.map(function (n) {
+      var state = rosterState(n, presence);
+      var count = open.filter(function (c) { return ownerOf(c) === n && needsMove(c); }).length;
+      return '<button type="button" class="roster-person" data-focus-runner="' + esc(n) + '"' + (focusRunner === n ? ' data-on' : '') + (presence[n] === false ? ' data-off' : '') + '>' +
+        avatarHtml(n, { big: true, off: presence[n] === false }) +
+        '<span class="roster-name">' + esc(n) + '</span>' +
+        '<span class="roster-state">' + esc(state) + ' · ' + count + '件</span></button>';
+    }).join('');
+    if (focusRunner) rosterHtml += '<button type="button" class="link-inline roster-clear" data-focus-runner="">全員を表示</button>';
+    setHtml(document.querySelector('[data-roster]'), rosterHtml);
+
+    // 1列目：次の走者募集（誰も持っていない仕事＋お休みの人の急ぎ）
+    var recruit = [];
+    var running = [];
+    open.forEach(function (c) {
+      if (!needsMove(c)) return;
+      var owner = ownerOf(c);
+      var kind = c.getAttribute('data-kind');
+      var meta = [kindMeta(c), canDoToday(c)].filter(Boolean).join(" · ");
+      var note = hasHandover(c) ? "申し送り：" + firstLine(roleVal(c, 'handover'), 40) : "";
+      if (owner === UNASSIGNED) {
+        if (kind === 'task' || (kind === 'inquiry' && statusOf(c) === '未対応')) recruit.push({ card: c, claim: true, badges: baseBadges(c), meta: meta, note: note, avatar: false });
+        return;
+      }
+      if (presence[owner] === false && (isUrgent(c) || isSoon(c))) {
+        recruit.push({ card: c, claim: true, badges: [{ text: owner + "さんお休み", tone: "warn" }].concat(baseBadges(c)), meta: meta, note: note, ownerOff: true });
+        return;
+      }
+      // 2列目：走行中
+      running.push({
+        card: c, meta: meta, ownerOff: presence[owner] === false,
+        badges: baseBadges(c).concat([noHandover(c) ? { text: "申し送りなし", tone: "warn" } : null]),
+        pass: kind === 'task' && presence[owner] !== false
+      });
+    });
+    recruit.sort(byUrgency);
+    running.sort(byUrgency);
+
+    // 3列目：今週のゴール
+    var goals = all.filter(completedThisWeek).map(function (c) { return { card: c, meta: kindMeta(c), badges: [{ text: "ゴール", tone: "ok" }], tone: 'ok' }; });
+
+    var column = function (key, title, hint, items, emptyText) {
+      return '<div class="kb-col" data-col="' + key + '">' +
+        '<div class="kb-head"><span class="kb-title">' + title + '</span><span class="kb-count tabular">' + items.length + '</span></div>' +
+        (hint ? '<p class="kb-hint">' + hint + '</p>' : '') +
+        '<div class="kb-list">' + (items.length ? items.map(tileHtml).join('') : '<p class="kb-empty">' + emptyText + '</p>') + '</div></div>';
+    };
+    setHtml(document.querySelector('[data-kanban]'),
+      column("recruit", "🏃 次の走者募集", "手が空いた人がバトンを受け取ってください", recruit, "募集中の仕事はありません") +
+      column("running", "走行中", "右下の顔が、いまバトンを持っている人です", running, "走行中の仕事はありません") +
+      column("goal", "🏁 今週のゴール", "", goals, "今週はまだありません"));
+
+    // みんなの申し送り（折りたたみ）。新しく書かれたものから
+    var handovers = open.filter(hasHandover).map(function (c) {
+      var by = roleVal(c, 'handoverBy');
+      return { card: c, meta: (by ? by + " · " : "") + shortMeta(c), note: firstLine(roleVal(c, 'handover'), 120), tone: 'warn', key: handoverStampKey(c) };
+    }).sort(function (a, b) { return a.key < b.key ? 1 : a.key > b.key ? -1 : 0; });
+    renderRows('handover', handovers, "申し送りはありません");
+
+    // 上部の数字（チーム全体）
+    var moving = open.filter(needsMove);
+    var urgentN = moving.filter(isUrgent).length;
+    var soonN = moving.filter(function (c) { return !isUrgent(c) && isSoon(c); }).length;
+    var noHoN = open.filter(noHandover).length;
+    renderKpis([
+      { label: "急ぎ（期限切れ・要対応）", value: urgentN, tone: urgentN ? "crit" : "ok" },
+      { label: "今日・明日まで", value: soonN, tone: soonN ? "warn" : "ok" },
+      { label: "次の走者募集", value: recruit.length, tone: recruit.length ? "accent" : "ok" },
+      { label: "申し送りのない進行中", value: noHoN, tone: noHoN ? "warn" : "ok" }
+    ]);
+    var todayCount = document.querySelector('[data-local-count="today"]');
+    if (todayCount) todayCount.textContent = urgentN;
+
+    renderTeamHealth(open, presence, skills);
+  }
+
+  // ---- チーム状況（代表向け）----
+  function renderTeamHealth(open, presence, skills) {
+    var progress = open.filter(isInProgress);
+    var ready = progress.filter(hasHandover);
+    var readyPct = progress.length ? Math.round(ready.length * 100 / progress.length) : 100;
+    var readyTone = readyPct >= 80 ? 'ok' : readyPct >= 50 ? 'warn' : 'crit';
+    var people = STAFF.filter(function (n) { return n !== UNASSIGNED; });
+    open.forEach(function (c) { var o = ownerOf(c); if (o !== UNASSIGNED && people.indexOf(o) === -1) people.push(o); });
+    var maxCount = 0;
+    var rows = people.map(function (n) {
+      var own = open.filter(function (c) { return ownerOf(c) === n; });
+      var prog = own.filter(isInProgress);
+      if (own.length > maxCount) maxCount = own.length;
+      return { name: n, open: own.length, prog: prog.length, ready: prog.filter(hasHandover).length, present: presence[n] };
+    });
+    var warnings = [];
+    if (open.length >= 5) {
+      rows.forEach(function (r) {
+        var share = Math.round(r.open * 100 / open.length);
+        if (share >= 40) warnings.push(r.name + "さんに仕事の" + share + "%（" + r.open + "件）が集中しています。ほかの人へ分けられないか見直してください。");
+      });
+    }
+    var healthHtml = '<div class="health-summary"><span class="health-pct tabular" data-tone="' + readyTone + '">' + readyPct + '%</span>' +
+      '<span>引き継ぎ準備率。進行中の仕事 ' + progress.length + '件のうち、申し送りが書かれているのは ' + ready.length + '件です。100%に近いほど、誰が休んでも仕事が止まりません。</span></div>' +
+      warnings.map(function (w) { return '<p class="health-warn">' + esc(w) + '</p>'; }).join('') +
+      '<div class="health-scroll"><table class="health-table"><thead><tr><th>担当</th><th>今日</th><th>担当中</th><th>進行中</th><th>申し送りあり</th></tr></thead><tbody>' +
+      rows.map(function (r) {
+        var pct = maxCount ? Math.round(r.open * 100 / maxCount) : 0;
+        var presentText = r.present === true ? "出勤" : r.present === false ? "不在" : "－";
+        return '<tr><th>' + esc(r.name) + '</th><td>' + presentText + '</td>' +
+          '<td><span class="health-bar"><span style="width:' + pct + '%"></span></span><span class="tabular">' + r.open + '</span></td>' +
+          '<td class="tabular">' + r.prog + '</td>' +
+          '<td class="tabular"' + (r.prog > r.ready ? ' data-tone="crit"' : '') + '>' + r.ready + ' / ' + r.prog + '</td></tr>';
+      }).join('') + '</tbody></table></div>';
+    var risky = progress.filter(function (c) { return !hasHandover(c); }).map(function (c) {
+      return { card: c, badges: [{ text: "申し送りなし", tone: "crit" }, dueBadge(c)] };
+    }).sort(byDue);
+    if (risky.length) {
+      healthHtml += '<h3 class="health-sub">申し送りが無い進行中の仕事（担当が休むと止まります）</h3><div class="rows">' + risky.slice(0, 8).map(rowHtml).join('') + '</div>' +
+        (risky.length > 8 ? '<p class="rows-more">ほか ' + (risky.length - 8) + ' 件</p>' : '');
+    }
+    if (Object.keys(skills).length) {
+      var risks = riskySkills(skills);
+      healthHtml += '<p class="health-skill"' + (risks.length ? ' data-tone="warn"' : '') + '>' + (risks.length
+        ? '一人しかできない（またはできる人がいない）スキルが ' + risks.length + '項目あります：' + esc(risks.slice(0, 4).map(function (r) { return r.skill; }).join("、")) + (risks.length > 4 ? " ほか" : "")
+        : 'どのスキルも2人以上が一人でできます。') + ' <button type="button" class="link-inline" data-open-tab="skill">スキル表を見る</button></p>';
+    } else {
+      healthHtml += '<p class="health-skill">スキル表が未登録です。登録すると、一人しかできない仕事が分かります。 <button type="button" class="link-inline" data-open-tab="skill">スキル表へ</button></p>';
+    }
+    setHtml(document.querySelector('[data-today-body="health"]'), healthHtml);
+  }
+
+  // 「引き受ける」「〇〇さんに頼む」。担当を変え、change を発火して保存（sync.js）と再描画に乗せる。
+  // 頼んだ相手の「あなたの仕事」に出るので、別途の連絡がなくても伝わる
+  function togglePicker(btn) {
+    var row = btn.closest('.row, .tile');
+    if (!row) return;
+    var open = row.nextElementSibling && row.nextElementSibling.classList.contains('picker');
+    closeInlinePanels();
+    if (open) return;
+    var key = btn.getAttribute('data-pick-key');
+    var card = jumpRegistry[key];
+    var presence = presenceMap();
+    var names = STAFF.filter(function (n) { return n !== UNASSIGNED && (!card || ownerOf(card) !== n); });
+    var here = names.filter(function (n) { return presence[n] === true; });
+    var others = names.filter(function (n) { return presence[n] !== true; });
+    var picker = document.createElement('div');
+    picker.className = 'picker';
+    picker.innerHTML = '<span class="picker-label">誰が受け取りますか？</span>' +
+      here.concat(others).map(function (n) {
+        return '<button type="button" class="picker-btn"' + (presence[n] === true ? ' data-here' : '') + ' data-assign-key="' + key + '" data-assign-to="' + esc(n) + '">' + esc(n) + '</button>';
+      }).join('');
+    row.parentNode.insertBefore(picker, row.nextSibling);
+  }
+
+  function closeInlinePanels() { document.querySelectorAll('.picker, .passer').forEach(function (p) { p.remove(); }); }
+
+  function togglePasser(btn) {
+    var row = btn.closest('.row, .tile');
+    if (!row) return;
+    var open = row.nextElementSibling && row.nextElementSibling.classList.contains('passer');
+    closeInlinePanels();
+    if (open) return;
+    var key = btn.getAttribute('data-pass-key');
+    var card = jumpRegistry[key];
+    if (!card) return;
+    var presence = presenceMap();
+    var names = STAFF.filter(function (n) { return n !== UNASSIGNED && n !== ownerOf(card) && presence[n] === true; });
+    var passer = document.createElement('div');
+    passer.className = 'passer';
+    passer.innerHTML = '<label class="passer-label">申し送り（どこまで進んだか・次にやること・資料の場所）</label>' +
+      '<textarea class="passer-text" rows="3"></textarea>' +
+      '<div class="passer-actions">' +
+      '<button type="button" class="claim-btn" data-pass-to="' + UNASSIGNED + '" data-pass-card="' + key + '">走者募集に戻す</button>' +
+      names.map(function (n) { return '<button type="button" class="picker-btn" data-here data-pass-to="' + esc(n) + '" data-pass-card="' + key + '">' + esc(n) + 'さんに渡す</button>'; }).join('') +
+      '<span class="passer-hint" data-passer-hint></span></div>';
+    passer.querySelector('textarea').value = roleVal(card, 'handover');
+    row.parentNode.insertBefore(passer, row.nextSibling);
+    passer.querySelector('textarea').focus();
+  }
+
+  function passBaton(btn) {
+    var passer = btn.closest('.passer');
+    var card = jumpRegistry[btn.getAttribute('data-pass-card')];
+    if (!passer || !card || !document.body.contains(card)) return;
+    var text = passer.querySelector('textarea').value.trim();
+    if (!text) { passer.querySelector('[data-passer-hint]').textContent = '申し送りを書いてから渡してください'; return; }
+    var to = btn.getAttribute('data-pass-to');
+    var from = ownerOf(card);
+    // 申し送りを書き込み、input を発火して記名（渡す人の名前）と保存に乗せる。担当を変えるのはその後
+    var handover = card.querySelector('[data-role="handover"]');
+    if (handover) {
+      handover.textContent = text;
+      handover.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    addHistoryEntry(card, card.getAttribute('data-kind'), 'バトンを渡す', statusOf(card), null, from + ' → ' + (to === UNASSIGNED ? '次の走者募集' : to) + '：' + text);
+    closeInlinePanels();
+    assignCard(card, to);
+  }
+
+  function assignCard(card, name) {
+    if (!card || !name || !document.body.contains(card)) return;
+    var sel = card.querySelector('[data-role="owner"]');
+    if (!sel) return;
+    setRoleValue(card, 'owner', name);
+    sel.dispatchEvent(new Event('change', { bubbles: true }));
+    renderSkills();
+    renderToday();
+  }
+
+
+  // ---- 画面の切り替え ----
+  var PANEL_SECTION = { today: "work", task: "work", shift: "work", team: "work", skill: "work", customer: "work", inquiry: "deal", wontask: "build", ops: "ops" };
+  var lastTabOf = { work: "today", deal: "inquiry", build: "wontask", ops: "ops" };
+
+  function jumpToCard(card, focusRole) {
+    if (!card || !document.body.contains(card)) { applyAll(); return; }
+    var kind = card.getAttribute('data-kind');
+    // 絞り込みで隠れていると飛んでも見えないので、そのタブの絞り込みを外す
+    if (card.hasAttribute('data-local-hidden')) {
+      if (filters[kind] !== undefined) filters[kind] = null;
+      if (ownerFilters[kind] !== undefined) ownerFilters[kind] = "";
+      if (kind === 'task') categoryFilter = "";
+      document.querySelectorAll('[data-search="' + kind + '"], [data-owner-filter="' + kind + '"], [data-category-filter="' + kind + '"]').forEach(function (el) { el.value = ""; });
+      applyPanel(kind);
+    }
+    activateTab(kind);
+    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    card.setAttribute('data-local-flash', '');
+    setTimeout(function () { card.removeAttribute('data-local-flash'); }, 1600);
+    // 「帰る前に申し送りを書く」から来たときは、そのまま書き始められるように申し送り欄へカーソルを置く
+    var field = focusRole && card.querySelector('[data-role="' + focusRole + '"]');
+    if (field) setTimeout(function () { field.focus(); }, 400);
+  }
+
   function activateTab(target) {
+    var section = PANEL_SECTION[target] || "work";
+    lastTabOf[section] = target;
+    document.querySelectorAll('.section-btn').forEach(function (b) {
+      if (b.getAttribute('data-section') === section) b.setAttribute('data-local-active', ''); else b.removeAttribute('data-local-active');
+    });
+    document.querySelectorAll('nav.tabs[data-subnav]').forEach(function (n) {
+      n.hidden = n.getAttribute('data-subnav') !== section;
+    });
     document.querySelectorAll('.tab-btn').forEach(function (b) {
       if (b.getAttribute('data-tab') === target) b.setAttribute('data-local-active', ''); else b.removeAttribute('data-local-active');
     });
@@ -2626,6 +4254,101 @@
   document.querySelectorAll('.tab-btn').forEach(function (btn) {
     btn.addEventListener('click', function () { activateTab(btn.getAttribute('data-tab')); });
   });
+
+  document.querySelectorAll('.section-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () { activateTab(lastTabOf[btn.getAttribute('data-section')]); });
+  });
+
+  document.querySelectorAll('[data-category-filter]').forEach(function (sel) {
+    CATEGORIES.forEach(function (c) {
+      var opt = document.createElement('option');
+      opt.value = c;
+      opt.textContent = c;
+      sel.appendChild(opt);
+    });
+    sel.addEventListener('change', function () {
+      categoryFilter = sel.value;
+      applyPanel(sel.getAttribute('data-category-filter'));
+    });
+  });
+
+  // 「今日」・顧客台帳の一覧から元のカードへ飛ぶ
+  document.body.addEventListener('click', function (e) {
+    var focusBtn = e.target.closest('[data-focus-runner]');
+    if (focusBtn) {
+      var who = focusBtn.getAttribute('data-focus-runner');
+      focusRunner = (focusRunner === who) ? "" : who;
+      renderToday();
+      return;
+    }
+    var pickBtn = e.target.closest('[data-pick-key]');
+    if (pickBtn) { togglePicker(pickBtn); return; }
+    var passBtn = e.target.closest('[data-pass-key]');
+    if (passBtn) { togglePasser(passBtn); return; }
+    var passTo = e.target.closest('[data-pass-to]');
+    if (passTo) { passBaton(passTo); return; }
+    var assignBtn = e.target.closest('[data-assign-key]');
+    if (assignBtn) { assignCard(jumpRegistry[assignBtn.getAttribute('data-assign-key')], assignBtn.getAttribute('data-assign-to')); return; }
+    var openOwnerBtn = e.target.closest('[data-open-owner]');
+    if (openOwnerBtn) {
+      ownerFilters.task = openOwnerBtn.getAttribute('data-open-owner');
+      var ownerSel = document.querySelector('[data-owner-filter="task"]');
+      if (ownerSel) ownerSel.value = ownerFilters.task;
+      applyPanel('task');
+      activateTab('task');
+      window.scrollTo(0, 0);
+      return;
+    }
+    var openTabBtn = e.target.closest('[data-open-tab]');
+    if (openTabBtn) { activateTab(openTabBtn.getAttribute('data-open-tab')); window.scrollTo(0, 0); return; }
+    var scrollBtn = e.target.closest('[data-scroll-block]');
+    if (scrollBtn) {
+      var block = document.querySelector('[data-today-block="' + scrollBtn.getAttribute('data-scroll-block') + '"]');
+      if (block) block.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
+    var jumpBtn = e.target.closest('[data-jump-key]');
+    if (!jumpBtn) return;
+    jumpToCard(jumpRegistry[jumpBtn.getAttribute('data-jump-key')], jumpBtn.getAttribute('data-jump-focus'));
+  });
+
+  // 顧客台帳への取り込み。SharePoint に件数分の行ができるので、件数を見せてからもう一度押してもらう
+  var importBtn = document.querySelector('[data-role="importCustomers"]');
+  if (importBtn) {
+    var importIdle = importBtn.textContent;
+    importBtn.addEventListener('click', function () {
+      if (importBtn.disabled) return;
+      clearTimeout(importBtn._timer);
+      var reset = function () { importBtn.removeAttribute('data-local-armed'); importBtn.textContent = importIdle; };
+      if (importBtn.getAttribute('data-local-armed') === 'true') {
+        var n = importCustomers();
+        renderCustomers();
+        importBtn.textContent = n + "社を追加しました";
+        importBtn.removeAttribute('data-local-armed');
+        importBtn._timer = setTimeout(reset, 3000);
+        return;
+      }
+      var count = customerCandidates().length;
+      if (!count) {
+        importBtn.textContent = "取り込める会社はありません";
+        importBtn._timer = setTimeout(reset, 3000);
+        return;
+      }
+      importBtn.setAttribute('data-local-armed', 'true');
+      importBtn.textContent = count + "社を追加します（もう一度クリック）";
+      importBtn._timer = setTimeout(reset, 4000);
+    });
+  }
+
+  // SharePoint にリストがまだ無い種類は、追加ボタンを止めて案内を出す（作っても保存先が無く消えるため）
+  function markListMissing(kind) {
+    var note = document.querySelector('[data-missing-list="' + kind + '"]');
+    if (note) note.hidden = false;
+    document.querySelectorAll('[data-add="' + kind + '"]' + (kind === 'customer' ? ', [data-role="importCustomers"]' : '')).forEach(function (b) {
+      b.disabled = true;
+      b.title = "SharePoint にリストがありません";
+    });
+  }
 
   var meetingTodayNavBtn = document.querySelector('[data-role="meetingTodayNav"]');
   if (meetingTodayNavBtn) {
@@ -2906,10 +4629,14 @@
   });
 
   // 担当を変えたらその場で絞り込み・並び替えに反映する（「更新」を押さなくてよい）
+  // 出勤予定・顧客台帳は、名前やチェックを変えたらその場で表に反映する
   document.body.addEventListener('change', function (e) {
-    if (!e.target.getAttribute || e.target.getAttribute('data-role') !== 'owner') return;
-    var card = e.target.closest('.card');
-    if (card) applyPanel(card.getAttribute('data-kind'));
+    var card = e.target.closest && e.target.closest('.card');
+    if (!card) return;
+    var kind = card.getAttribute('data-kind');
+    if (kind === 'customer' || kind === 'skill' || e.target.getAttribute('data-role') === 'owner') applyPanel(kind);
+    // 必要なスキルを変えたら「頼める人」をその場で出し直す
+    if (e.target.getAttribute('data-role') === 'skill') renderSkills();
   });
 
   document.addEventListener('claude:edit', function () { applyAll(); });
@@ -2925,7 +4652,9 @@
     addHistoryEntry: addHistoryEntry,
     registerToOps: registerToOps,
     setCurrentUser: setCurrentUser,
-    ensureStaffOption: ensureStaffOption
+    ensureStaffOption: ensureStaffOption,
+    markListMissing: markListMissing,
+    setOutlookShifts: setOutlookShifts
   };
   document.dispatchEvent(new CustomEvent('app:ready'));
 })();
