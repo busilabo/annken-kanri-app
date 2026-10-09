@@ -801,15 +801,26 @@
   // 代表の不在（出張・旅行・休み）。代表の予定表の終日予定の件名で判断する
   var AWAY_WORD = /出張|ツアー|旅行|休/;
 
+  var CAL_SILENT_TIMEOUT_MS = 15000;
+
   async function getCalToken(interactive) {
-    try {
-      var r = await msalApp.acquireTokenSilent({ scopes: CAL_SCOPES, account: account });
-      return r.accessToken;
-    } catch (e) {
-      // ポップアップはボタンを押したときにしか開けない（自動で開くとブラウザに止められる）
-      if (!interactive) { var err = new Error("consent"); err.consent = true; throw err; }
+    // ボタンを押したときは、すぐに許可の窓を開く。先に裏で試すと時間がかかり、
+    // ブラウザが「押した直後ではない」と判断して窓を止めてしまう
+    if (interactive) {
       var r2 = await msalApp.acquireTokenPopup({ scopes: CAL_SCOPES, account: account });
       return r2.accessToken;
+    }
+    try {
+      // 裏での取得は返事が来ないまま止まることがあるので、時間を区切る
+      var r = await Promise.race([
+        msalApp.acquireTokenSilent({ scopes: CAL_SCOPES, account: account }),
+        new Promise(function (_, reject) { setTimeout(function () { reject(new Error("timeout")); }, CAL_SILENT_TIMEOUT_MS); })
+      ]);
+      return r.accessToken;
+    } catch (e) {
+      var err = new Error("consent");
+      err.consent = true;
+      throw err;
     }
   }
 
@@ -904,11 +915,18 @@
       });
       app.setOutlookShifts({ loaded: true, error: "", needsConsent: false, events: events, repAway: repAway, at: new Date(), failed: failed });
     } catch (e) {
-      log("shift load failed: " + e.message);
+      log("shift load failed: " + (e.errorCode || e.message));
+      // 許可の窓が開けなかった・閉じられた・断られたときも、もう一度押せるようにボタンを出す
+      var code = e.errorCode || "";
+      var msg = e.consent ? "Outlook の予定表を読む許可がまだありません"
+        : /popup_window_error|empty_window_error/.test(code) ? "許可の窓が開けませんでした。ブラウザのポップアップを許可して、もう一度押してください"
+        : /user_cancelled/.test(code) ? "許可の窓が閉じられました。もう一度押してください"
+        : /consent_required|admin|AADSTS65001|AADSTS90094/.test(code + e.message) ? "管理者の承認が必要です（" + (code || e.message) + "）"
+        : e.message;
       app.setOutlookShifts({
         loaded: false, events: [], repAway: {}, at: null,
-        needsConsent: !!e.consent,
-        error: e.consent ? "Outlook の予定表を読む許可がまだありません" : e.message
+        needsConsent: true,
+        error: msg
       });
     }
   }
@@ -926,6 +944,9 @@
     if (window.__app && window.__app.setCurrentUser) {
       window.__app.setCurrentUser((account && (account.name || account.username)) || "");
     }
+    // 出勤予定（Outlook）は SharePoint の読み込みを待たずに始める。許可がまだなら「出勤予定」タブに許可ボタンが出る
+    loadShifts(false);
+    setInterval(function () { loadShifts(false); }, SHIFT_REFRESH_MS);
     await resolveSiteAndLists();
     watchLists();
     watchInteractions();
@@ -933,9 +954,6 @@
     setInterval(pollRefresh, POLL_MS);
     await drainQueue();
     setInterval(drainQueue, QUEUE_DRAIN_MS);
-    // 出勤予定（Outlook）。許可がまだなら「出勤予定」タブに許可ボタンが出る
-    loadShifts(false);
-    setInterval(function () { loadShifts(false); }, SHIFT_REFRESH_MS);
   }
 
   async function boot() {

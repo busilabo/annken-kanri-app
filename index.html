@@ -3530,7 +3530,7 @@
   // 顔ぶれに出す一言（今日の出勤時刻、休み など）
   function rosterState(name, presence) {
     if (name === REP) return presence[name] === false ? "不在（出張など）" : "代表";
-    if (!shiftState.loaded) return "出勤予定を読み込み中";
+    if (!shiftState.loaded) return shiftState.error ? "出勤予定 未接続" : "出勤予定を読み込み中";
     if (presence[name] === true) return shiftTimeText(bizShiftsOf(name, todayStr));
     var other = shiftsOf(name, todayStr).filter(function (e) { return e.other; });
     return other.length ? ("休み（" + other[0].place + "）") : "休み";
@@ -3557,7 +3557,9 @@
       statusHtml = '<span class="shift-err">出勤予定を読み込めませんでした：' + esc(shiftState.error) + '</span>' +
         (shiftState.needsConsent ? '<button type="button" class="add-btn" data-role="connectCalendar">Outlook の予定表を読む許可をする</button>' : '');
     } else {
-      statusHtml = '<span class="shift-help">Outlook の予定表を読み込み中です…</span>';
+      // 読み込み中でも許可ボタンは出しておく（裏での読み込みが止まっても、押せば先に進めるように）
+      statusHtml = '<span class="shift-help">Outlook の予定表を読み込み中です…</span>' +
+        '<button type="button" class="add-btn" data-role="connectCalendar">Outlook の予定表を読む許可をする</button>';
     }
     setHtml(status, statusHtml);
 
