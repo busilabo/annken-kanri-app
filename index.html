@@ -3584,18 +3584,23 @@
       "&redirect_uri=" + encodeURIComponent(here);
   }
 
+  // どこから何件読めたか。出勤が0件のときは開いた状態で出す（原因がすぐ分かるように）
+  function shiftReportHtml() {
+    return (shiftState.report ? '<details class="shift-report"' + (shiftState.events.length && shiftState.report.every(function (r) { return r.ok; }) ? '' : ' open') + '><summary>読み込んだ予定表（' + shiftState.report.length + '）' + (shiftState.events.length ? '' : '：出勤の予定が見つかりませんでした') + '</summary><ul>' +
+          shiftState.report.map(function (r) { return '<li' + (r.ok ? '' : ' data-ng') + '>' + esc(r.label) + '：' + (r.ok ? ('予定 ' + r.total + '件／うち出勤 ' + r.matched + '件') : ('読めませんでした（' + esc(r.reason) + '）')) + '</li>'; }).join('') +
+          '</ul></details>' : '');
+  }
+
   function renderShift() {
     var status = document.querySelector('[data-shift-status]');
     var statusHtml;
     if (shiftState.loaded) {
       var at = shiftState.at;
-      statusHtml = '<span class="shift-ok">Outlook の予定表（各パートさんの予定表）から読み込みました' +
+      statusHtml = '<span class="shift-ok">出勤予定を読み込みました' +
         (at ? '（' + pad2(at.getHours()) + ':' + pad2(at.getMinutes()) + '）' : '') + '</span>' +
-        '<span class="shift-help">予定を変えるときは Outlook 側を直してください。10分ごとに読み直します。</span>' +
+        '<span class="shift-help">予定を変えるときは各自の Outlook を直してください。15分ほどで反映されます。</span>' +
         // どの予定表から何件読めたか。出勤が0件のときは開いた状態で出す（原因がすぐ分かるように）
-        (shiftState.report ? '<details class="shift-report"' + (shiftState.events.length ? '' : ' open') + '><summary>読み込んだ予定表（' + shiftState.report.length + '）' + (shiftState.events.length ? '' : '：出勤の予定が見つかりませんでした') + '</summary><ul>' +
-          shiftState.report.map(function (r) { return '<li' + (r.ok ? '' : ' data-ng') + '>' + esc(r.label) + '：' + (r.ok ? ('予定 ' + r.total + '件／うち出勤 ' + r.matched + '件') : ('読めませんでした（' + esc(r.reason) + '）')) + '</li>'; }).join('') +
-          '</ul></details>' : '');
+        shiftReportHtml();
     } else if (shiftState.error) {
       // パートさんは許可の操作ができない。代表が管理者として会社全体に一度だけ許可すれば、全員そのまま見られる
       statusHtml = '<div class="shift-wait">' +
@@ -3605,9 +3610,9 @@
         '<div class="shift-actions">' +
         '<a class="add-btn" href="' + esc(adminConsentUrl()) + '" target="_blank" rel="noopener">代表用：会社全体で許可する</a>' +
         '<button type="button" class="action-btn" data-role="connectCalendar">許可のあと、読み込み直す</button>' +
-        '</div></div>';
+        '</div></div>' + shiftReportHtml();
     } else {
-      statusHtml = '<span class="shift-help">Outlook の予定表を読み込み中です…</span>';
+      statusHtml = '<span class="shift-help">出勤予定を読み込み中です…</span>';
     }
     setHtml(status, statusHtml);
 

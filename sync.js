@@ -866,98 +866,125 @@
     return out;
   }
 
+  // 出勤予定は2か所から読む。どちらか一方でも読めれば表示する。
+  // ① パートさんの出勤：各自の個人用 Outlook（outlook.jp）の予定表に入っており、会社のアカウントからは直接読めない。
+  //    Power Automate（Outlook.com コネクタ）が15分ごとに読み、案件管理キュー/shifts に1人1ファイルで置くので、それを読む。
+  // ② 代表の不在（出張・ツアーなど）：busilabo@ の予定表を読む（予定表の読み取り許可が要る）。
+  var SHIFT_FOLDER = "案件管理キュー/shifts";
+  var SHIFT_STALE_MIN = 60;
+
+  function shiftRange() {
+    // 今週の月曜から2週間
+    var from = new Date();
+    from.setHours(0, 0, 0, 0);
+    var dow = from.getDay();
+    from.setDate(from.getDate() - (dow === 0 ? 6 : dow - 1));
+    var to = new Date(from);
+    to.setDate(to.getDate() + 14);
+    return { from: from, to: to };
+  }
+
+  async function loadShiftFiles(events, report) {
+    var listing;
+    try {
+      listing = await graph("/drives/" + QUEUE_DRIVE_ID + "/root:/" + encodeURIComponent(SHIFT_FOLDER) + ":/children");
+    } catch (e) {
+      report.push({ label: "パートさんの予定表（Power Automate）", ok: false, reason: /404/.test(e.message) ? "まだ取り込まれていません（Power Automate の設定待ち）" : e.message.slice(0, 80) });
+      return false;
+    }
+    var files = (listing.value || []).filter(function (f) { return /\.json$/i.test(f.name || ""); });
+    if (!files.length) {
+      report.push({ label: "パートさんの予定表（Power Automate）", ok: false, reason: "まだ取り込まれていません（Power Automate の設定待ち）" });
+      return true;
+    }
+    for (var i = 0; i < files.length; i++) {
+      var f = files[i];
+      var data;
+      try {
+        data = await graph("/drives/" + QUEUE_DRIVE_ID + "/items/" + f.id + "/content");
+      } catch (e) {
+        report.push({ label: f.name, ok: false, reason: e.message.slice(0, 80) });
+        continue;
+      }
+      var list = (data && data.events) || [];
+      var matched = 0;
+      list.forEach(function (ev) {
+        var parsed = parseShiftEvent({
+          subject: ev.subject, isAllDay: !!ev.isAllDay, isCancelled: !!ev.isCancelled,
+          start: { dateTime: String(ev.start || "") }, end: { dateTime: String(ev.end || "") }
+        });
+        matched += parsed.length;
+        Array.prototype.push.apply(events, parsed);
+      });
+      // 取り込みが止まっていたら（Power Automate の接続切れなど）、古いままだと分かるようにする
+      var updated = data && data.updatedAt ? new Date(data.updatedAt) : null;
+      var ageMin = updated && !isNaN(updated.getTime()) ? (Date.now() - updated.getTime()) / 60000 : null;
+      var label = (data && data.account) || f.name.replace(/\.json$/i, "");
+      if (ageMin !== null && ageMin > SHIFT_STALE_MIN) {
+        report.push({ label: label, ok: false, reason: "最後の取り込みが " + Math.round(ageMin / 60) + " 時間前です。Power Automate の接続が切れていないか確認してください（予定 " + list.length + "件／うち出勤 " + matched + "件）" });
+      } else {
+        report.push({ label: label, ok: true, total: list.length, matched: matched });
+      }
+    }
+    return true;
+  }
+
+  async function loadRepAway(events, repAway, report, interactive) {
+    var token;
+    try {
+      token = await getCalToken(interactive);
+    } catch (e) {
+      report.push({ label: "代表の予定表（出張などの不在）", ok: false, reason: "予定表を読む許可がありません" });
+      return false;
+    }
+    var r = shiftRange();
+    var range = "startDateTime=" + encodeURIComponent(r.from.toISOString()) + "&endDateTime=" + encodeURIComponent(r.to.toISOString()) +
+      "&$select=subject,start,end,isAllDay,isCancelled&$top=200";
+    var list;
+    try {
+      list = await calGetAll("/me/calendar/calendarView?" + range, token);
+    } catch (e) {
+      report.push({ label: "代表の予定表（出張などの不在）", ok: false, reason: e.message.slice(0, 80) });
+      return false;
+    }
+    var matched = 0;
+    list.forEach(function (ev) {
+      // 招待で届いた出勤の予定があれば、それも拾う
+      var parsed = parseShiftEvent(ev);
+      matched += parsed.length;
+      Array.prototype.push.apply(events, parsed);
+      if (ev.isAllDay && !ev.isCancelled && AWAY_WORD.test(ev.subject || "") && !SHIFT_WORD.test(ev.subject || "")) {
+        var d = new Date(String(ev.start.dateTime).slice(0, 10) + "T00:00:00");
+        var last = new Date(String(ev.end.dateTime).slice(0, 10) + "T00:00:00");
+        for (var guard = 0; d < last && guard < 62; d.setDate(d.getDate() + 1), guard++) repAway[ymd(d)] = true;
+      }
+    });
+    report.push({ label: "代表の予定表（出張などの不在）", ok: true, total: list.length, matched: matched });
+    return true;
+  }
+
   async function loadShifts(interactive) {
     var app = window.__app;
     if (!app || !app.setOutlookShifts) return;
-    try {
-      var token = await getCalToken(interactive);
-      // 今週の月曜から2週間
-      var from = new Date();
-      from.setHours(0, 0, 0, 0);
-      var dow = from.getDay();
-      from.setDate(from.getDate() - (dow === 0 ? 6 : dow - 1));
-      var to = new Date(from);
-      to.setDate(to.getDate() + 14);
-      var range = "startDateTime=" + encodeURIComponent(from.toISOString()) + "&endDateTime=" + encodeURIComponent(to.toISOString()) +
-        "&$select=subject,start,end,isAllDay,isCancelled&$top=200";
-
-      // パートさんの予定表は busilabo@ の Outlook に「追加」されている。追加した予定表は既定の一覧ではなく
-      // 予定表のグループ（「その他の予定表」など）に入るので、グループごとに全部見る
-      var calendars = [];
-      var seenCal = {};
-      var addCal = function (cal, groupId) {
-        if (seenCal[cal.id]) return;
-        seenCal[cal.id] = true;
-        cal._path = groupId ? "/me/calendarGroups/" + encodeURIComponent(groupId) + "/calendars/" + encodeURIComponent(cal.id) : "/me/calendars/" + encodeURIComponent(cal.id);
-        calendars.push(cal);
-      };
-      (await calGetAll("/me/calendars?$select=id,name,isDefaultCalendar,owner&$top=100", token)).forEach(function (c) { addCal(c, ""); });
-      try {
-        var groups = await calGetAll("/me/calendarGroups?$select=id,name&$top=50", token);
-        for (var g = 0; g < groups.length; g++) {
-          var inGroup = await calGetAll("/me/calendarGroups/" + encodeURIComponent(groups[g].id) + "/calendars?$select=id,name,isDefaultCalendar,owner&$top=100", token);
-          inGroup.forEach(function (c) { addCal(c, groups[g].id); });
-        }
-      } catch (e) { log("calendar groups read failed: " + e.message); }
-      var events = [];
-      var repAway = {};
-      var failed = [];
-      // どの予定表から何件読めたか（出勤予定タブに出して、読めていないときの原因を画面で確かめられるようにする）
-      var report = [];
-      var sources = calendars.map(function (cal) {
-        var owner = cal.owner && cal.owner.address ? cal.owner.address : "";
-        return { label: cal.name + (owner ? "（" + owner + "）" : ""), path: cal._path + "/calendarView?", isDefault: !!cal.isDefaultCalendar, owner: owner.toLowerCase() };
-      });
-      for (var i = 0; i < sources.length; i++) {
-        var cal = sources[i];
-        var list;
-        try {
-          list = await calGetAll(cal.path + range, token);
-        } catch (e) {
-          // 祝日など読めない予定表は飛ばす（1つ読めなくても他は表示する）
-          failed.push(cal.label);
-          var status = (/^(\d{3})/.exec(e.message) || [])[1] || "";
-          report.push({ label: cal.label, ok: false, reason: status === "404" || status === "403" ? "中身を読む権限がありません（共有の設定を確認）" : e.message.slice(0, 80) });
-          log("calendar read failed (" + cal.label + "): " + e.message);
-          continue;
-        }
-        var matched = 0;
-        list.forEach(function (ev) {
-          var parsed = parseShiftEvent(ev);
-          matched += parsed.length;
-          events = events.concat(parsed);
-          if (cal.isDefault && ev.isAllDay && !ev.isCancelled && AWAY_WORD.test(ev.subject || "") && !SHIFT_WORD.test(ev.subject || "")) {
-            var d = new Date(String(ev.start.dateTime).slice(0, 10) + "T00:00:00");
-            var last = new Date(String(ev.end.dateTime).slice(0, 10) + "T00:00:00");
-            for (var guard = 0; d < last && guard < 62; d.setDate(d.getDate() + 1), guard++) repAway[ymd(d)] = true;
-          }
-        });
-        report.push({ label: cal.label, ok: true, total: list.length, matched: matched });
-      }
-      // 同じ予定が複数の予定表に見えることがあるので、名前・日・時刻で重複を除く
-      var seen = {};
-      events = events.filter(function (e) {
-        var k = e.name + "|" + e.date + "|" + e.start + "|" + e.end + "|" + e.place;
-        if (seen[k]) return false;
-        seen[k] = true;
-        return true;
-      });
-      app.setOutlookShifts({ loaded: true, error: "", needsConsent: false, events: events, repAway: repAway, at: new Date(), failed: failed, report: report });
-    } catch (e) {
-      log("shift load failed: " + (e.errorCode || e.message));
-      // 許可の窓が開けなかった・閉じられた・断られたときも、もう一度押せるようにボタンを出す
-      var code = e.errorCode || "";
-      var msg = e.consent ? "Outlook の予定表を読む許可がまだありません"
-        : /popup_window_error|empty_window_error/.test(code) ? "許可の窓が開けませんでした。ブラウザのポップアップを許可して、もう一度押してください"
-        : /user_cancelled/.test(code) ? "許可の窓が閉じられました。もう一度押してください"
-        : /consent_required|admin|AADSTS65001|AADSTS90094/.test(code + e.message) ? "管理者の承認が必要です（" + (code || e.message) + "）"
-        : e.message;
-      app.setOutlookShifts({
-        loaded: false, events: [], repAway: {}, at: null,
-        needsConsent: true,
-        error: msg
-      });
+    var events = [];
+    var repAway = {};
+    var report = [];
+    var filesOk = false, calOk = false;
+    try { filesOk = await loadShiftFiles(events, report); } catch (e) { log("shift files failed: " + e.message); }
+    try { calOk = await loadRepAway(events, repAway, report, interactive); } catch (e) { log("rep calendar failed: " + (e.errorCode || e.message)); }
+    if (!filesOk && !calOk) {
+      app.setOutlookShifts({ loaded: false, events: [], repAway: {}, at: null, needsConsent: true, error: "出勤予定を読み込めませんでした", report: report });
+      return;
     }
+    // 同じ予定が2か所に見えることがあるので、名前・日・時刻で重複を除く
+    var seen = {};
+    events = events.filter(function (e) {
+      var k = e.name + "|" + e.date + "|" + e.start + "|" + e.end + "|" + e.place;
+      if (seen[k]) return false;
+      seen[k] = true;
+      return true;
+    });
+    app.setOutlookShifts({ loaded: true, error: "", needsConsent: false, events: events, repAway: repAway, at: new Date(), report: report });
   }
 
   document.body.addEventListener("click", function (e) {
