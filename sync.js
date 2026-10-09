@@ -798,8 +798,6 @@
   var CAL_SCOPES = ["Calendars.Read", "Calendars.Read.Shared"];
   var SHIFT_REFRESH_MS = 10 * 60 * 1000;
   var SHIFT_WORD = /出勤|勤務/;
-  // 出勤の予定が入っているメールボックス。busilabo@ に共有されていれば、Outlookに追加していなくても名前で直接読む
-  var SHIFT_MAILBOXES = ["staff@busilabo.com"];
   // 代表の不在（出張・旅行・休み）。代表の予定表の終日予定の件名で判断する
   var AWAY_WORD = /出張|ツアー|旅行|休/;
 
@@ -883,7 +881,24 @@
       var range = "startDateTime=" + encodeURIComponent(from.toISOString()) + "&endDateTime=" + encodeURIComponent(to.toISOString()) +
         "&$select=subject,start,end,isAllDay,isCancelled&$top=200";
 
-      var calendars = await calGetAll("/me/calendars?$select=id,name,isDefaultCalendar,owner&$top=100", token);
+      // パートさんの予定表は busilabo@ の Outlook に「追加」されている。追加した予定表は既定の一覧ではなく
+      // 予定表のグループ（「その他の予定表」など）に入るので、グループごとに全部見る
+      var calendars = [];
+      var seenCal = {};
+      var addCal = function (cal, groupId) {
+        if (seenCal[cal.id]) return;
+        seenCal[cal.id] = true;
+        cal._path = groupId ? "/me/calendarGroups/" + encodeURIComponent(groupId) + "/calendars/" + encodeURIComponent(cal.id) : "/me/calendars/" + encodeURIComponent(cal.id);
+        calendars.push(cal);
+      };
+      (await calGetAll("/me/calendars?$select=id,name,isDefaultCalendar,owner&$top=100", token)).forEach(function (c) { addCal(c, ""); });
+      try {
+        var groups = await calGetAll("/me/calendarGroups?$select=id,name&$top=50", token);
+        for (var g = 0; g < groups.length; g++) {
+          var inGroup = await calGetAll("/me/calendarGroups/" + encodeURIComponent(groups[g].id) + "/calendars?$select=id,name,isDefaultCalendar,owner&$top=100", token);
+          inGroup.forEach(function (c) { addCal(c, groups[g].id); });
+        }
+      } catch (e) { log("calendar groups read failed: " + e.message); }
       var events = [];
       var repAway = {};
       var failed = [];
@@ -891,11 +906,7 @@
       var report = [];
       var sources = calendars.map(function (cal) {
         var owner = cal.owner && cal.owner.address ? cal.owner.address : "";
-        return { label: cal.name + (owner ? "（" + owner + "）" : ""), path: "/me/calendars/" + encodeURIComponent(cal.id) + "/calendarView?", isDefault: !!cal.isDefaultCalendar, owner: owner.toLowerCase() };
-      });
-      SHIFT_MAILBOXES.forEach(function (mb) {
-        var already = sources.some(function (src) { return src.owner === mb.toLowerCase(); });
-        if (!already) sources.push({ label: mb + " の予定表（直接）", path: "/users/" + encodeURIComponent(mb) + "/calendar/calendarView?", isDefault: false, owner: mb });
+        return { label: cal.name + (owner ? "（" + owner + "）" : ""), path: cal._path + "/calendarView?", isDefault: !!cal.isDefaultCalendar, owner: owner.toLowerCase() };
       });
       for (var i = 0; i < sources.length; i++) {
         var cal = sources[i];
@@ -906,7 +917,7 @@
           // 祝日など読めない予定表は飛ばす（1つ読めなくても他は表示する）
           failed.push(cal.label);
           var status = (/^(\d{3})/.exec(e.message) || [])[1] || "";
-          report.push({ label: cal.label, ok: false, reason: status === "404" || status === "403" ? "busilabo@ に共有されていません" : e.message.slice(0, 80) });
+          report.push({ label: cal.label, ok: false, reason: status === "404" || status === "403" ? "中身を読む権限がありません（共有の設定を確認）" : e.message.slice(0, 80) });
           log("calendar read failed (" + cal.label + "): " + e.message);
           continue;
         }
