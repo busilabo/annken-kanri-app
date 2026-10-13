@@ -531,6 +531,7 @@
     // （ルーティンが処理後にprocessedへ移動するまで、ここで新規問い合わせと誤認しないようにする）。
     if (data.type === "verifyRequest") return;
     if (data.type === "teamsTask") { await drainTeamsTask(file, data); return; }
+    if (data.type === "mailTask") { await drainMailTask(file, data); return; }
     var srcId = data.srcId || "";
     var already = srcId && document.querySelector('.card[data-src-id="' + srcId + '"]');
     if (!already) {
@@ -652,6 +653,78 @@
     } catch (e) { log("teams task move failed (" + file.name + "): " + e.message); }
   }
 
+  // ---- メールからの依頼（綿半ドットコム様など）----
+  // Power Automate が、取引先から busilabo@／staff@ に届いた依頼メールを mailTask としてキューに置く。
+  // 新しい件なら仕事一覧に「次の走者募集」として登録し、同じ件の返信（RE:）なら元の仕事の履歴に足す（仕事が増え続けないように）。
+  // 元の件の目印は TeamsMessageId 列に "mail:" を付けて入れる（Teams の依頼と同じ列を「元のメッセージ」として使う）。
+  // 「東中様」のように敬称が付いていれば重ねない。付いていなければ「さん」を付ける
+  function honorific(name) {
+    return /(様|さん|殿)$/.test(name) ? name : name + "さん";
+  }
+
+  function mailThreadKey(data) {
+    var subject = String(data.subject || "").replace(/^\s*((re|fw|fwd|返信|転送)\s*[:：]\s*)+/i, "").trim();
+    var domain = String(data.fromAddress || "").split("@")[1] || "";
+    return "mail:" + domain.toLowerCase() + ":" + subject;
+  }
+
+  async function drainMailTask(file, data) {
+    var key = mailThreadKey(data);
+    var from = (data.fromName || data.fromAddress || "").replace(/\s+/g, "");
+    var preview = teamsText(data.preview || "").slice(0, 400);
+    var now = new Date();
+    var stamp = (now.getMonth() + 1) + "/" + String(now.getDate()).padStart(2, "0") + " " + String(now.getHours()).padStart(2, "0") + ":" + String(now.getMinutes()).padStart(2, "0");
+    var existing = Array.prototype.filter.call(document.querySelectorAll('[data-list="task"] > .card'), function (c) {
+      var el = getRoleEl(c, "teamsMessageId");
+      var st = getRoleEl(c, "status");
+      return el && el.value === key && (!st || st.textContent.trim() !== "完了");
+    })[0];
+    if (existing) {
+      // 同じ件の続き：履歴に足して保存する（新しい仕事は作らない）
+      if (window.__app && window.__app.addHistoryEntry) {
+        window.__app.addHistoryEntry(existing, "task", "追加のメールが届いた", (getRoleEl(existing, "status") || {}).textContent || "", null, from + "：" + preview.split("\n")[0].slice(0, 120));
+        scheduleSave(existing);
+        window.__app.applyAll();
+      }
+    } else if (listIds.task) {
+      var subject = String(data.subject || "（件名なし）");
+      var content = subject + "\n" + preview;
+      var fields = keepExistingColumns("task", {
+        Title: subject.slice(0, 60),
+        Status: "未着手",
+        Priority: "中",
+        Owner: "未定",
+        Business: data.business || "社内・共通",
+        Category: "未分類",
+        Content: content,
+        Related: data.customer || "",
+        Requester: from,
+        TeamsMessageId: key,
+        TeamsLink: data.link || "",
+        History: JSON.stringify([{ time: stamp, action: "メールで依頼", status: "未着手", tone: "neutral", due: "", memo: honorific(from) + "から（" + (data.mailbox || "") + "）" }]),
+        Deleted: false
+      });
+      var due = parseDue(content, data.receivedAt);
+      if (due) fields.Due = due;
+      var created;
+      try {
+        created = await graph("/sites/" + siteId + "/lists/" + listIds.task + "/items", { method: "POST", body: { fields: fields } });
+      } catch (e) { log("mail task create failed (" + file.name + "): " + e.message); return; }
+      applying = true;
+      var card = buildCardFromItem("task", { id: created.id, fields: fields });
+      var list = document.querySelector('[data-list="task"]');
+      if (card && list) list.appendChild(card);
+      applying = false;
+      window.__app.applyAll();
+    }
+    try {
+      await graph("/drives/" + QUEUE_DRIVE_ID + "/items/" + file.id, {
+        method: "PATCH",
+        body: { parentReference: { path: "/drives/" + QUEUE_DRIVE_ID + "/root:/" + QUEUE_PROCESSED_FOLDER } }
+      });
+    } catch (e) { log("mail task move failed (" + file.name + "): " + e.message); }
+  }
+
   // 保存のたびに、Teams から来た仕事の「バトンを持っている人」「状態」の変化を見て、元の投稿のスレッドに返す文を作る
   function teamsNotice(card, fields) {
     var threadEl = getRoleEl(card, "teamsMessageId");
@@ -660,6 +733,7 @@
     var now = { owner: fields.Owner || "", status: fields.Status || "" };
     card._last = now;
     if (!threadId || last.owner === undefined) return null;
+    if (threadId.indexOf("mail:") === 0) return null;   // メールから来た仕事は Teams に返信しない
     var title = (fields.Title || "").slice(0, 40);
     var handover = (fields.Handover || "").split("\n")[0].slice(0, 80);
     if (now.status === "完了" && last.status !== "完了") {

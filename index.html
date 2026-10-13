@@ -3884,8 +3884,9 @@
       if (!from && !link) { box.hidden = true; return; }
       box.hidden = false;
       var safeLink = /^https:\/\//.test(link) ? link : '';
-      setHtml(box, '📨 ' + (from ? esc(from) + 'さんからの依頼' : '依頼') + '（Teams）' +
-        (safeLink ? ' <a href="' + esc(safeLink) + '" target="_blank" rel="noopener">元の投稿を見る</a>' : ''));
+      var viaMail = roleVal(card, 'teamsMessageId').indexOf('mail:') === 0;
+      setHtml(box, (viaMail ? '📧 ' : '📨 ') + (from ? esc(/(様|さん|殿)$/.test(from) ? from : from + 'さん') + 'からの依頼' : '依頼') + (viaMail ? '（メール）' : '（Teams）') +
+        (safeLink ? ' <a href="' + esc(safeLink) + '" target="_blank" rel="noopener">' + (viaMail ? '元のメールを見る' : '元の投稿を見る') + '</a>' : ''));
     });
   }
 
