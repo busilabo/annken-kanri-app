@@ -350,13 +350,23 @@
     return res.json();
   }
 
+  // ブラウザだけで動くアプリのサインインは約24時間で切れる。裏で更新できないときに確認の窓を自動で開くと
+  // ブラウザに止められる（user_cancelled）ので、サインイン画面を出して、ボタンで開き直してもらう
+  var signInShown = false;
+  function showSignInAgain() {
+    if (signInShown) return;
+    signInShown = true;
+    document.getElementById("authGate").hidden = false;
+    document.getElementById("authStatus").textContent = "サインインの有効期限が切れました。「サインイン」を押して、もう一度サインインしてください。";
+  }
+
   async function getToken() {
     try {
       var result = await msalApp.acquireTokenSilent({ scopes: SCOPES, account: account });
       return result.accessToken;
     } catch (e) {
-      var result2 = await msalApp.acquireTokenPopup({ scopes: SCOPES, account: account });
-      return result2.accessToken;
+      showSignInAgain();
+      throw e;
     }
   }
 
@@ -1015,11 +1025,17 @@
 
   async function boot() {
     await msalApp.initialize();
+    var started = false;
+    var start = function () { started = true; afterSignIn(); };
     document.getElementById("signInBtn").onclick = function () {
       document.getElementById("authStatus").textContent = "サインイン中…";
-      msalApp.loginPopup({ scopes: SCOPES }).then(function (result) {
+      // 予定表を読む権限もここでまとめて受け取る（管理者の同意済みなので、確認の窓は出ない）
+      msalApp.loginPopup({ scopes: SCOPES, extraScopesToConsent: CAL_SCOPES, loginHint: account && account.username }).then(function (result) {
         account = result.account;
-        afterSignIn();
+        signInShown = false;
+        // すでに一度読み込みを始めていた（途中でサインインが切れた）ときは、読み込み直して最初からやり直す
+        if (started) { window.location.reload(); return; }
+        start();
       }).catch(function (e) {
         document.getElementById("authStatus").textContent = "サインインに失敗しました: " + e.message;
       });
@@ -1030,7 +1046,13 @@
     var accounts = msalApp.getAllAccounts();
     if (accounts.length) {
       account = accounts[0];
-      afterSignIn();
+      // 前回のサインインが残っていても、期限が切れていれば先にサインイン画面を出す（空の画面のまま止まらないように）
+      try {
+        await msalApp.acquireTokenSilent({ scopes: SCOPES, account: account });
+        start();
+      } catch (e) {
+        showSignInAgain();
+      }
     }
   }
 
