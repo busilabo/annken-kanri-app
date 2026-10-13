@@ -3904,6 +3904,11 @@
     return roleVal(card, 'business') || COMMON_BUSINESS;
   }
 
+  // 文中の https:// のアドレスを、押せるリンクにする（サンカクのメッセージページなど）
+  function linkify(text) {
+    return esc(text).replace(/https:\/\/[^\s<>"]+/g, function (u) { return '<a href="' + u + '" target="_blank" rel="noopener">' + u + '</a>'; });
+  }
+
   function contactHtml(c, compact) {
     var v = function (r) { return roleVal(c, r); };
     var email = v('email'), phone = v('phone'), teams = v('teams'), howto = v('howto');
@@ -3915,10 +3920,10 @@
       '<div class="contact-ways">' +
       (email ? '<a href="mailto:' + esc(email) + '">✉ ' + esc(email) + '</a>' : '') +
       (phone ? '<a href="tel:' + esc(phone.replace(/[^0-9+]/g, '')) + '">☎ ' + esc(phone) + '</a>' : '') +
-      (teams ? '<span>💬 ' + esc(teams) + '</span>' : '') +
+      (teams ? '<span>💬 ' + linkify(teams) + '</span>' : '') +
       (!email && !phone && !teams ? '<span class="contact-missing">連絡手段が未登録です</span>' : '') +
       '</div>' +
-      (howto && !compact ? '<div class="contact-howto">' + esc(howto) + '</div>' : (howto ? '<div class="contact-howto">' + esc(howto.split(String.fromCharCode(10))[0]) + '</div>' : '')) +
+      (howto && !compact ? '<div class="contact-howto">' + linkify(howto) + '</div>' : (howto ? '<div class="contact-howto">' + linkify(howto.split(String.fromCharCode(10))[0]) + '</div>' : '')) +
       '</div>';
   }
 
