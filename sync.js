@@ -910,7 +910,8 @@
       var matched = 0;
       list.forEach(function (ev) {
         var parsed = parseShiftEvent({
-          subject: ev.subject, isAllDay: !!ev.isAllDay, isCancelled: !!ev.isCancelled,
+          // Power Automate の書き方によって true/false が文字（"false"）で届くことがある。!! だと "false" も真になるので文字でも判定する
+          subject: ev.subject, isAllDay: ev.isAllDay === true || /^true$/i.test(String(ev.isAllDay)), isCancelled: ev.isCancelled === true || /^true$/i.test(String(ev.isCancelled)),
           start: { dateTime: String(ev.start || "") }, end: { dateTime: String(ev.end || "") }
         });
         matched += parsed.length;
