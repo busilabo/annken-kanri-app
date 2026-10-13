@@ -8,6 +8,7 @@
 #   タスク        … 仕事一覧。「種類」「必要なスキル」「Teamsからの依頼」「顧客ID」の列を足す
 #   スキル表      … 1人1行。各スキルの段階（誰に何を頼めるか・一人しかできない仕事を見つける）
 #   顧客台帳      … 会社ごとの基本情報と、顧客創造モデルの5段階（①認知→②商談化→③契約→④活用→⑤紹介）の到達日。docs/顧客台帳.md の後継
+#   連絡先        … 事業ごとの取引先・メーカーの担当者（パートさんがすぐ連絡先を見つけられるように）
 #   やり取りログ  … 日々のやり取り（Teams・メールなど）を1件1行でためる。Power Automate が自動で足していく
 #   ノウハウ      … 代表の判断ルールや資料の場所（脳内アップロードの成果を入れる。画面はまだ無い）
 #
@@ -37,6 +38,7 @@ $Plan = [ordered]@{
   '運用状況' = @{ create = $false; columns = @( $CustomerId ) }
   'タスク' = @{ create = $false; columns = @(
     $CustomerId
+    @{ name = 'Business';    type = 'text';      desc = '事業（家電の卸販売／Amazon販売／LILOCLE運営／業務改善・DX支援／社内・共通）' }
     @{ name = 'Category';    type = 'text';      desc = '仕事の種類（問い合わせ・営業／制作／発信／事務・その他）' }
     @{ name = 'RequiredSkill'; type = 'text';    desc = 'この仕事に必要なスキル（スキル表の項目名）' }
     @{ name = 'Requester';   type = 'text';      desc = 'Teamsで依頼した人' }
@@ -66,6 +68,18 @@ $Plan = [ordered]@{
     @{ name = 'Phone';       type = 'text';      desc = '電話' }
     @{ name = 'Folder';      type = 'multiline'; desc = '資料の置き場所（URLは255文字を超えることがあるため複数行）' }
     @{ name = 'Memo';        type = 'multiline'; desc = 'メモ' }
+    $Deleted
+  )}
+  '連絡先' = @{ create = $true; columns = @(
+    @{ name = 'Business';    type = 'text';      desc = '事業（家電の卸販売／Amazon販売／LILOCLE運営／業務改善・DX支援／社内・共通）' }
+    @{ name = 'Side';        type = 'text';      desc = '区分（取引先／メーカー／社内／その他）' }
+    @{ name = 'Company';     type = 'text';      desc = '会社名' }
+    @{ name = 'Name';        type = 'text';      desc = 'お名前' }
+    @{ name = 'Role';        type = 'text';      desc = '窓口の内容（発注・納期・不良対応 など）' }
+    @{ name = 'Email';       type = 'text';      desc = 'メール' }
+    @{ name = 'Phone';       type = 'text';      desc = '電話' }
+    @{ name = 'Teams';       type = 'text';      desc = 'Teams・そのほかの連絡手段' }
+    @{ name = 'HowTo';       type = 'multiline'; desc = '連絡のしかた・注意' }
     $Deleted
   )}
   'やり取りログ' = @{ create = $true; columns = @(

@@ -12,7 +12,7 @@
   var SCOPES = ["Sites.ReadWrite.All"];
   var SITE_HOST = "busilabo.sharepoint.com";
   var SITE_PATH = "/sites/msteams_f7ddf8";
-  var LIST_NAMES = { inquiry: "問い合わせ管理", wontask: "成約管理タスク", ops: "運用状況", task: "タスク", customer: "顧客台帳", skill: "スキル表" };
+  var LIST_NAMES = { inquiry: "問い合わせ管理", wontask: "成約管理タスク", ops: "運用状況", task: "タスク", customer: "顧客台帳", skill: "スキル表", contact: "連絡先" };
   var POLL_MS = 5000;
   var QUEUE_DRIVE_ID = "b!wbAWUnf6KkGVCCMpzpid5mjD2eweyyFPkqQ-wGokg-I25eWJtTuGQ7bhpfZRHTvP";
   var QUEUE_FOLDER = "案件管理キュー/queue";
@@ -86,6 +86,7 @@
       Owner: { role: "owner", kind: "input" },
       Due: { role: "due", kind: "date" },
       Related: { role: "related", kind: "input" },
+      Business: { role: "business", kind: "input" },
       Category: { role: "category", kind: "input" },
       RequiredSkill: { role: "skill", kind: "input" },
       // Teams から来た仕事の出どころ（依頼した人・元の投稿）。進み具合を元の投稿のスレッドへ返すのに使う
@@ -95,6 +96,17 @@
       Handover: { role: "handover", kind: "editable" },
       HandoverBy: { role: "handoverBy", kind: "editable" },
       Content: { role: "content", kind: "editable" }
+    },
+    contact: {
+      Business: { role: "business", kind: "input" },
+      Side: { role: "side", kind: "input" },
+      Company: { role: "company", kind: "input" },
+      Name: { role: "name", kind: "input" },
+      Role: { role: "role", kind: "input" },
+      Email: { role: "email", kind: "input" },
+      Phone: { role: "phone", kind: "input" },
+      Teams: { role: "teams", kind: "input" },
+      HowTo: { role: "howto", kind: "editable" }
     },
     skill: {
       Staff: { role: "staff", kind: "input" },
@@ -323,6 +335,8 @@
       fields.Title = fields.Name || "無題";
     } else if (kind === "skill") {
       fields.Title = fields.Staff || "スキル表";
+    } else if (kind === "contact") {
+      fields.Title = ((fields.Company || "") + " " + (fields.Name || "")).trim() || "連絡先";
     }
     // SharePoint に列がまだ無い項目を送ると Graph が 400 を返し、そのカードの保存がまるごと失敗する。
     // 画面だけ先に新しくなっても既存の項目は保存できるように、リストに実在する列だけを送る。
