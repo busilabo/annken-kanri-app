@@ -22,6 +22,7 @@
   var FIELD_MAP = {
     inquiry: {
       Status: { role: "status", kind: "chip" },
+      CustomerId: { role: "customerId", kind: "input" },
       Source: { role: "source", kind: "chip" },
       ReceivedAt: { role: "receivedAt", kind: "date" },
       Company: { role: "company", kind: "input" },
@@ -44,6 +45,7 @@
     },
     wontask: {
       Status: { role: "status", kind: "chip" },
+      CustomerId: { role: "customerId", kind: "input" },
       Company: { role: "company", kind: "input" },
       Owner: { role: "owner", kind: "input" },
       ContractDate: { role: "contractDate", kind: "date" },
@@ -66,6 +68,7 @@
     },
     ops: {
       Status: { role: "status", kind: "chip" },
+      CustomerId: { role: "customerId", kind: "input" },
       // 顧客名は以前 Title にしか保存しておらず、読み戻す処理がなかったため再読込で消えていた
       Customer: { role: "customer", kind: "input" },
       Plan: { role: "plan", kind: "input" },
@@ -78,6 +81,7 @@
     },
     task: {
       Status: { role: "status", kind: "chip" },
+      CustomerId: { role: "customerId", kind: "input" },
       Priority: { role: "priority", kind: "chip" },
       Owner: { role: "owner", kind: "input" },
       Due: { role: "due", kind: "date" },
@@ -107,6 +111,13 @@
       Email: { role: "email", kind: "input" },
       Phone: { role: "phone", kind: "input" },
       Folder: { role: "folder", kind: "input" },
+      Origin: { role: "origin", kind: "input" },
+      HearingAt: { role: "hearingAt", kind: "date" },
+      ContractAt: { role: "contractAt", kind: "date" },
+      Day30At: { role: "day30At", kind: "date" },
+      ReferralAt: { role: "referralAt", kind: "date" },
+      ReferredBy: { role: "referredBy", kind: "input" },
+      Recorder: { role: "recorder", kind: "input" },
       Memo: { role: "memo", kind: "editable" }
     }
   };
@@ -388,6 +399,7 @@
         if (window.__app && window.__app.markListMissing) window.__app.markListMissing(kind);
       }
     }
+    await resolveActivityList();
   }
 
   async function saveCard(card) {
@@ -400,6 +412,7 @@
     try {
       await graph("/sites/" + siteId + "/lists/" + listIds[kind] + "/items/" + itemId + "/fields", { method: "PATCH", body: fields });
       if (notice) postTeamsReply(card, notice);
+      logActivity(card, kind, fields);
     } catch (e) { log("save failed: " + e.message); }
   }
 
@@ -656,6 +669,94 @@
     } catch (e) { log("teams reply upload failed: " + e.message); }
   }
 
+  // ---- やり取りログ（日々の記録をデータベースにためる）----
+  // アプリの中で起きたこと（履歴に記録したアクション・バトンの受け渡し・申し送り）を、1件1行で「やり取りログ」に足す。
+  // パートさんは普段どおりアプリを使うだけで、日々の記録がたまっていく。顧客IDも付けるので、顧客ごとに時系列で追える。
+  // 他の人の画面での変更は、その人の画面が記録する（読み込んだ値を「記録済み」として覚え、二重に記録しない）。
+  var ACTIVITY_LIST = "やり取りログ";
+  var ACTIVITY_KIND_LABEL = { inquiry: "問い合わせ", wontask: "システム構築", ops: "運用", task: "仕事" };
+  var HANDOVER_QUIET_MS = 90000;   // 申し送りは書いている途中で記録しないよう、手が止まってから記録する
+  var activityListId = null;
+  var handoverTimers = {};
+
+  async function resolveActivityList() {
+    try {
+      var res = await graph("/sites/" + siteId + "/lists?$filter=" + encodeURIComponent("displayName eq '" + ACTIVITY_LIST + "'"));
+      activityListId = res.value && res.value[0] ? res.value[0].id : null;
+      if (activityListId) {
+        var colRes = await graph("/sites/" + siteId + "/lists/" + activityListId + "/columns?$select=name");
+        var set = {};
+        (colRes.value || []).forEach(function (c) { set[c.name] = true; });
+        listColumns.__activity = set;
+      }
+    } catch (e) { log("activity list lookup failed: " + e.message); }
+  }
+
+  function snapshotActivity(card, f) {
+    var hist = [];
+    try { hist = JSON.parse(f.History || "[]"); } catch (e) { hist = []; }
+    card._logSnap = { hist: hist.length, handover: f.Handover || "" };
+  }
+
+  function activityBase(card, kind, fields) {
+    var customer = kind === "ops" ? (fields.Customer || "") : kind === "task" ? (fields.Related || "") : (fields.Company || "");
+    return {
+      Title: (ACTIVITY_KIND_LABEL[kind] || kind) + "：" + (fields.Title || "").slice(0, 80),
+      OccurredAt: new Date().toISOString(),
+      Channel: "仕事管理アプリ",
+      Direction: "社内",
+      Customer: customer,
+      CustomerId: fields.CustomerId || "",
+      Staff: fields.Owner && fields.Owner !== "未定" ? fields.Owner : "",
+      Subject: (fields.Title || "").slice(0, 200),
+      SourceLink: "",
+      SourceId: "app:" + kind + ":" + (card.getAttribute("data-item-id") || "") + ":" + Date.now() + ":" + Math.floor(Math.random() * 1000)
+    };
+  }
+
+  async function postActivity(item) {
+    if (!activityListId) return;
+    var cols = listColumns.__activity;
+    if (cols) for (var k in item) if (!cols[k]) delete item[k];
+    try {
+      await graph("/sites/" + siteId + "/lists/" + activityListId + "/items", { method: "POST", body: { fields: item } });
+    } catch (e) { log("activity log failed: " + e.message); }
+  }
+
+  // 保存のたびに呼ぶ。読み込んだとき（または前回記録したとき）からの増えた分だけを記録する
+  function logActivity(card, kind, fields) {
+    if (!activityListId || !ACTIVITY_KIND_LABEL[kind]) return;
+    var snap = card._logSnap;
+    if (!snap) { snapshotActivity(card, fields); return; }
+    var hist = [];
+    try { hist = JSON.parse(fields.History || "[]"); } catch (e) { hist = []; }
+    if (hist.length > snap.hist) {
+      // 履歴は新しいものが先頭に入る
+      hist.slice(0, hist.length - snap.hist).reverse().forEach(function (h) {
+        var item = activityBase(card, kind, fields);
+        item.Summary = (h.action || "") + (h.status ? " → " + h.status : "") + (h.due ? "（" + h.due + "）" : "") + (h.memo ? "\n" + h.memo : "");
+        postActivity(item);
+      });
+      // バトンを渡したときの申し送りは履歴に含まれるので、申し送りとしては重ねて記録しない
+      snap.handover = fields.Handover || "";
+    }
+    snap.hist = hist.length;
+
+    var key = card.getAttribute("data-item-id");
+    if ((fields.Handover || "") !== snap.handover && key) {
+      clearTimeout(handoverTimers[key]);
+      handoverTimers[key] = setTimeout(function () {
+        var now = (getRoleEl(card, "handover") || {}).innerText || "";
+        now = now.trim();
+        if (!now || now === snap.handover) return;
+        snap.handover = now;
+        var item = activityBase(card, kind, collectFields(card, kind));
+        item.Summary = "申し送り：" + now;
+        postActivity(item);
+      }, HANDOVER_QUIET_MS);
+    }
+  }
+
   // Customer列を足す前の運用状況カードは、顧客名がTitleにしか入っていない。
   // そのまま読むと顧客名が空欄になるので、Titleから戻す。次の保存でCustomerにも入る。
   function applyItemFields(card, kind, f) {
@@ -663,6 +764,8 @@
     for (var col in map) writeField(card, kind, map[col], f[col]);
     // Teams への返信は「保存した値からの変化」で決めるので、読み込んだ値を覚えておく（他の人の変更で二重に返信しないように）
     if (kind === "task") card._last = { owner: f.Owner || "", status: f.Status || "" };
+    // ここまでの履歴・申し送りは記録済みとみなす（他の人の画面で起きたことを、こちらで二重に記録しない）
+    if (ACTIVITY_KIND_LABEL[kind]) snapshotActivity(card, f);
     if (kind === "ops" && !f.Customer && f.Title && f.Title !== "無題") {
       writeField(card, kind, FIELD_MAP.ops.Customer, f.Title);
     }
@@ -1002,6 +1105,8 @@
     if (e.target.closest('[data-role="connectCalendar"]')) loadShifts(true);
   });
 
+  // 画面側が「この列は SharePoint にあるか」を確かめられるように
+  window.__syncHasColumn = function (kind, name) { return !!(listColumns[kind] && listColumns[kind][name]); };
   if (window.__app) window.__app.requestVerify = requestVerify;
 
   async function afterSignIn() {

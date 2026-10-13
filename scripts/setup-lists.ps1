@@ -3,15 +3,20 @@
 # 無いリストは作り、無い列は足す。すでにあるものは飛ばすので、何度実行しても安全。
 # 既存のリスト・列・データを消したり書き換えたりはしない。
 #
-#   タスク        … 仕事一覧。「種類」「必要なスキル」「Teamsからの依頼」の列を足す
+#   ※ 仕事管理のデータはすべてこのサイトのリストに集約する（ここが正本）。表どうしは「顧客ID」（顧客台帳の行のID）でつなぐ
+#   問い合わせ管理／成約管理タスク／運用状況 … 既存。「顧客ID」の列を足す
+#   タスク        … 仕事一覧。「種類」「必要なスキル」「Teamsからの依頼」「顧客ID」の列を足す
 #   スキル表      … 1人1行。各スキルの段階（誰に何を頼めるか・一人しかできない仕事を見つける）
-#   顧客台帳      … 会社ごとの基本情報
-#   やり取りログ  … Teams・メールのやり取りの要約（夜間の自動取り込みで使う。画面はまだ無い）
+#   顧客台帳      … 会社ごとの基本情報と、顧客創造モデルの5段階（①認知→②商談化→③契約→④活用→⑤紹介）の到達日。docs/顧客台帳.md の後継
+#   やり取りログ  … 日々のやり取り（Teams・メールなど）を1件1行でためる。Power Automate が自動で足していく
 #   ノウハウ      … 代表の判断ルールや資料の場所（脳内アップロードの成果を入れる。画面はまだ無い）
 #
 # 使い方:
 #   pwsh -File scripts/setup-lists.ps1
 #   表示されたURLをブラウザで開き、表示されたコードを入力してサインインする。
+#   すでに合鍵（アクセストークン）がある場合は -Token で渡すとサインインを省ける（移行の作業と続けて流すため）
+
+param([string]$Token = '')
 
 $ErrorActionPreference = 'Stop'
 
@@ -23,10 +28,15 @@ $SiteHost = 'busilabo.sharepoint.com'
 $SitePath = '/sites/msteams_f7ddf8'
 
 $Deleted = @{ name = 'Deleted'; type = 'boolean'; desc = '削除済み（元に戻せるようにするため実データは消さない）' }
+$CustomerId = @{ name = 'CustomerId'; type = 'text'; desc = '顧客ID（顧客台帳の行のID）。会社名の表記ゆれに左右されずに顧客でつなぐ'; indexed = $true }
 
 # create = $true のリストは、無ければ作る。$false のリストは既存のものに列を足すだけ。
 $Plan = [ordered]@{
+  '問い合わせ管理' = @{ create = $false; columns = @( $CustomerId ) }
+  '成約管理タスク' = @{ create = $false; columns = @( $CustomerId ) }
+  '運用状況' = @{ create = $false; columns = @( $CustomerId ) }
   'タスク' = @{ create = $false; columns = @(
+    $CustomerId
     @{ name = 'Category';    type = 'text';      desc = '仕事の種類（問い合わせ・営業／制作／発信／事務・その他）' }
     @{ name = 'RequiredSkill'; type = 'text';    desc = 'この仕事に必要なスキル（スキル表の項目名）' }
     @{ name = 'Requester';   type = 'text';      desc = 'Teamsで依頼した人' }
@@ -42,7 +52,14 @@ $Plan = [ordered]@{
   '顧客台帳' = @{ create = $true; columns = @(
     @{ name = 'Name';        type = 'text';      desc = '会社名' }
     @{ name = 'Business';    type = 'text';      desc = '事業（できるAIチーム＋／その他）' }
-    @{ name = 'Stage';       type = 'text';      desc = '状況（見込み／構築中／運用中／休止／終了）' }
+    @{ name = 'Stage';       type = 'text';      desc = '現在ステージ（①認知／②商談化／③契約／④活用／⑤紹介／終了（失注））' }
+    @{ name = 'Origin';      type = 'text';      desc = '①認知経路' }
+    @{ name = 'HearingAt';   type = 'dateTime';  desc = '②ヒアリング日' }
+    @{ name = 'ContractAt';  type = 'dateTime';  desc = '③契約日' }
+    @{ name = 'Day30At';     type = 'dateTime';  desc = '④Day30診断日' }
+    @{ name = 'ReferralAt';  type = 'dateTime';  desc = '⑤紹介依頼日' }
+    @{ name = 'ReferredBy';  type = 'text';      desc = '紹介元' }
+    @{ name = 'Recorder';    type = 'text';      desc = '記入者（人の名前、または代行入力したAI）' }
     @{ name = 'Owner';       type = 'text';      desc = '自社の担当者' }
     @{ name = 'ContactName'; type = 'text';      desc = '先方のご担当者' }
     @{ name = 'Email';       type = 'text';      desc = 'メール' }
@@ -55,6 +72,9 @@ $Plan = [ordered]@{
     @{ name = 'OccurredAt';  type = 'dateTime';  desc = 'やり取りの日時' }
     @{ name = 'Channel';     type = 'text';      desc = '経路（Teams／メール／電話／その他）' }
     @{ name = 'Customer';    type = 'text';      desc = '顧客名（顧客台帳の会社名）' }
+    $CustomerId
+    @{ name = 'Direction';   type = 'text';      desc = '受信／送信／社内' }
+    @{ name = 'Subject';     type = 'text';      desc = '件名（メール）や1行目（Teams）' }
     @{ name = 'Staff';       type = 'text';      desc = '自社側でやり取りした人' }
     @{ name = 'Summary';     type = 'multiline'; desc = 'やり取りの要約' }
     @{ name = 'SourceLink';  type = 'multiline'; desc = '元のメッセージへのリンク' }
@@ -138,7 +158,7 @@ function Find-List {
   return $null
 }
 
-$token = Get-GraphToken
+$token = if ($Token) { $Token } else { Get-GraphToken }
 Write-Host 'サインインできました。リストと列を確認します...' -ForegroundColor Green
 
 $site = Invoke-Graph -Token $token -Method GET -Path "/sites/${SiteHost}:${SitePath}"

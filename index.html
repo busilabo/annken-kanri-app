@@ -1423,6 +1423,7 @@
           <artifact-local><button type="button" class="action-btn refresh-btn" data-role="refresh">更新</button></artifact-local>
         </div>
         <div class="grid">
+          <input type="hidden" data-role="customerId">
           <div class="field"><label>受付日</label><input type="date" data-role="receivedAt"></div>
           <div class="field"><label>会社名</label><input type="text" data-role="company"></div>
           <div class="field"><label>担当者名</label><input type="text" data-role="contactName"></div>
@@ -1566,6 +1567,7 @@
           <artifact-local><button type="button" class="action-btn refresh-btn" data-role="refresh">更新</button></artifact-local>
         </div>
         <div class="grid">
+          <input type="hidden" data-role="customerId">
           <div class="field"><label>会社名</label><input type="text" data-role="company"></div>
           <div class="field"><label>担当（窓口）</label><select data-role="owner" data-staff-select></select></div>
           <div class="field"><label>契約日</label><input type="date" data-role="contractDate"></div>
@@ -1729,6 +1731,7 @@
           <artifact-local><button type="button" class="action-btn refresh-btn" data-role="refresh">更新</button></artifact-local>
         </div>
         <div class="grid">
+          <input type="hidden" data-role="customerId">
           <div class="field"><label>顧客名</label><input type="text" data-role="customer"></div>
           <div class="field"><label>プラン</label><input type="text" data-role="plan"></div>
           <div class="field"><label>契約開始日</label><input type="date" data-role="startAt"></div>
@@ -1810,6 +1813,7 @@
           <artifact-local><button type="button" class="action-btn refresh-btn" data-role="refresh">更新</button></artifact-local>
         </div>
         <div class="grid">
+          <input type="hidden" data-role="customerId">
           <div class="field"><label>種類</label><select data-role="category" data-category-select></select></div>
           <div class="field"><label>バトンを持っている人</label><select data-role="owner" data-staff-select></select></div>
           <div class="field"><label>期限</label><input type="date" data-role="due"></div>
@@ -1926,12 +1930,19 @@
         <div class="grid">
           <div class="field"><label>会社名</label><input type="text" data-role="name"></div>
           <div class="field"><label>事業</label><select data-role="business" data-choice-select="business"></select></div>
-          <div class="field"><label>状況</label><select data-role="stage" data-choice-select="stage"></select></div>
+          <div class="field"><label>現在ステージ</label><select data-role="stage" data-choice-select="stage"></select></div>
           <div class="field"><label>担当（窓口）</label><select data-role="owner" data-staff-select></select></div>
           <div class="field"><label>先方のご担当者</label><input type="text" data-role="contactName"></div>
           <div class="field"><label>メール</label><input type="text" data-role="email"></div>
           <div class="field"><label>電話</label><input type="text" data-role="phone"></div>
           <div class="field"><label>資料の置き場所（URL）</label><input type="text" data-role="folder"></div>
+          <div class="field"><label>①認知経路</label><input type="text" data-role="origin" placeholder="例：Instagram、紹介、検索"></div>
+          <div class="field"><label>②ヒアリング日</label><input type="date" data-role="hearingAt"></div>
+          <div class="field"><label>③契約日</label><input type="date" data-role="contractAt"></div>
+          <div class="field"><label>④Day30診断日</label><input type="date" data-role="day30At"></div>
+          <div class="field"><label>⑤紹介依頼日</label><input type="date" data-role="referralAt"></div>
+          <div class="field"><label>紹介元</label><input type="text" data-role="referredBy"></div>
+          <div class="field"><label>記入者</label><input type="text" data-role="recorder"></div>
           <div class="field wide">
             <label>この顧客の案件・仕事</label>
             <div class="related-list" data-related></div>
@@ -2050,7 +2061,8 @@
   var CHOICES = {
     category: CATEGORIES,
     business: ["できるAIチーム＋", "その他"],
-    stage: ["見込み", "構築中", "運用中", "休止", "終了"]
+    // 顧客創造モデルの5段階（docs/09_販売する仕組み.md のフライホイール）。参謀AI社員の歩留まり計算と同じ区切り
+    stage: ["①認知", "②商談化", "③契約", "④活用", "⑤紹介", "終了（失注）"]
   };
 
   // スキル表の項目。仕事の種類ごとに並べる。項目を足す・名前を変えるときはここだけ直す
@@ -3669,10 +3681,34 @@
     var workCards = [];
     WORK_KINDS.forEach(function (k) { workCards = workCards.concat(liveCards(k)); });
 
+    // 顧客IDを付ける（表どうしは会社名の文字ではなく顧客IDでつなぐ）。保存済みの顧客で、会社名がぴったり1社に合うときだけ
+    var byKey = {};
+    cards.forEach(function (c) {
+      var id = c.getAttribute('data-item-id');
+      var k = normName(roleVal(c, 'name'));
+      if (!id || !k) return;
+      byKey[k] = byKey[k] ? '__dup__' : id;
+    });
+    workCards.forEach(function (w) {
+      var idEl = w.querySelector('[data-role="customerId"]');
+      if (!idEl || idEl.value || !w.getAttribute('data-item-id')) return;
+      // SharePoint に列がまだ無いと保存されず、付け直しを繰り返してしまう
+      if (window.__syncHasColumn && !window.__syncHasColumn(w.getAttribute('data-kind'), 'CustomerId')) return;
+      var hit = byKey[companyKeyOf(w)];
+      if (!hit || hit === '__dup__') return;
+      idEl.value = hit;
+      idEl.dispatchEvent(new Event('change', { bubbles: true }));   // sync.js が保存する
+    });
+
     var visible = 0;
     cards.forEach(function (card) {
       var key = normName(roleVal(card, 'name'));
-      var related = key ? workCards.filter(function (w) { return sameCompany(key, companyKeyOf(w)); }) : [];
+      var myId = card.getAttribute('data-item-id') || '';
+      var related = workCards.filter(function (w) {
+        var cid = roleVal(w, 'customerId');
+        if (cid) return cid === myId;
+        return !!key && sameCompany(key, companyKeyOf(w));
+      });
       related.sort(function (a, b) { return (isDone(a) ? 1 : 0) - (isDone(b) ? 1 : 0); });
       setHtml(card.querySelector('[data-related]'), related.map(function (w) {
         return rowHtml({ card: w, tone: isDone(w) ? 'ok' : 'accent', meta: KIND_LABELS[w.getAttribute('data-kind')] + " · " + statusOf(w) + " · 担当 " + ownerOf(w), badges: [isDone(w) ? { text: "完了", tone: "ok" } : dueBadge(w)] });
@@ -3703,12 +3739,12 @@
       });
     };
     // 先に見たものが優先されるので、進んでいる順（運用→構築→商談）に見る
-    liveCards('ops').forEach(function (c) { add(c, roleVal(c, 'customer'), '運用中'); });
-    liveCards('wontask').forEach(function (c) { add(c, roleVal(c, 'company'), statusOf(c) === '完了' ? '運用中' : '構築中'); });
+    liveCards('ops').forEach(function (c) { add(c, roleVal(c, 'customer'), '④活用'); });
+    liveCards('wontask').forEach(function (c) { add(c, roleVal(c, 'company'), statusOf(c) === '完了' ? '④活用' : '③契約'); });
     liveCards('inquiry').forEach(function (c) {
       var st = statusOf(c);
-      if (st === '成約') add(c, roleVal(c, 'company'), '構築中');
-      else if (st === '商談中') add(c, roleVal(c, 'company'), '見込み');
+      if (st === '成約') add(c, roleVal(c, 'company'), '③契約');
+      else if (st === '商談中') add(c, roleVal(c, 'company'), '②商談化');
     });
     return picked;
   }
