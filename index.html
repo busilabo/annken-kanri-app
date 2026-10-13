@@ -4314,6 +4314,8 @@
   (function showConsentResult() {
     var q = new URLSearchParams(window.location.search);
     if (!q.has("admin_consent") && !q.has("error")) return;
+    // お気に入りに許可直後のアドレスが登録されていると、開くたびに出てしまう。Microsoft の許可画面から戻ってきたときだけ出す
+    if (!/login.microsoftonline.com/.test(document.referrer || "")) { history.replaceState(null, "", window.location.pathname); return; }
     var ok = q.get("admin_consent") === "True";
     var banner = document.createElement("p");
     banner.className = "consent-banner";

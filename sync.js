@@ -1040,19 +1040,35 @@
         document.getElementById("authStatus").textContent = "サインインに失敗しました: " + e.message;
       });
     };
+    // 自動の作り直し（下）から戻ってきたとき
+    var REDIRECT_FLAG = "busilabo.authRedirectTried";
+    var back = null;
     try {
-      await msalApp.handleRedirectPromise();
-    } catch (e) { /* ignore */ }
+      back = await msalApp.handleRedirectPromise();
+    } catch (e) { log("redirect result failed: " + (e.errorCode || e.message)); }
+    if (back && back.account) account = back.account;
     var accounts = msalApp.getAllAccounts();
-    if (accounts.length) {
-      account = accounts[0];
-      // 前回のサインインが残っていても、期限が切れていれば先にサインイン画面を出す（空の画面のまま止まらないように）
-      try {
-        await msalApp.acquireTokenSilent({ scopes: SCOPES, account: account });
-        start();
-      } catch (e) {
-        showSignInAgain();
+    if (!account && accounts.length) account = accounts[0];
+    if (!account) return;   // 初めて開いたPC：サインイン画面のボタンから
+    try {
+      await msalApp.acquireTokenSilent({ scopes: SCOPES, account: account });
+      try { sessionStorage.removeItem(REDIRECT_FLAG); } catch (e) { /* ignore */ }
+      start();
+    } catch (e) {
+      // サインインの合鍵（約24時間で切れる）を、Microsoft のページへ一瞬移動して作り直す。
+      // ブラウザが「サインインしたまま」を覚えていれば、パスワードもボタン操作も要らずに戻ってくる。
+      // 裏の小さな窓での作り直しはブラウザの追跡防止で止められやすいので、この方法にしている。
+      // 1回試してだめなら（覚えていない・パスワードが要る）、サインイン画面を出す（行ったり来たりを繰り返さない）
+      var tried = false;
+      try { tried = sessionStorage.getItem(REDIRECT_FLAG) === "1"; } catch (e2) { /* ignore */ }
+      if (!tried) {
+        try { sessionStorage.setItem(REDIRECT_FLAG, "1"); } catch (e2) { /* ignore */ }
+        document.getElementById("authStatus").textContent = "サインインを更新しています…";
+        msalApp.acquireTokenRedirect({ scopes: SCOPES, account: account, loginHint: account.username });
+        return;
       }
+      try { sessionStorage.removeItem(REDIRECT_FLAG); } catch (e2) { /* ignore */ }
+      showSignInAgain();
     }
   }
 
