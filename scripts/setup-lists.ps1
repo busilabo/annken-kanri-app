@@ -88,6 +88,8 @@ $Plan = [ordered]@{
     @{ name = 'Customer';    type = 'text';      desc = '顧客名（顧客台帳の会社名）' }
     $CustomerId
     @{ name = 'Direction';   type = 'text';      desc = '受信／送信／社内' }
+    @{ name = 'Business';    type = 'text';      desc = '事業（家電の卸販売／Amazon販売／LILOCLE運営／業務改善・DX支援／社内・共通）' }
+    @{ name = 'Mailbox';     type = 'text';      desc = '受け取ったメールボックス（メールの場合）' }
     @{ name = 'Subject';     type = 'text';      desc = '件名（メール）や1行目（Teams）' }
     @{ name = 'Staff';       type = 'text';      desc = '自社側でやり取りした人' }
     @{ name = 'Summary';     type = 'multiline'; desc = 'やり取りの要約' }

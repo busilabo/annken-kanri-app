@@ -718,6 +718,8 @@
       Title: (ACTIVITY_KIND_LABEL[kind] || kind) + "：" + (fields.Title || "").slice(0, 80),
       OccurredAt: new Date().toISOString(),
       Channel: "仕事管理アプリ",
+      // 問い合わせ・構築・運用はできるAIチーム＋の仕事。仕事一覧はカードの「事業」（未設定は社内・共通）
+      Business: kind === "task" ? (fields.Business || "社内・共通") : "業務改善・DX支援",
       Direction: "社内",
       Customer: customer,
       CustomerId: fields.CustomerId || "",
