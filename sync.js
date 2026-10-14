@@ -932,6 +932,7 @@
   // routineReport: { routine, title, business, generatedAt, summary, body, link, actions: [{ id, title, detail, business, owner, priority, due }] }
   var REPORT_CHANNEL = "定時報告";
   var REPORT_REFRESH_MS = 5 * 60 * 1000;
+  var IGNORED_REPORTS = ["lilocle-check"];
 
   function reportSummaryText(data) {
     var actions = data.actions || [];
@@ -943,6 +944,8 @@
   async function drainRoutineReport(file, data) {
     // 先に処理済みへ移す（2台のパソコンが同時に開いていても、報告と仕事が二重にならないように。移せなかった方は何もしない）
     if (!(await moveToProcessed(file, "routine report"))) return;
+    // 毎朝の LILOCLE 照合は取り込まない（代表の指定 2026-10-15。受注運用の報告で足りる）
+    if (IGNORED_REPORTS.indexOf(data.routine) !== -1) return;
     var title = data.title || data.routine || "定時報告";
     var at = data.generatedAt ? new Date(data.generatedAt) : new Date();
     if (isNaN(at.getTime())) at = new Date();
