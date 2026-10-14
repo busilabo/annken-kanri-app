@@ -1168,6 +1168,24 @@
   .tile[data-biz-i="3"] { background: var(--biz3-bg); }
   .tile[data-biz-i="4"] { background: var(--biz4-bg); }
   .tile[data-biz-i="5"] { background: var(--biz5-bg); }
+  /* 事業ボタンも仕事と同じ背景色。選んでいるボタンは濃い色 */
+  .biz-chip[data-biz-i="1"] { background: var(--biz1-bg); border-color: var(--biz1-bg); }
+  .biz-chip[data-biz-i="2"] { background: var(--biz2-bg); border-color: var(--biz2-bg); }
+  .biz-chip[data-biz-i="3"] { background: var(--biz3-bg); border-color: var(--biz3-bg); }
+  .biz-chip[data-biz-i="4"] { background: var(--biz4-bg); border-color: var(--biz4-bg); }
+  .biz-chip[data-biz-i="5"] { background: var(--biz5-bg); border-color: var(--biz5-bg); }
+  .biz-chip[data-biz-i="1"][data-on] { background: var(--biz1); border-color: var(--biz1); }
+  .biz-chip[data-biz-i="2"][data-on] { background: var(--biz2); border-color: var(--biz2); }
+  .biz-chip[data-biz-i="3"][data-on] { background: var(--biz3); border-color: var(--biz3); }
+  .biz-chip[data-biz-i="4"][data-on] { background: var(--biz4); border-color: var(--biz4); }
+  .biz-chip[data-biz-i="5"][data-on] { background: var(--biz5); border-color: var(--biz5); }
+  .biz-chip[data-biz-i]:hover { border-color: var(--text-muted); }
+  .biz-contacts[data-biz-i="1"] { border-color: var(--biz1); background: var(--biz1-bg); }
+  .biz-contacts[data-biz-i="2"] { border-color: var(--biz2); background: var(--biz2-bg); }
+  .biz-contacts[data-biz-i="3"] { border-color: var(--biz3); background: var(--biz3-bg); }
+  .biz-contacts[data-biz-i="4"] { border-color: var(--biz4); background: var(--biz4-bg); }
+  .biz-contacts[data-biz-i="5"] { border-color: var(--biz5); background: var(--biz5-bg); }
+  .biz-chip[data-on] .biz-dot { box-shadow: 0 0 0 2px var(--surface); }
   .biz-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; box-shadow: 0 0 0 2px var(--surface); }
   .biz-dot[data-biz-i="1"] { background: var(--biz1); }
   .biz-dot[data-biz-i="2"] { background: var(--biz2); }
@@ -4136,11 +4154,12 @@
     var total = open.filter(needsMove).length;
     var chip = function (value, label, n) {
       var bizI = value ? BUSINESSES.indexOf(value) + 1 : 0;
-      return '<button type="button" class="biz-chip" data-biz="' + esc(value) + '"' + (focusBusiness === value ? ' data-on' : '') + '>' +
+      return '<button type="button" class="biz-chip" data-biz="' + esc(value) + '"' + (bizI ? ' data-biz-i="' + bizI + '"' : '') + (focusBusiness === value ? ' data-on' : '') + '>' +
         (bizI ? '<span class="biz-dot" data-biz-i="' + bizI + '"></span>' : '') + esc(label) + ' <span class="tab-count">' + n + '</span></button>';
     };
     setHtml(document.querySelector('[data-biz-switch]'), chip('', 'すべての事業', total) + BUSINESSES.map(function (b) { return chip(b, b, counts[b] || 0); }).join(''));
     var box = document.querySelector('[data-biz-contacts]');
+    if (box) box.setAttribute('data-biz-i', focusBusiness ? BUSINESSES.indexOf(focusBusiness) + 1 : 0);
     if (!focusBusiness) { setHtml(box, ''); return; }
     var list = liveCards('contact').filter(function (c) { return roleVal(c, 'business') === focusBusiness; });
     var order = { '取引先': 0, 'メーカー': 1, '社内': 2, 'その他': 3 };
