@@ -535,6 +535,8 @@
     if (data.type === "mailTask") { await drainMailTask(file, data); return; }
     if (data.type === "routineReport") { await drainRoutineReport(file, data); return; }
     if (data.type === "faxNotice") { await drainFaxNotice(file, data); return; }
+    // 知らない種類のファイルは問い合わせとして登録しない（置いた側の書き間違いで、問い合わせが増えないように）
+    if (data.type) { log("unknown queue type, skipped: " + data.type + " (" + file.name + ")"); return; }
     var srcId = data.srcId || "";
     var already = srcId && document.querySelector('.card[data-src-id="' + srcId + '"]');
     if (!already) {
