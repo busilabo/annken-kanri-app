@@ -4013,7 +4013,8 @@
   // sync.js が「やり取りログ」の定時報告を読み、ルーティンごとの最新を setReports で渡してくる
   var reportState = { loaded: false, reports: [] };
   // 並べる順（代表の指定 2026-10-15）。ここにないルーティンは出さない（毎朝の LILOCLE 照合は出さない）。routine はルーティンが報告に付ける名前
-  var REPORT_ORDER = ["inquiry", "amazon-morning", "lilocle-juchu", "ai-news"];
+  // 仕組みの見張り（watch）は、止まっているものがあるときだけ先頭、すべて動いていれば最後
+  var REPORT_ORDER = ["inquiry", "amazon-morning", "lilocle-juchu", "ai-news", "watch"];
 
   function setReports(state) { reportState = state || { loaded: false, reports: [] }; renderTopInfo(); }
 
@@ -4026,8 +4027,9 @@
   function renderReports() {
     var box = document.querySelector('[data-reports]');
     if (!box) return;
+    var rank = function (r) { return r.routine === 'watch' && (r.actions || []).length ? -1 : REPORT_ORDER.indexOf(r.routine); };
     var list = (reportState.reports || []).filter(function (r) { return REPORT_ORDER.indexOf(r.routine) !== -1; }).sort(function (a, b) {
-      return REPORT_ORDER.indexOf(a.routine) - REPORT_ORDER.indexOf(b.routine);
+      return rank(a) - rank(b);
     });
     if (!list.length) {
       setHtml(box, '<p class="info-empty">' + (reportState.loaded ? 'まだ報告が届いていません。ルーティンの次の実行から、ここに出ます。' : '報告を読み込んでいます…') + '</p>');

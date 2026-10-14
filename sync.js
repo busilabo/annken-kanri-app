@@ -934,7 +934,7 @@
   var REPORT_REFRESH_MS = 5 * 60 * 1000;
   var IGNORED_REPORTS = ["lilocle-check"];
 
-  var ROUTINE_KEY_BUSINESS = [[/^routine:amazon-/, "Amazon販売"], [/^routine:lilocle-/, "LILOCLE運営"], [/^routine:inquiry-/, "業務改善・DX支援"]];
+  var ROUTINE_KEY_BUSINESS = [[/^routine:amazon-/, "Amazon販売"], [/^routine:lilocle-/, "LILOCLE運営"], [/^routine:inquiry-/, "業務改善・DX支援"], [/^routine:watch-/, "社内・共通"]];
   function businessOfRoutineKey(key) {
     for (var i = 0; i < ROUTINE_KEY_BUSINESS.length; i++) if (ROUTINE_KEY_BUSINESS[i][0].test(key || "")) return ROUTINE_KEY_BUSINESS[i][1];
     return "";
