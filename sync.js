@@ -464,6 +464,7 @@
     for (var i = 0; i < files.length; i++) {
       await drainOne(files[i]);
     }
+    try { await ensureDailyTasks(); } catch (e) { log("daily task failed: " + e.message); }
   }
 
   // 成約管理タスクの「確認する」ボタン。ルーティンはSharePointリストを読めないため、
@@ -532,6 +533,8 @@
     if (data.type === "verifyRequest") return;
     if (data.type === "teamsTask") { await drainTeamsTask(file, data); return; }
     if (data.type === "mailTask") { await drainMailTask(file, data); return; }
+    if (data.type === "routineReport") { await drainRoutineReport(file, data); return; }
+    if (data.type === "faxNotice") { await drainFaxNotice(file, data); return; }
     var srcId = data.srcId || "";
     var already = srcId && document.querySelector('.card[data-src-id="' + srcId + '"]');
     if (!already) {
@@ -564,6 +567,16 @@
       if (card && list) list.appendChild(card);
       applying = false;
       window.__app.applyAll();
+      // 問い合わせが来たら、パートさんが内容を確かめて代表に報告する仕事も入れる
+      await createTaskOnce("inquiry:" + srcId, {
+        Title: "問い合わせの確認と報告：" + (data.company || "（会社名なし）"),
+        Priority: "高",
+        Business: "業務改善・DX支援",
+        Category: "問い合わせ・営業",
+        Related: data.company || "",
+        Requester: data.source === "資料DL" ? "資料ダウンロード" : "お問い合わせフォーム",
+        Content: "問い合わせの確認と報告：" + (data.company || "（会社名なし）") + "\n" + String(data.content || "").slice(0, 300) + stepsText(STEPS.inquiry)
+      }, "問い合わせが届いた", "");
     }
     try {
       await graph("/drives/" + QUEUE_DRIVE_ID + "/items/" + file.id, {
@@ -653,10 +666,157 @@
     } catch (e) { log("teams task move failed (" + file.name + "): " + e.message); }
   }
 
-  // ---- メールからの依頼（綿半ドットコム様など）----
-  // Power Automate が、取引先から busilabo@／staff@ に届いた依頼メールを mailTask としてキューに置く。
+  // ---- 自動で入る仕事の共通部分 ----
+  // メール・定時報告・FAX・問い合わせ・毎日の確認から入る仕事は、元の目印を TeamsMessageId 列に入れて、二重に入らないようにする。
+  // 目印の頭：mail:（メール）／routine:（定時報告）／fax:（FAX）／inquiry:（問い合わせ）／daily:（毎日の確認）
+
+  // 仕事の手順。パートさんが仕事を受け取ったら、上から順に進めれば終わるように書く（docs/事業ごとの業務とツール.md の聞き取り 2026-10-14）
+  var STEPS = {
+    wholesaleOrder: [
+      "メールの配送案（日付ごとの台数）を確認する",
+      "日立の発注システムに、メールに書かれた日付・台数のとおり入力する（ID は会社のパソコンのブラウザに保存してあります）",
+      "発注したら、履歴に「発注した」と記録する。日立から納期の FAX が届くと、この仕事に自動で付きます",
+      "納期の FAX と、配送案の希望日を照らし合わせる",
+      "全部合った → 東中様に staff@busilabo.com から報告し、代表あての「請求書を発行する」仕事を追加する／合わない日がある → 日立の出口さんに相談する",
+      "報告と請求書の依頼が済んだら「完了」にする"
+    ],
+    wholesaleDefect: [
+      "メールの内容（品番・症状・お客様の情報）を確認する",
+      "日立の出口さんに連絡して、新品交換か修理かを確認する（連絡先は「家電の卸販売」の連絡先）",
+      "新品交換 → 日立の発注システムで代品を発注する（不良品は日立が回収）",
+      "修理 → 日立の Web フォームで出張修理を依頼する（出張修理は洗濯機・冷蔵庫・電子レンジのみ。掃除機・炊飯器は必ず新品交換）",
+      "代品の発送日、または修理の訪問日が決まったら、名古屋支店（nagoya@kaitorikensakukun.com）へ staff@busilabo.com から報告する",
+      "報告したら「完了」にする"
+    ],
+    wholesaleFax: [
+      "FAX の PDF を開いて、品番・台数・納期を確認する",
+      "仕事一覧で、同じ品番の配送案の仕事（種類：発注・納期）を探し、そちらの履歴に書き写す",
+      "配送案の希望日と照らし合わせる。全部合った → 東中様へ報告し、代表あての「請求書を発行する」仕事を追加／合わない日がある → 日立の出口さんに相談",
+      "済んだら「完了」にする"
+    ],
+    amazonBuyer: [
+      "セラーセントラルの「購入者とのメッセージ」を開く（メールへの返信では Amazon に返信済みと認識されないので、必ずセラーセントラルから返信する）",
+      "「ビジラボAmazonセラーAIチーム」に問い合わせの内容を貼って、返信文を作る",
+      "セラーセントラルから返信する（AI チームで作った文なら代表の確認はいりません）",
+      "初期不良のときは、Amazon の返品・返金を案内する（日立への連絡はいりません）",
+      "返信したら「完了」にする（期限は届いてから24時間。土日祝に届いた分は次の出勤日）"
+    ],
+    amazonDaily: [
+      "セラーセントラルの「購入者とのメッセージ」を開く",
+      "「返信が必要」なメッセージがないか確認する",
+      "あれば、仕事一覧に同じ件の仕事があるか確かめる。なければ、購入者対応の手順で返信する（「ビジラボAmazonセラーAIチーム」で返信文を作り、セラーセントラルから返信）",
+      "確認したら「完了」にする"
+    ],
+    liloCustomer: [
+      "内容を確認する（多いのは、納期の確認・キャンセル・領収書）",
+      "納期の確認 → 商品ページの納期の目安を確認する。お客様の指定日があれば、lilocle@lilocle.jp からメーカー様に確認する（件名に下の【L-番号】を入れると、返事がこの仕事に付きます）",
+      "キャンセル → 発送前なら、lilocle@lilocle.jp からメーカー様に出荷停止を連絡（件名に【L-番号】）してから、Shopify でキャンセルする。発送後のキャンセルはお断りする",
+      "領収書 → Claude の領収書スキルで作り、PDF を送る（雛形：リロクル資料／請求書・領収書(お客様)）",
+      "返信文は「LILOCLE運営AIチーム」で作り、contact@lilocle.jp から返信する（代表の確認はいりません）",
+      "対応が終わったら「完了」にする"
+    ],
+    liloSupplier: [
+      "欠品・廃番・入荷遅れ → Shopify で、その商品を販売不可にする",
+      "価格改定 → Shopify の価格を、お知らせに書かれた価格に変える",
+      "新商品・カタログ → Shopify に新商品を登録する（画像はメーカー様の資料、説明文は「LILOCLE運営AIチーム」で作る）",
+      "お客様の件への返事 → 元のお客様の仕事に書き写して、お客様に返信する",
+      "対応したら「完了」にする"
+    ],
+    inquiry: [
+      "案件管理の「問い合わせ」で内容を確認する",
+      "Teams の「一般」チャネルに、会社名と内容の要点を投稿して代表に報告する",
+      "代表の返事を待つ（待っている間は、申し送りに「代表の回答待ち」と書く）",
+      "代表が決めた内容で、staff@busilabo.com からお客様に返信する",
+      "返信したら「完了」にする"
+    ],
+    rep: [
+      "代表が内容を確認する",
+      "パートさんに任せられる部分があれば、申し送りに書いてバトンを渡す"
+    ]
+  };
+
+  function stepsText(steps) {
+    if (!steps || !steps.length) return "";
+    return "\n\n【手順】\n" + steps.map(function (s, i) { return (i + 1) + ". " + s; }).join("\n");
+  }
+
+  function stampNow() {
+    var now = new Date();
+    return (now.getMonth() + 1) + "/" + String(now.getDate()).padStart(2, "0") + " " + String(now.getHours()).padStart(2, "0") + ":" + String(now.getMinutes()).padStart(2, "0");
+  }
+
+  async function moveToProcessed(file, label) {
+    try {
+      await graph("/drives/" + QUEUE_DRIVE_ID + "/items/" + file.id, {
+        method: "PATCH",
+        body: { parentReference: { path: "/drives/" + QUEUE_DRIVE_ID + "/root:/" + QUEUE_PROCESSED_FOLDER } }
+      });
+      return true;
+    } catch (e) { log(label + " move failed (" + file.name + "): " + e.message); return false; }
+  }
+
+  function taskCards() { return Array.prototype.slice.call(document.querySelectorAll('.card[data-kind="task"]')); }
+  function taskKeyOf(card) { var el = getRoleEl(card, "teamsMessageId"); return el ? el.value : ""; }
+  function isOpenTask(card) {
+    if (card.hasAttribute("data-deleted")) return false;
+    var st = getRoleEl(card, "status");
+    return !st || st.textContent.trim() !== "完了";
+  }
+
+  // 同じ目印の仕事がすでにあるか。画面に無くても、別のパソコンが入れたばかりのことがあるので SharePoint にも聞く
+  async function remoteTaskExists(key) {
+    try {
+      var filter = "fields/TeamsMessageId eq '" + key.replace(/'/g, "''") + "'";
+      var res = await graph("/sites/" + siteId + "/lists/" + listIds.task + "/items?$expand=fields($select=TeamsMessageId)&$top=1&$filter=" + encodeURIComponent(filter), {
+        headers: { "Prefer": "HonorNonIndexedQueriesWarningMayFailRandomly" }
+      });
+      return !!(res && res.value && res.value.length);
+    } catch (e) { log("task lookup failed: " + e.message); return false; }
+  }
+
+  async function createTaskItem(fields, historyAction, historyMemo) {
+    if (!listIds.task) return null;
+    fields = keepExistingColumns("task", Object.assign({
+      Status: "未着手",
+      Priority: "中",
+      Owner: "未定",
+      Category: "未分類",
+      History: JSON.stringify([{ time: stampNow(), action: historyAction, status: "未着手", tone: "neutral", due: "", memo: historyMemo || "" }]),
+      Deleted: false
+    }, fields));
+    var created;
+    try {
+      created = await graph("/sites/" + siteId + "/lists/" + listIds.task + "/items", { method: "POST", body: { fields: fields } });
+    } catch (e) { log("task create failed: " + e.message); return null; }
+    applying = true;
+    var card = buildCardFromItem("task", { id: created.id, fields: fields });
+    var list = document.querySelector('[data-list="task"]');
+    if (card && list) list.appendChild(card);
+    applying = false;
+    window.__app.applyAll();
+    return card;
+  }
+
+  // 目印の仕事が一度も入っていなければ入れる（完了・削除済みも「入っていた」とみなす）
+  async function createTaskOnce(key, fields, historyAction, historyMemo) {
+    if (!key || !listIds.task) return null;
+    if (taskCards().some(function (c) { return taskKeyOf(c) === key; })) return null;
+    if (await remoteTaskExists(key)) return null;
+    fields.TeamsMessageId = key;
+    return createTaskItem(fields, historyAction, historyMemo);
+  }
+
+  function addNote(card, action, memo) {
+    if (!window.__app || !window.__app.addHistoryEntry) return;
+    window.__app.addHistoryEntry(card, "task", action, (getRoleEl(card, "status") || {}).textContent || "", null, memo);
+    scheduleSave(card);
+    window.__app.applyAll();
+  }
+
+  // ---- メールからの依頼 ----
+  // Power Automate のメール記録フローが、仕事にするメールを mailTask としてキューに置く（docs/案件管理アプリ/Power Automate メール記録フロー.md）。
   // 新しい件なら仕事一覧に「次の走者募集」として登録し、同じ件の返信（RE:）なら元の仕事の履歴に足す（仕事が増え続けないように）。
-  // 元の件の目印は TeamsMessageId 列に "mail:" を付けて入れる（Teams の依頼と同じ列を「元のメッセージ」として使う）。
+  // どんな仕事にするか（手順・期限・代表あてか）は mailProfile で決める。どれにも当たらないメールは記録だけで、仕事にしない。
   // 「東中様」のように敬称が付いていれば重ねない。付いていなければ「さん」を付ける
   function honorific(name) {
     return /(様|さん|殿)$/.test(name) ? name : name + "さん";
@@ -668,61 +828,270 @@
     return "mail:" + domain.toLowerCase() + ":" + subject;
   }
 
+  // 届いた日の翌日。土日にかかるときは月曜（Amazon の「24時間以内に返信」。土日祝は次の出勤日）
+  function nextWorkday(receivedAt) {
+    var d = receivedAt ? new Date(receivedAt) : new Date();
+    if (isNaN(d.getTime())) d = new Date();
+    d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() + 1);
+    while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1);
+    return ymd(d) + "T00:00:00.000Z";
+  }
+
+  var WATAHAN = /@watahan\.co\.jp$/i;
+  var WATAHAN_NAGOYA = /^nagoya@kaitorikensakukun\.com$/i;
+  var DEFECT_WORD = /不良|故障|破損|交換|修理|動かない|異音|水漏れ/;
+  var ORDER_WORD = /配送|発注|納品|台数|出荷/;
+  var PAYMENT_WORD = /請求|支払|振込|入金/;
+
+  function mailProfile(data) {
+    var from = String(data.fromAddress || "").trim();
+    var subject = String(data.subject || "（件名なし）");
+    var text = subject + " " + String(data.preview || "");
+    var mailbox = String(data.mailbox || "").toLowerCase();
+    var business = data.business || "";
+    if (WATAHAN.test(from) || WATAHAN_NAGOYA.test(from)) {
+      if (WATAHAN_NAGOYA.test(from) || DEFECT_WORD.test(text)) {
+        return { title: "不良対応：" + subject, business: "家電の卸販売", category: "不良対応", priority: "高", steps: STEPS.wholesaleDefect };
+      }
+      if (ORDER_WORD.test(text)) {
+        return { title: "発注（配送案）：" + subject, business: "家電の卸販売", category: "発注・納期", priority: "高", steps: STEPS.wholesaleOrder };
+      }
+      return { title: "綿半様からのメール：" + subject, business: "家電の卸販売", category: "代表の確認", owner: "坂中", steps: STEPS.rep };
+    }
+    if (/marketplace\.amazon/i.test(from) || business === "Amazon販売") {
+      return { title: "Amazon購入者：" + subject, business: "Amazon販売", category: "お客様対応", priority: "高", due: nextWorkday(data.receivedAt), steps: STEPS.amazonBuyer };
+    }
+    if (mailbox.indexOf("lilocle@") === 0) {
+      if (PAYMENT_WORD.test(text)) return { title: "LILOCLE 請求・支払い：" + subject, business: "LILOCLE運営", category: "代表の確認", owner: "坂中", steps: STEPS.rep };
+      return { title: "LILOCLEメーカー様：" + subject, business: "LILOCLE運営", category: "メーカー対応", steps: STEPS.liloSupplier };
+    }
+    if (mailbox.indexOf("contact@") === 0 || (business === "LILOCLE運営" && mailbox.indexOf("order@") !== 0)) {
+      return { title: "LILOCLEお客様：" + subject, business: "LILOCLE運営", category: "お客様対応", priority: "高", steps: STEPS.liloCustomer };
+    }
+    if (business === "業務改善・DX支援") {
+      return { title: "お客様からのメール：" + subject, business: "業務改善・DX支援", category: "代表の確認", owner: "坂中", steps: STEPS.rep };
+    }
+    return null;   // 日立からの連絡・注文のお知らせなど：やり取りログへの記録だけ
+  }
+
+  // LILOCLE の仕事の目印。メーカー様へのメールの件名に入れてもらい、返事を元の仕事に付ける
+  var TASK_TAG = /【L-(\d+)】/;
+
   async function drainMailTask(file, data) {
-    var key = mailThreadKey(data);
-    var from = (data.fromName || data.fromAddress || "").replace(/\s+/g, "");
+    // 「東中 様」→「東中様」。英字の名前（LA PORTE BLEUE）の空白は残す
+    var from = (data.fromName || data.fromAddress || "").trim().replace(/([^\x00-\x7F])\s+(?=[^\x00-\x7F])/g, "$1");
     var preview = teamsText(data.preview || "").slice(0, 400);
-    var now = new Date();
-    var stamp = (now.getMonth() + 1) + "/" + String(now.getDate()).padStart(2, "0") + " " + String(now.getHours()).padStart(2, "0") + ":" + String(now.getMinutes()).padStart(2, "0");
-    var existing = Array.prototype.filter.call(document.querySelectorAll('[data-list="task"] > .card'), function (c) {
-      var el = getRoleEl(c, "teamsMessageId");
-      var st = getRoleEl(c, "status");
-      return el && el.value === key && (!st || st.textContent.trim() !== "完了");
-    })[0];
+    var firstLine = from + "：" + preview.split("\n")[0].slice(0, 120);
+
+    // 件名に【L-12】があれば、12番の仕事への返事
+    var tag = TASK_TAG.exec(String(data.subject || ""));
+    var tagged = tag && document.querySelector('[data-list="task"] > .card[data-item-id="' + tag[1] + '"]');
+    if (tagged) {
+      addNote(tagged, "メーカー様から返事が届いた", firstLine);
+      await moveToProcessed(file, "mail task");
+      return;
+    }
+
+    var key = mailThreadKey(data);
+    var existing = taskCards().filter(function (c) { return taskKeyOf(c) === key && isOpenTask(c); })[0];
     if (existing) {
       // 同じ件の続き：履歴に足して保存する（新しい仕事は作らない）
-      if (window.__app && window.__app.addHistoryEntry) {
-        window.__app.addHistoryEntry(existing, "task", "追加のメールが届いた", (getRoleEl(existing, "status") || {}).textContent || "", null, from + "：" + preview.split("\n")[0].slice(0, 120));
-        scheduleSave(existing);
-        window.__app.applyAll();
+      addNote(existing, "追加のメールが届いた", firstLine);
+    } else {
+      var profile = mailProfile(data);
+      if (profile) {
+        var content = profile.title + "\n" + preview + stepsText(profile.steps);
+        var fields = {
+          Title: profile.title.slice(0, 60),
+          Priority: profile.priority || "中",
+          Owner: profile.owner || "未定",
+          Business: profile.business,
+          Category: profile.category,
+          Content: content,
+          Related: data.customer || "",
+          Requester: from,
+          TeamsMessageId: key,
+          TeamsLink: data.link || ""
+        };
+        // メールの中の日付は、配送の希望日やお客様の指定日のことが多く、仕事の期限ではない。期限は決まっているもの（Amazon）だけ入れる
+        if (profile.due) fields.Due = profile.due;
+        var created = await createTaskItem(fields, "メールで依頼", honorific(from) + "から（" + (data.mailbox || "") + "）");
+        if (!created) return;   // 入れられなかったら、次の取り込みでもう一度試す
       }
-    } else if (listIds.task) {
-      var subject = String(data.subject || "（件名なし）");
-      var content = subject + "\n" + preview;
-      var fields = keepExistingColumns("task", {
-        Title: subject.slice(0, 60),
-        Status: "未着手",
-        Priority: "中",
-        Owner: "未定",
-        Business: data.business || "社内・共通",
-        Category: "未分類",
-        Content: content,
-        Related: data.customer || "",
-        Requester: from,
-        TeamsMessageId: key,
-        TeamsLink: data.link || "",
-        History: JSON.stringify([{ time: stamp, action: "メールで依頼", status: "未着手", tone: "neutral", due: "", memo: honorific(from) + "から（" + (data.mailbox || "") + "）" }]),
-        Deleted: false
-      });
-      var due = parseDue(content, data.receivedAt);
-      if (due) fields.Due = due;
-      var created;
-      try {
-        created = await graph("/sites/" + siteId + "/lists/" + listIds.task + "/items", { method: "POST", body: { fields: fields } });
-      } catch (e) { log("mail task create failed (" + file.name + "): " + e.message); return; }
-      applying = true;
-      var card = buildCardFromItem("task", { id: created.id, fields: fields });
-      var list = document.querySelector('[data-list="task"]');
-      if (card && list) list.appendChild(card);
-      applying = false;
-      window.__app.applyAll();
     }
+    await moveToProcessed(file, "mail task");
+  }
+
+
+  // ---- 定時報告（ルーティンの報告）----
+  // 毎朝の Amazon チェック・LILOCLE の照合などのルーティンが、メールと同じ報告を routineReport としてキューに置く。
+  // 報告は「やり取りログ」（経路：定時報告）にため、トップの「今日の報告」に出す。要対応の項目は1件ずつ仕事にする。
+  // routineReport: { routine, title, business, generatedAt, summary, body, link, actions: [{ id, title, detail, business, owner, priority, due }] }
+  var REPORT_CHANNEL = "定時報告";
+  var REPORT_REFRESH_MS = 5 * 60 * 1000;
+
+  function reportSummaryText(data) {
+    var actions = data.actions || [];
+    return "【要点】\n" + String(data.summary || "").trim() +
+      "\n【要対応】\n" + (actions.length ? actions.map(function (a) { return "・" + (a.title || "") + (a.detail ? "（" + String(a.detail).split("\n")[0].slice(0, 120) + "）" : ""); }).join("\n") : "なし") +
+      "\n【全文】\n" + String(data.body || "").trim();
+  }
+
+  async function drainRoutineReport(file, data) {
+    // 先に処理済みへ移す（2台のパソコンが同時に開いていても、報告と仕事が二重にならないように。移せなかった方は何もしない）
+    if (!(await moveToProcessed(file, "routine report"))) return;
+    var title = data.title || data.routine || "定時報告";
+    var at = data.generatedAt ? new Date(data.generatedAt) : new Date();
+    if (isNaN(at.getTime())) at = new Date();
+    await postActivity({
+      Title: "定時報告：" + title,
+      OccurredAt: at.toISOString(),
+      Channel: REPORT_CHANNEL,
+      Business: data.business || "社内・共通",
+      Direction: "社内",
+      Customer: "",
+      CustomerId: "",
+      Staff: "",
+      Subject: title.slice(0, 200),
+      Summary: reportSummaryText(data),
+      SourceLink: /^https:\/\//.test(data.link || "") ? data.link : "",
+      SourceId: "routine:" + (data.routine || "unknown") + ":" + at.toISOString()
+    });
+    var actions = (data.actions || []).slice(0, 20);
+    for (var i = 0; i < actions.length; i++) {
+      var a = actions[i] || {};
+      if (!a.title) continue;
+      var key = "routine:" + (data.routine || "unknown") + ":" + (a.id || a.title);
+      var open = taskCards().filter(function (c) { return taskKeyOf(c) === key && isOpenTask(c); })[0];
+      if (open) {
+        // まだ片付いていない件がまた報告された。同じ日に何度も書かない
+        var first = open.querySelector("[data-history] .history-entry");
+        var today = stampNow().split(" ")[0];
+        var sameToday = first && (first.querySelector(".history-time") || {}).textContent.indexOf(today) === 0 &&
+          (first.querySelector(".history-action") || {}).textContent === "定時報告で再び指摘";
+        if (!sameToday) addNote(open, "定時報告で再び指摘", title + (a.detail ? "：" + String(a.detail).split("\n")[0].slice(0, 120) : ""));
+        continue;
+      }
+      var fields = {
+        Title: String(a.title).slice(0, 60),
+        Priority: /^(高|中|低)$/.test(a.priority || "") ? a.priority : "中",
+        Owner: a.owner === "坂中" ? "坂中" : "未定",
+        Business: a.business || data.business || "社内・共通",
+        Category: "定時報告の対応",
+        Content: String(a.title) + (a.detail ? "\n" + a.detail : "") + (a.steps && a.steps.length ? stepsText(a.steps) : ""),
+        Requester: title,
+        TeamsMessageId: key,
+        TeamsLink: /^https:\/\//.test(data.link || "") ? data.link : ""
+      };
+      if (/^\d{4}-\d{2}-\d{2}/.test(a.due || "")) fields.Due = String(a.due).slice(0, 10) + "T00:00:00.000Z";
+      await createTaskItem(fields, "定時報告で要対応", title);
+    }
+    loadReports();
+  }
+
+  function parseReportSummary(text) {
+    var out = { summary: "", actions: [], body: "" };
+    var m = /【要点】\n?([\s\S]*?)\n【要対応】\n?([\s\S]*?)\n【全文】\n?([\s\S]*)$/.exec(text || "");
+    if (!m) { out.summary = String(text || "").split("\n").slice(0, 3).join("\n"); out.body = text || ""; return out; }
+    out.summary = m[1].trim();
+    out.actions = m[2].trim() === "なし" ? [] : m[2].split("\n").map(function (s) { return s.replace(/^・/, "").trim(); }).filter(Boolean);
+    out.body = m[3].trim();
+    return out;
+  }
+
+  // 定時報告を読み、ルーティンごとの最新を画面へ渡す
+  async function loadReports() {
+    if (!activityListId || !window.__app || !window.__app.setReports) return;
     try {
-      await graph("/drives/" + QUEUE_DRIVE_ID + "/items/" + file.id, {
-        method: "PATCH",
-        body: { parentReference: { path: "/drives/" + QUEUE_DRIVE_ID + "/root:/" + QUEUE_PROCESSED_FOLDER } }
+      var filter = "fields/Channel eq '" + REPORT_CHANNEL + "'";
+      var res = await graph("/sites/" + siteId + "/lists/" + activityListId + "/items?$expand=fields&$top=200&$filter=" + encodeURIComponent(filter), {
+        headers: { "Prefer": "HonorNonIndexedQueriesWarningMayFailRandomly" }
       });
-    } catch (e) { log("mail task move failed (" + file.name + "): " + e.message); }
+      var latest = {};
+      (res.value || []).forEach(function (item) {
+        var f = item.fields || {};
+        var routine = String(f.SourceId || "").split(":")[1] || f.Subject || "";
+        var at = f.OccurredAt || item.createdDateTime || "";
+        if (latest[routine] && latest[routine].at >= at) return;
+        var parsed = parseReportSummary(f.Summary || "");
+        latest[routine] = { routine: routine, title: f.Subject || "", business: f.Business || "", at: at, link: f.SourceLink || "", summary: parsed.summary, actions: parsed.actions, body: parsed.body };
+      });
+      window.__app.setReports({ loaded: true, reports: Object.keys(latest).map(function (k) { return latest[k]; }) });
+    } catch (e) {
+      log("reports load failed: " + e.message);
+      window.__app.setReports({ loaded: false, reports: [] });
+    }
+  }
+
+  // ---- 日立からの納期の FAX ----
+  // 坂中商店の複合機が FAX を PDF にして busilabo@ へ転送し、Power Automate が PDF を「案件管理キュー/fax」に保存する。
+  // FAX 読み取りルーティンが PDF を読み、日立の納期の連絡だったものだけを faxNotice としてキューに置く（坂中商店宛ての FAX は置かない）。
+  // faxNotice: { id, receivedAt, summary, items: [{ model, qty, date }], link }
+  async function drainFaxNotice(file, data) {
+    var summary = String(data.summary || "").trim() || "納期のご連絡";
+    var memo = summary + (data.items && data.items.length ? "\n" + data.items.map(function (it) { return (it.model || "") + " " + (it.qty || "") + "台 納期 " + (it.date || ""); }).join("\n") : "") +
+      (/^https:\/\//.test(data.link || "") ? "\nFAX：" + data.link : "");
+    // いちばん新しい「発注・納期」の仕事（配送案）に付ける
+    var orders = taskCards().filter(function (c) {
+      return isOpenTask(c) && (getRoleEl(c, "category") || {}).value === "発注・納期" && (getRoleEl(c, "business") || {}).value === "家電の卸販売";
+    }).sort(function (a, b) { return (+b.getAttribute("data-item-id") || 0) - (+a.getAttribute("data-item-id") || 0); });
+    if (orders.length) {
+      addNote(orders[0], "納期の FAX が届いた", memo);
+    } else {
+      var faxKey = "fax:" + (data.id || file.name);
+      var already = taskCards().some(function (c) { return taskKeyOf(c) === faxKey; }) || (await remoteTaskExists(faxKey));
+      var created = already || await createTaskItem({
+        TeamsMessageId: faxKey,
+        Title: ("納期 FAX の照合：" + summary).slice(0, 60),
+        Priority: "高",
+        Business: "家電の卸販売",
+        Category: "発注・納期",
+        Related: "綿半ドットコム",
+        Requester: "日立（FAX）",
+        TeamsLink: /^https:\/\//.test(data.link || "") ? data.link : "",
+        Content: "納期 FAX の照合：" + summary + "\n" + memo + stepsText(STEPS.wholesaleFax)
+      }, "納期の FAX が届いた", "");
+      if (!created) return;   // 入れられなかったら、次の取り込みでもう一度試す
+    }
+    postActivity({
+      Title: "FAX：" + summary.slice(0, 80),
+      OccurredAt: data.receivedAt && !isNaN(new Date(data.receivedAt).getTime()) ? new Date(data.receivedAt).toISOString() : new Date().toISOString(),
+      Channel: "FAX",
+      Business: "家電の卸販売",
+      Direction: "受信",
+      Customer: "日立",
+      CustomerId: "",
+      Staff: "",
+      Subject: summary.slice(0, 200),
+      Summary: memo,
+      SourceLink: /^https:\/\//.test(data.link || "") ? data.link : "",
+      SourceId: "fax:" + (data.id || file.name)
+    });
+    await moveToProcessed(file, "fax notice");
+  }
+
+  // ---- 毎日の確認 ----
+  // 出勤した日に1回、セラーセントラルで未返信のメッセージがないか確かめる（通知メールが届かなかったときの備え）。
+  // 誰かがビジラボに出勤する日だけ入れる。出勤予定が読めないときは平日だけ
+  var dailyCreated = {};
+  async function ensureDailyTasks() {
+    if (!listIds.task || !window.__app) return;
+    var today = ymd(new Date());
+    if (dailyCreated[today]) return;
+    var works = window.__app.someoneWorksToday ? window.__app.someoneWorksToday() : null;
+    if (works === false) return;
+    if (works === null) { var dow = new Date().getDay(); if (dow === 0 || dow === 6) return; }
+    dailyCreated[today] = true;
+    await createTaskOnce("daily:amazon-sc:" + today, {
+      Title: "Amazon：未返信のメッセージがないか確認",
+      Priority: "中",
+      Business: "Amazon販売",
+      Category: "毎日の確認",
+      Due: today + "T00:00:00.000Z",
+      Requester: "毎日の確認",
+      Content: "Amazon：セラーセントラルで、未返信のメッセージがないか確認する" + stepsText(STEPS.amazonDaily)
+    }, "毎日の確認", "");
   }
 
   // 保存のたびに、Teams から来た仕事の「バトンを持っている人」「状態」の変化を見て、元の投稿のスレッドに返す文を作る
@@ -733,7 +1102,8 @@
     var now = { owner: fields.Owner || "", status: fields.Status || "" };
     card._last = now;
     if (!threadId || last.owner === undefined) return null;
-    if (threadId.indexOf("mail:") === 0) return null;   // メールから来た仕事は Teams に返信しない
+    // メール・定時報告・FAX・問い合わせ・毎日の確認から来た仕事は Teams に返信しない（返す投稿がない）
+    if (/^(mail|routine|fax|inquiry|daily):/.test(threadId)) return null;
     var title = (fields.Title || "").slice(0, 40);
     var handover = (fields.Handover || "").split("\n")[0].slice(0, 80);
     if (now.status === "完了" && last.status !== "完了") {
@@ -1133,7 +1503,52 @@
     return true;
   }
 
-  async function loadRepAway(events, repAway, report, interactive) {
+  // 代表の予定をトップに出す（パートさんが代表の予定を確かめられるように）。私用の予定は件名を出さず「予定あり」にする。
+  // 私用の判断は Outlook の「非公開」と、件名の言葉（Excel のスケジュールに反映するルーティンと同じ基準）
+  var PRIVATE_WORD = /バンド|練習|誕生|ライブ|ヴァイオリン|バイオリン|家族|趣味|私用|プライベート|通院|病院|歯医者/;
+  var PRIVATE_CATEGORY = /個人|私用|プライベート|personal|private/i;
+  var REP_DAYS = 7;
+
+  function isPrivateEvent(ev) {
+    if (/^(private|personal|confidential)$/i.test(ev.sensitivity || "")) return true;
+    if ((ev.categories || []).some(function (c) { return PRIVATE_CATEGORY.test(c); })) return true;
+    return PRIVATE_WORD.test(ev.subject || "");
+  }
+
+  function collectRepSchedule(list, repEvents) {
+    var from = new Date();
+    from.setHours(0, 0, 0, 0);
+    var to = new Date(from);
+    to.setDate(to.getDate() + REP_DAYS);
+    list.forEach(function (ev) {
+      if (ev.isCancelled || SHIFT_WORD.test(ev.subject || "")) return;
+      var priv = isPrivateEvent(ev);
+      var title = priv ? "予定あり" : (ev.subject || "（件名なし）");
+      var place = priv ? "" : ((ev.location && ev.location.displayName) || "");
+      var start = String(ev.start && ev.start.dateTime || "");
+      var end = String(ev.end && ev.end.dateTime || "");
+      if (ev.isAllDay) {
+        var d = new Date(start.slice(0, 10) + "T00:00:00");
+        var last = new Date(end.slice(0, 10) + "T00:00:00");
+        for (var guard = 0; d < last && guard < 62; d.setDate(d.getDate() + 1), guard++) {
+          if (d >= from && d < to) repEvents.push({ date: ymd(d), start: "", end: "", allDay: true, title: title, place: place, private: priv });
+        }
+        return;
+      }
+      var sd = new Date(start.slice(0, 10) + "T00:00:00");
+      if (sd < from || sd >= to) return;
+      var hm = function (t) { return t.slice(11, 16).replace(/^0/, ""); };
+      repEvents.push({ date: start.slice(0, 10), start: hm(start), end: end.slice(0, 10) === start.slice(0, 10) ? hm(end) : "", allDay: false, title: title, place: place, private: priv });
+    });
+    repEvents.sort(function (a, b) {
+      if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+      if (a.allDay !== b.allDay) return a.allDay ? -1 : 1;
+      var ma = a.start.split(":"), mb = b.start.split(":");
+      return ((+ma[0]) * 60 + (+ma[1] || 0)) - ((+mb[0]) * 60 + (+mb[1] || 0));
+    });
+  }
+
+  async function loadRepAway(events, repAway, report, interactive, repEvents) {
     var token;
     try {
       token = await getCalToken(interactive);
@@ -1143,7 +1558,7 @@
     }
     var r = shiftRange();
     var range = "startDateTime=" + encodeURIComponent(r.from.toISOString()) + "&endDateTime=" + encodeURIComponent(r.to.toISOString()) +
-      "&$select=subject,start,end,isAllDay,isCancelled&$top=200";
+      "&$select=subject,start,end,isAllDay,isCancelled,sensitivity,categories,location&$top=200";
     var list;
     try {
       list = await calGetAll("/me/calendar/calendarView?" + range, token);
@@ -1163,6 +1578,7 @@
         for (var guard = 0; d < last && guard < 62; d.setDate(d.getDate() + 1), guard++) repAway[ymd(d)] = true;
       }
     });
+    if (repEvents) collectRepSchedule(list, repEvents);
     report.push({ label: "代表の予定表（出張などの不在）", ok: true, total: list.length, matched: matched });
     return true;
   }
@@ -1173,9 +1589,11 @@
     var events = [];
     var repAway = {};
     var report = [];
+    var repEvents = [];
     var filesOk = false, calOk = false;
     try { filesOk = await loadShiftFiles(events, report); } catch (e) { log("shift files failed: " + e.message); }
-    try { calOk = await loadRepAway(events, repAway, report, interactive); } catch (e) { log("rep calendar failed: " + (e.errorCode || e.message)); }
+    try { calOk = await loadRepAway(events, repAway, report, interactive, repEvents); } catch (e) { log("rep calendar failed: " + (e.errorCode || e.message)); }
+    if (app.setRepSchedule) app.setRepSchedule({ loaded: calOk, events: repEvents, at: new Date() });
     if (!filesOk && !calOk) {
       app.setOutlookShifts({ loaded: false, events: [], repAway: {}, at: null, needsConsent: true, error: "出勤予定を読み込めませんでした", report: report });
       return;
@@ -1214,6 +1632,8 @@
     watchInteractions();
     await loadAll();
     setInterval(pollRefresh, POLL_MS);
+    loadReports();
+    setInterval(loadReports, REPORT_REFRESH_MS);
     await drainQueue();
     setInterval(drainQueue, QUEUE_DRAIN_MS);
   }

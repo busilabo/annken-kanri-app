@@ -1300,6 +1300,42 @@
   .contact-howto { font-size: 12px; color: var(--text); background: var(--warn-soft); border-radius: 6px; padding: 3px 7px; white-space: pre-wrap; }
   .contact-rule { margin: 0 0 12px; padding: 8px 12px; border-radius: 8px; background: var(--accent-soft); color: var(--text); font-size: 13px; }
 
+  /* 今日の報告・代表の予定 */
+  .top-info { display: grid; gap: 12px; margin-bottom: 16px; }
+  .info-block { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; box-shadow: var(--shadow); min-width: 0; }
+  .info-head { display: flex; flex-wrap: wrap; gap: 2px 12px; align-items: baseline; margin-bottom: 8px; }
+  .info-head > b { font-size: 15px; }
+  .info-head > span { font-size: 12px; color: var(--text-muted); }
+  .info-empty { margin: 0; font-size: 13px; color: var(--text-muted); }
+  .report-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr)); gap: 8px; }
+  .report { background: var(--surface-2); border-radius: 10px; border-left: 4px solid var(--ok); min-width: 0; }
+  .report[data-tone="crit"] { border-left-color: var(--crit); }
+  .report[data-stale] { opacity: 0.7; }
+  .report > summary { list-style: none; cursor: pointer; padding: 8px 12px; display: flex; flex-direction: column; gap: 4px; }
+  .report > summary::-webkit-details-marker { display: none; }
+  .report-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .report-title { font-weight: 700; font-size: 14px; }
+  .report-time { font-size: 12px; color: var(--text-muted); }
+  .report-summary { font-size: 13px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .report-actions { margin: 0; padding-left: 18px; font-size: 13px; color: var(--crit); }
+  .report-open { font-size: 12px; color: var(--accent); font-weight: 700; }
+  .report[open] .report-open { display: none; }
+  .report-body { margin: 0 12px 10px; padding: 8px 10px; background: var(--surface); border-radius: 8px; font-size: 12.5px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 320px; overflow-y: auto; }
+  .report-body a { color: var(--accent); }
+  .rep-days { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(150px, 100%), 1fr)); gap: 8px; }
+  .rep-day { background: var(--surface-2); border-radius: 10px; padding: 8px 10px; min-width: 0; }
+  .rep-day[data-today] { background: var(--accent-soft); outline: 2px solid var(--accent); }
+  .rep-date { font-weight: 700; font-size: 13px; margin-bottom: 4px; }
+  .rep-date small { font-weight: 400; color: var(--text-muted); margin-left: 4px; }
+  .rep-day ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+  .rep-day li { font-size: 12.5px; line-height: 1.4; overflow-wrap: anywhere; }
+  .rep-time { display: block; font-size: 11.5px; color: var(--text-muted); }
+  .rep-day li[data-private] .rep-title { color: var(--text-muted); }
+  .rep-place { display: block; font-size: 11.5px; color: var(--text-muted); }
+  .rep-none { font-size: 12px; color: var(--text-muted); }
+  .task-tag { margin-top: 4px; font-weight: 400; color: var(--text); }
+  .task-tag b { color: var(--accent); }
+
   footer.note {
     margin-top: 26px;
     font-size: 12px;
@@ -1388,6 +1424,17 @@
   <!-- 今日（仕事管理のトップ）。全員が同じ画面を見る「リレーボード」。サインインした人には依存しない
        （同じアカウントを共用していても使えるように）。誰の仕事かは顔アイコンで見分ける -->
   <section class="panel" data-panel="today">
+    <!-- 今日の報告（ルーティンの報告）と代表の予定。出勤したら最初にここを見る -->
+    <div class="top-info">
+      <section class="info-block" aria-label="今日の報告">
+        <div class="info-head"><b>今日の報告</b><span>ルーティンが毎日まとめた報告です。要対応は自動で仕事一覧に入ります</span></div>
+        <div data-reports></div>
+      </section>
+      <section class="info-block" aria-label="代表の予定">
+        <div class="info-head"><b>代表（坂中）の予定</b><span>今日から7日分。私用の予定は「予定あり」と出ます</span></div>
+        <div data-rep-schedule></div>
+      </section>
+    </div>
     <div class="today-top">
       <div class="today-date" data-today-date></div>
       <div class="roster" data-roster></div>
@@ -2128,7 +2175,8 @@
   }
 
   // 仕事の種類。「未分類」は種類を足す前に作った仕事のための受け皿
-  var CATEGORIES = ["未分類", "問い合わせ・営業", "制作", "発信", "事務・その他"];
+  // 後ろの6つは、メール・定時報告・FAX・毎日の確認から自動で入る仕事の種類（sync.js の mailProfile など）
+  var CATEGORIES = ["未分類", "問い合わせ・営業", "制作", "発信", "事務・その他", "発注・納期", "不良対応", "お客様対応", "メーカー対応", "定時報告の対応", "毎日の確認", "代表の確認"];
 
   // 顧客台帳の選択肢。担当と同じ理由（表記の割れ）で自由入力にしない
   var CHOICES = {
@@ -3521,6 +3569,7 @@
     renderSkills();
     renderContacts();
     renderTaskOrigins();
+    renderTopInfo();
     renderToday();
     updateTrashCount();
   }
@@ -3875,19 +3924,114 @@
 
   // ---- Teams から来た仕事 ----
   // 依頼した人と元の投稿へのリンクをカードの上に出す（「誰の、どの話か」を Teams に戻って確かめられるように）
+  // メール・定時報告・FAX・問い合わせ・毎日の確認から自動で入った仕事も、出どころを出す（元の目印の頭で見分ける）
   function renderTaskOrigins() {
     liveCards('task').forEach(function (card) {
       var box = card.querySelector('[data-teams-origin]');
       if (!box) return;
       var from = roleVal(card, 'requester');
       var link = roleVal(card, 'teamsLink');
-      if (!from && !link) { box.hidden = true; return; }
+      var key = roleVal(card, 'teamsMessageId');
+      var itemId = card.getAttribute('data-item-id');
+      // LILOCLE の仕事は、メーカー様へのメールの件名に入れる目印を出す（返事がこの仕事に自動で付く）
+      var tag = itemId && businessOf(card) === 'LILOCLE運営' && /^(お客様対応|メーカー対応)$/.test(roleVal(card, 'category'))
+        ? '<div class="task-tag">メーカー様へのメールの件名に <b>【L-' + esc(itemId) + '】</b> を入れると、返事がこの仕事に付きます</div>' : '';
+      if (!from && !link && !tag) { box.hidden = true; return; }
       box.hidden = false;
       var safeLink = /^https:\/\//.test(link) ? link : '';
-      var viaMail = roleVal(card, 'teamsMessageId').indexOf('mail:') === 0;
-      setHtml(box, (viaMail ? '📧 ' : '📨 ') + (from ? esc(/(様|さん|殿)$/.test(from) ? from : from + 'さん') + 'からの依頼' : '依頼') + (viaMail ? '（メール）' : '（Teams）') +
-        (safeLink ? ' <a href="' + esc(safeLink) + '" target="_blank" rel="noopener">' + (viaMail ? '元のメールを見る' : '元の投稿を見る') + '</a>' : ''));
+      var who = from ? esc(/(様|さん|殿)$/.test(from) ? from : from + 'さん') : '';
+      var origin, linkText;
+      if (/^mail:/.test(key)) { origin = '📧 ' + (who ? who + 'からの依頼' : '依頼') + '（メール）'; linkText = '元のメールを見る'; }
+      else if (/^routine:/.test(key)) { origin = '🤖 ' + esc(from || '定時報告') + 'の要対応'; linkText = '報告を見る'; }
+      else if (/^fax:/.test(key)) { origin = '📠 日立からの納期 FAX'; linkText = 'FAX を見る'; }
+      else if (/^inquiry:/.test(key)) { origin = '📝 ' + esc(from || '問い合わせ') + 'からの問い合わせ'; linkText = '元の問い合わせを見る'; }
+      else if (/^daily:/.test(key)) { origin = '🔁 毎日の確認'; linkText = ''; }
+      else if (from || link) { origin = '📨 ' + (who ? who + 'からの依頼' : '依頼') + '（Teams）'; linkText = '元の投稿を見る'; }
+      else origin = '';
+      setHtml(box, origin + (safeLink && linkText ? ' <a href="' + esc(safeLink) + '" target="_blank" rel="noopener">' + linkText + '</a>' : '') + tag);
     });
+  }
+
+  // ---- 今日の報告（ルーティンの報告）----
+  // sync.js が「やり取りログ」の定時報告を読み、ルーティンごとの最新を setReports で渡してくる
+  var reportState = { loaded: false, reports: [] };
+  // 並べる順（ここにないルーティンは後ろ）。routine はルーティンが報告に付ける名前
+  var REPORT_ORDER = ["amazon-morning", "lilocle-check", "lilocle-juchu", "inquiry", "ai-news"];
+
+  function setReports(state) { reportState = state || { loaded: false, reports: [] }; renderTopInfo(); }
+
+  function localTime(iso) {
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return { date: "", time: "" };
+    return { date: fmtDate(d), time: d.getHours() + ":" + pad2(d.getMinutes()), md: (d.getMonth() + 1) + "/" + d.getDate() };
+  }
+
+  function renderReports() {
+    var box = document.querySelector('[data-reports]');
+    if (!box) return;
+    var list = (reportState.reports || []).slice().sort(function (a, b) {
+      var ia = REPORT_ORDER.indexOf(a.routine), ib = REPORT_ORDER.indexOf(b.routine);
+      return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+    });
+    if (!list.length) {
+      setHtml(box, '<p class="info-empty">' + (reportState.loaded ? 'まだ報告が届いていません。ルーティンの次の実行から、ここに出ます。' : '報告を読み込んでいます…') + '</p>');
+      return;
+    }
+    setHtml(box, '<div class="report-grid">' + list.map(function (r) {
+      var t = localTime(r.at);
+      var stale = t.date && t.date !== todayStr;
+      var n = (r.actions || []).length;
+      var badge = n ? '<span class="row-badge" data-tone="crit">要対応 ' + n + '件</span>' : '<span class="row-badge" data-tone="ok">要対応なし</span>';
+      var summary = (r.summary || '').split('\n').slice(0, 3).join('\n');
+      return '<details class="report" data-tone="' + (n ? 'crit' : 'ok') + '"' + (stale ? ' data-stale' : '') + '>' +
+        '<summary>' +
+        '<span class="report-line"><span class="report-title">' + esc(r.title || r.routine) + '</span>' +
+        '<span class="report-time">' + (stale ? esc(t.md) + ' ' : '') + esc(t.time) + '</span>' + badge + '</span>' +
+        (summary ? '<span class="report-summary">' + esc(summary) + '</span>' : '') +
+        (n ? '<ul class="report-actions">' + r.actions.slice(0, 5).map(function (a) { return '<li>' + esc(a) + '</li>'; }).join('') + '</ul>' : '') +
+        '<span class="report-open">全文を見る</span>' +
+        '</summary>' +
+        '<div class="report-body">' + linkify(r.body || '（全文なし）') +
+        (/^https:\/\//.test(r.link || '') ? '\n\n<a href="' + esc(r.link) + '" target="_blank" rel="noopener">詳しいレポートを開く</a>' : '') + '</div>' +
+        '</details>';
+    }).join('') + '</div>');
+  }
+
+  // ---- 代表の予定 ----
+  // sync.js が busilabo@ の予定表から今日から7日分を読み、setRepSchedule で渡してくる（私用は「予定あり」に置き換え済み）
+  var repSchedState = { loaded: false, events: [] };
+  function setRepSchedule(state) { repSchedState = state || { loaded: false, events: [] }; renderTopInfo(); }
+
+  function renderRepSchedule() {
+    var box = document.querySelector('[data-rep-schedule]');
+    if (!box) return;
+    if (!repSchedState.loaded) {
+      setHtml(box, '<p class="info-empty">' + (repSchedState.at ? '代表の予定表を読めませんでした。「出勤予定」タブの案内を確認してください。' : '代表の予定を読み込んでいます…') + '</p>');
+      return;
+    }
+    var html = '<div class="rep-days">';
+    var d = new Date(todayStr + "T00:00:00");
+    for (var i = 0; i < 7; i++, d.setDate(d.getDate() + 1)) {
+      var ds = fmtDate(d);
+      var evs = repSchedState.events.filter(function (e) { return e.date === ds; });
+      html += '<div class="rep-day"' + (i === 0 ? ' data-today' : '') + '>' +
+        '<div class="rep-date">' + (d.getMonth() + 1) + '/' + d.getDate() + '（' + WEEKDAYS[d.getDay()] + '）' + (i === 0 ? '<small>今日</small>' : i === 1 ? '<small>明日</small>' : '') + '</div>' +
+        (evs.length ? '<ul>' + evs.map(function (e) {
+          var time = e.allDay ? '終日' : (e.start + (e.end ? '〜' + e.end : '〜'));
+          return '<li' + (e.private ? ' data-private' : '') + '><span class="rep-time">' + esc(time) + '</span><span class="rep-title">' + esc(e.title) + '</span>' +
+            (e.place ? '<span class="rep-place">📍 ' + esc(e.place) + '</span>' : '') + '</li>';
+        }).join('') + '</ul>' : '<span class="rep-none">予定なし</span>') +
+        '</div>';
+    }
+    setHtml(box, html + '</div>');
+  }
+
+  function renderTopInfo() { renderReports(); renderRepSchedule(); }
+
+  // 今日ビジラボに出勤する人がいるか（代表を除く）。出勤予定が読めていなければ null（毎日の確認の仕事を入れる日の判断に使う）
+  function someoneWorksToday() {
+    if (!shiftState.loaded) return null;
+    return shiftNames().some(function (n) { return n !== REP && bizShiftsOf(n, todayStr).length > 0; });
   }
 
   // ---- 事業と連絡先 ----
@@ -4981,7 +5125,10 @@
     setCurrentUser: setCurrentUser,
     ensureStaffOption: ensureStaffOption,
     markListMissing: markListMissing,
-    setOutlookShifts: setOutlookShifts
+    setOutlookShifts: setOutlookShifts,
+    setReports: setReports,
+    setRepSchedule: setRepSchedule,
+    someoneWorksToday: someoneWorksToday
   };
   document.dispatchEvent(new CustomEvent('app:ready'));
 })();
