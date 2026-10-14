@@ -933,6 +933,7 @@
   var REPORT_CHANNEL = "定時報告";
   var REPORT_REFRESH_MS = 5 * 60 * 1000;
   var IGNORED_REPORTS = ["lilocle-check"];
+  var NO_TASK_REPORTS = ["amazon-morning", "ai-news"];
 
   var ROUTINE_KEY_BUSINESS = [[/^routine:amazon-/, "Amazon販売"], [/^routine:lilocle-/, "LILOCLE運営"], [/^routine:inquiry-/, "業務改善・DX支援"], [/^routine:watch-/, "社内・共通"]];
   function businessOfRoutineKey(key) {
@@ -980,7 +981,8 @@
       SourceLink: /^https:\/\//.test(data.link || "") ? data.link : "",
       SourceId: "routine:" + (data.routine || "unknown") + ":" + at.toISOString()
     });
-    var actions = (data.actions || []).slice(0, 20);
+    // 毎朝の Amazon チェックは報告だけ（価格の判断は代表が報告を見て行う。代表の指定 2026-10-15）
+    var actions = NO_TASK_REPORTS.indexOf(data.routine) !== -1 ? [] : (data.actions || []).slice(0, 20);
     for (var i = 0; i < actions.length; i++) {
       var a = actions[i] || {};
       if (!a.title) continue;
