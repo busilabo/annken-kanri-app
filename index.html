@@ -1139,6 +1139,42 @@
   }
   :root[data-theme="dark"] { --p1: #7FB0DD; --p2: #6BCB98; --p3: #E58370; --p4: #C29BE8; --p5: #E0B255; --p6: #6CC7CC; }
 
+  /* 事業ごとの色（ボードの仕事の背景と、事業ボタンの丸）。並びは CHOICES.business と同じ：業務改善・家電・Amazon・LILOCLE・社内 */
+  :root {
+    --biz1-bg: #E6EFFA; --biz1: #2C5F8A;
+    --biz2-bg: #E3F3E8; --biz2: #24714B;
+    --biz3-bg: #FDEFD9; --biz3: #B5650A;
+    --biz4-bg: #F8E6F1; --biz4: #A3427A;
+    --biz5-bg: #EEF0F3; --biz5: #5B6473;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --biz1-bg: #1C2A3C; --biz1: #7FB0DD;
+      --biz2-bg: #18301F; --biz2: #6BCB98;
+      --biz3-bg: #352612; --biz3: #E9A955;
+      --biz4-bg: #351D2C; --biz4: #E592C2;
+      --biz5-bg: #232A3B; --biz5: #A8B0C0;
+    }
+  }
+  :root[data-theme="dark"] {
+    --biz1-bg: #1C2A3C; --biz1: #7FB0DD;
+    --biz2-bg: #18301F; --biz2: #6BCB98;
+    --biz3-bg: #352612; --biz3: #E9A955;
+    --biz4-bg: #351D2C; --biz4: #E592C2;
+    --biz5-bg: #232A3B; --biz5: #A8B0C0;
+  }
+  .tile[data-biz-i="1"] { background: var(--biz1-bg); }
+  .tile[data-biz-i="2"] { background: var(--biz2-bg); }
+  .tile[data-biz-i="3"] { background: var(--biz3-bg); }
+  .tile[data-biz-i="4"] { background: var(--biz4-bg); }
+  .tile[data-biz-i="5"] { background: var(--biz5-bg); }
+  .biz-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; box-shadow: 0 0 0 2px var(--surface); }
+  .biz-dot[data-biz-i="1"] { background: var(--biz1); }
+  .biz-dot[data-biz-i="2"] { background: var(--biz2); }
+  .biz-dot[data-biz-i="3"] { background: var(--biz3); }
+  .biz-dot[data-biz-i="4"] { background: var(--biz4); }
+  .biz-dot[data-biz-i="5"] { background: var(--biz5); }
+
   .avatar {
     flex: none;
     display: inline-flex;
@@ -4099,7 +4135,9 @@
     open.forEach(function (c) { if (needsMove(c)) { var b = businessOf(c); counts[b] = (counts[b] || 0) + 1; } });
     var total = open.filter(needsMove).length;
     var chip = function (value, label, n) {
-      return '<button type="button" class="biz-chip" data-biz="' + esc(value) + '"' + (focusBusiness === value ? ' data-on' : '') + '>' + esc(label) + ' <span class="tab-count">' + n + '</span></button>';
+      var bizI = value ? BUSINESSES.indexOf(value) + 1 : 0;
+      return '<button type="button" class="biz-chip" data-biz="' + esc(value) + '"' + (focusBusiness === value ? ' data-on' : '') + '>' +
+        (bizI ? '<span class="biz-dot" data-biz-i="' + bizI + '"></span>' : '') + esc(label) + ' <span class="tab-count">' + n + '</span></button>';
     };
     setHtml(document.querySelector('[data-biz-switch]'), chip('', 'すべての事業', total) + BUSINESSES.map(function (b) { return chip(b, b, counts[b] || 0); }).join(''));
     var box = document.querySelector('[data-biz-contacts]');
@@ -4353,7 +4391,9 @@
     var tone = badges.some(function (b) { return b.tone === 'crit'; }) ? 'crit' : badges.some(function (b) { return b.tone === 'warn'; }) ? 'warn' : (it.tone || 'neutral');
     var owner = ownerOf(it.card);
     var dim = focusRunner && owner !== focusRunner;
-    return '<div class="tile" data-tone="' + tone + '"' + (dim ? ' data-dim' : '') + '>' +
+    // 背景色は事業ごと（パッと見て、どの事業の仕事か分かるように）
+    var bizI = BUSINESSES.indexOf(businessOf(it.card)) + 1;
+    return '<div class="tile" data-tone="' + tone + '"' + (bizI ? ' data-biz-i="' + bizI + '"' : '') + (dim ? ' data-dim' : '') + '>' +
       '<button type="button" class="tile-main" data-jump-key="' + key + '">' +
       '<span class="tile-title">' + esc(cardTitle(it.card)) + '</span>' +
       '<span class="tile-meta">' + esc(it.meta || "") + '</span>' +
