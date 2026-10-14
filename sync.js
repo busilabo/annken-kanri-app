@@ -962,7 +962,8 @@
     for (var i = 0; i < actions.length; i++) {
       var a = actions[i] || {};
       if (!a.title) continue;
-      var key = "routine:" + (data.routine || "unknown") + ":" + (a.id || a.title);
+      // id はルーティンをまたいで同じ件なら同じ（LILOCLE の照合と受注運用は注文番号）。同じ件は1つの仕事にまとめる
+      var key = "routine:" + (a.id || (data.routine || "unknown") + ":" + a.title);
       var open = taskCards().filter(function (c) { return taskKeyOf(c) === key && isOpenTask(c); })[0];
       if (open) {
         // まだ片付いていない件がまた報告された。同じ日に何度も書かない
