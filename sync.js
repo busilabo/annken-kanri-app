@@ -934,6 +934,23 @@
   var REPORT_REFRESH_MS = 5 * 60 * 1000;
   var IGNORED_REPORTS = ["lilocle-check"];
 
+  var ROUTINE_KEY_BUSINESS = [[/^routine:amazon-/, "Amazon販売"], [/^routine:lilocle-/, "LILOCLE運営"], [/^routine:inquiry-/, "業務改善・DX支援"]];
+  function businessOfRoutineKey(key) {
+    for (var i = 0; i < ROUTINE_KEY_BUSINESS.length; i++) if (ROUTINE_KEY_BUSINESS[i][0].test(key || "")) return ROUTINE_KEY_BUSINESS[i][1];
+    return "";
+  }
+
+  // すでに違う事業で入ってしまった定時報告の仕事を、目印から正しい事業に直して保存する
+  function fixRoutineBusiness() {
+    taskCards().forEach(function (card) {
+      var want = businessOfRoutineKey(taskKeyOf(card));
+      var sel = getRoleEl(card, "business");
+      if (!want || !sel || sel.value === want || !card.getAttribute("data-item-id")) return;
+      writeField(card, "task", FIELD_MAP.task.Business, want);
+      scheduleSave(card);
+    });
+  }
+
   function reportSummaryText(data) {
     var actions = data.actions || [];
     return "【要点】\n" + String(data.summary || "").trim() +
@@ -983,7 +1000,8 @@
         Title: String(a.title).slice(0, 60),
         Priority: /^(高|中|低)$/.test(a.priority || "") ? a.priority : "中",
         Owner: a.owner === "坂中" ? "坂中" : "未定",
-        Business: a.business || data.business || "社内・共通",
+        // 事業は目印（amazon-／lilocle-…）で決める。ルーティンが項目ごとに付けた事業は使わない（推測で違う事業が付いたことがある 2026-10-15）
+        Business: businessOfRoutineKey(key) || data.business || "社内・共通",
         Category: "定時報告の対応",
         Content: String(a.title) + (a.detail ? "\n" + a.detail : "") + (a.steps && a.steps.length ? stepsText(a.steps) : ""),
         Requester: title,
@@ -1637,6 +1655,8 @@
     watchLists();
     watchInteractions();
     await loadAll();
+    fixRoutineBusiness();
+    window.__app.applyAll();
     setInterval(pollRefresh, POLL_MS);
     loadReports();
     setInterval(loadReports, REPORT_REFRESH_MS);
