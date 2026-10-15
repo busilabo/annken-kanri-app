@@ -1354,6 +1354,42 @@
   .contact-howto { font-size: 12px; color: var(--text); background: var(--warn-soft); border-radius: 6px; padding: 3px 7px; white-space: pre-wrap; }
   .contact-rule { margin: 0 0 12px; padding: 8px 12px; border-radius: 8px; background: var(--accent-soft); color: var(--text); font-size: 13px; }
 
+  /* 仕事のかんたん表示（renderSimpleTasks） */
+  .card[data-kind="task"] [data-role="content"], .card[data-kind="task"] [data-role="handover"] { white-space: pre-wrap; }
+  .simple, .simple > [data-simple] { display: flex; flex-direction: column; gap: 10px; }
+  .s-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); }
+  .s-head[data-biz-i="1"] { background: var(--biz1-bg); }
+  .s-head[data-biz-i="2"] { background: var(--biz2-bg); }
+  .s-head[data-biz-i="3"] { background: var(--biz3-bg); }
+  .s-head[data-biz-i="4"] { background: var(--biz4-bg); }
+  .s-head[data-biz-i="5"] { background: var(--biz5-bg); }
+  .s-status { font-size: 12px; font-weight: 700; padding: 2px 10px; border-radius: 999px; background: var(--neutral-soft); color: var(--neutral); }
+  .s-status[data-tone="warn"] { background: var(--warn-soft); color: var(--warn); }
+  .s-status[data-tone="ok"] { background: var(--ok-soft); color: var(--ok); }
+  .s-title { font-size: 17px; line-height: 1.4; flex: 1 1 260px; min-width: 0; overflow-wrap: anywhere; }
+  .s-owner { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; margin-left: auto; }
+  .s-origin { font-size: 12.5px; color: var(--accent); font-weight: 700; }
+  .s-origin a { color: var(--accent); }
+  .s-desc { font-size: 14px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; padding: 0 2px; }
+  .s-steps-head { font-size: 14px; font-weight: 700; }
+  .s-steps { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+  .s-steps li label { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border-radius: 8px; background: var(--surface-2); cursor: pointer; font-size: 14px; line-height: 1.55; }
+  .s-steps li input { width: 20px; height: 20px; margin: 1px 0 0; flex: none; accent-color: var(--ok); }
+  .s-steps li[data-done] label { background: var(--ok-soft); }
+  .s-steps li[data-done] span { color: var(--text-muted); text-decoration: line-through; }
+  .s-handover { font-size: 13.5px; line-height: 1.55; background: var(--warn-soft); border-radius: 8px; padding: 8px 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .s-handover b { display: block; font-size: 12px; margin-bottom: 2px; }
+  .s-handover small { display: block; color: var(--text-muted); margin-top: 2px; }
+  .s-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .s-btn { appearance: none; font: inherit; font-size: 14.5px; font-weight: 700; cursor: pointer; padding: 10px 16px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); color: var(--text); }
+  .s-btn:hover { border-color: var(--accent); }
+  .s-primary { background: var(--accent); border-color: var(--accent); color: var(--surface); }
+  .s-done-note { font-weight: 700; color: var(--ok); }
+  [data-simple-panel]:empty { display: none; }
+  .card-more { margin-top: 12px; border-top: 1px dashed var(--border); padding-top: 8px; }
+  .card-more > summary { cursor: pointer; font-size: 12.5px; color: var(--text-muted); padding: 4px 0; }
+  .card-more[open] > summary { margin-bottom: 10px; }
+
   /* 「AIに聞く」チャット（chat.js） */
   .chat-fab { position: fixed; right: 18px; bottom: 18px; z-index: 900; appearance: none; border: none; cursor: pointer; font: inherit; font-size: 14px; font-weight: 700; padding: 12px 18px; border-radius: 999px; background: var(--accent); color: var(--surface); box-shadow: 0 4px 14px rgba(27,35,51,0.25); }
   .chat-fab[hidden] { display: none; }
@@ -1965,6 +2001,10 @@
 
     <template data-card-template="task">
       <article class="card" data-kind="task">
+        <!-- パートさん向けのかんたん表示（renderSimpleTasks）。細かい項目は下の「詳しい項目・履歴」にしまう -->
+        <div class="simple"><div data-simple></div><div data-simple-panel></div></div>
+        <details class="card-more" data-card-more>
+        <summary>詳しい項目・履歴（事業・種類・期限の変更、削除など）</summary>
         <div class="card-top">
           <button type="button" class="chip" data-role="status" data-tone="neutral">未着手</button>
           <button type="button" class="chip" data-role="priority" data-tone="warn">中</button>
@@ -2022,6 +2062,7 @@
         <div class="danger-zone">
           <button type="button" class="danger-btn" data-role="delete" data-confirm-label="本当に削除しますか？（もう一度クリック）">この仕事を削除</button>
         </div>
+        </details>
       </article>
     </template>
   </section>
@@ -3651,6 +3692,7 @@
     renderSkills();
     renderContacts();
     renderTaskOrigins();
+    renderSimpleTasks();
     renderTopInfo();
     renderToday();
     updateTrashCount();
@@ -3675,7 +3717,19 @@
     var el = card.querySelector('[data-role="' + role + '"]');
     if (!el) return "";
     if (el.tagName === 'INPUT' || el.tagName === 'SELECT') return (el.value || "").trim();
-    return (el.innerText || el.textContent || "").trim();
+    return textOf(el).trim();
+  }
+
+  // 文字を読む。仕事のカードは細かい項目を「詳しい項目」にしまっていて、閉じているあいだは innerText が空になる。
+  // 見えていないときは改行を残して textContent から読む（sync.js の textOf と同じ）
+  function textOf(el) {
+    if (!el) return "";
+    // 閉じた <details> の中は、画面上の枠はあっても innerText が空になる（Chrome）。開いていて見えているときだけ innerText を使う
+    if (!(el.closest && el.closest("details:not([open])")) && el.getClientRects().length) return el.innerText;
+    var c = el.cloneNode(true);
+    c.querySelectorAll("br").forEach(function (b) { b.replaceWith("\n"); });
+    c.querySelectorAll("div, p").forEach(function (d) { d.before("\n"); });
+    return c.textContent.replace(/^\n+/, "");
   }
 
   function liveCards(kind) {
@@ -4033,6 +4087,182 @@
       setHtml(box, origin + (safeLink && linkText ? ' <a href="' + esc(safeLink) + '" target="_blank" rel="noopener">' + linkText + '</a>' : '') + tag);
     });
   }
+
+  // ---- 仕事のかんたん表示（パートさん向け）----
+  // 仕事の中身の「【手順】」の行をチェックリストにし、やることを3つのボタン（終わった／申し送りを書いて渡す／代表に聞く）に絞る。
+  // チェックは中身の行頭に「✓ 」を付けて保存する（列を増やさずに、誰の画面でも同じに見えるように）
+  var STEP_LINE = /^(✓\s*)?(\d+)\.\s*(.*)$/;
+
+  function parseTaskContent(card) {
+    var lines = roleVal(card, 'content').split('\n');
+    var out = { title: (lines[0] || '').trim(), desc: [], steps: [] };
+    var inSteps = false;
+    for (var i = 1; i < lines.length; i++) {
+      var line = lines[i];
+      if (/^【手順】/.test(line.trim())) { inSteps = true; continue; }
+      var m = inSteps && STEP_LINE.exec(line.trim());
+      if (m) out.steps.push({ line: i, done: !!m[1], no: m[2], text: m[3] });
+      else if (line.trim()) out.desc.push(line);
+    }
+    return out;
+  }
+
+  function simpleTaskHtml(card) {
+    var key = jumpKeyOf(card);
+    var owner = ownerOf(card);
+    var status = statusOf(card) || '未着手';
+    var c = parseTaskContent(card);
+    var due = dueBadge(card);
+    var bizI = BUSINESSES.indexOf(businessOf(card)) + 1;
+    var originBox = card.querySelector('[data-teams-origin]');
+    var origin = originBox && !originBox.hidden ? originBox.innerHTML : '';
+    var doneCount = c.steps.filter(function (s) { return s.done; }).length;
+    var html = '<div class="s-head"' + (bizI ? ' data-biz-i="' + bizI + '"' : '') + '>' +
+      '<span class="s-status" data-tone="' + toneForStatus('task', status) + '">' + esc(status) + '</span>' +
+      '<b class="s-title">' + esc(c.title || '（名前のない仕事）') + '</b>' +
+      (due ? '<span class="row-badge" data-tone="' + due.tone + '">' + esc(due.text) + '</span>' : '') +
+      '<span class="s-owner">' + (owner === UNASSIGNED ? '次の走者募集' : avatarHtml(owner) + ' ' + esc(owner) + 'さんが担当') + '</span></div>';
+    if (origin) html += '<div class="s-origin">' + origin + '</div>';
+    if (c.desc.length) html += '<div class="s-desc">' + linkify(c.desc.join('\n')) + '</div>';
+    if (c.steps.length) {
+      html += '<div class="s-steps-head">やること <span class="tab-count">' + doneCount + ' / ' + c.steps.length + '</span></div><ol class="s-steps">' +
+        c.steps.map(function (s) {
+          return '<li' + (s.done ? ' data-done' : '') + '><label><input type="checkbox" data-step-key="' + key + '" data-step-line="' + s.line + '"' + (s.done ? ' checked' : '') + '>' +
+            '<span>' + linkify(s.text) + '</span></label></li>';
+        }).join('') + '</ol>';
+    }
+    var handover = roleVal(card, 'handover');
+    if (handover) html += '<div class="s-handover"><b>申し送り</b>' + linkify(handover) + '<small>' + esc(roleVal(card, 'handoverBy')) + '</small></div>';
+    if (status === '完了') {
+      html += '<div class="s-actions"><span class="s-done-note">✅ この仕事は終わっています</span><button type="button" class="s-btn" data-s-reopen="' + key + '">まだ終わっていなかった</button></div>';
+    } else if (owner === UNASSIGNED) {
+      html += '<div class="s-actions"><button type="button" class="s-btn s-primary" data-s-claim="' + key + '">🙋 バトンを受け取る</button>' +
+        '<button type="button" class="s-btn" data-s-ask="' + key + '">❓ 代表に聞く</button></div>';
+    } else {
+      html += '<div class="s-actions"><button type="button" class="s-btn s-primary" data-s-done="' + key + '">✅ 終わった</button>' +
+        '<button type="button" class="s-btn" data-s-pass="' + key + '">🏃 申し送りを書いて渡す</button>' +
+        '<button type="button" class="s-btn" data-s-ask="' + key + '">❓ 代表に聞く</button></div>';
+    }
+    return html;
+  }
+
+  function renderSimpleTasks() {
+    document.querySelectorAll('.card[data-kind="task"]').forEach(function (card) {
+      var box = card.querySelector('[data-simple]');
+      if (box) setHtml(box, simpleTaskHtml(card));
+    });
+  }
+
+  function setTaskStatus(card, label) {
+    var el = card.querySelector('[data-role="status"]');
+    if (!el) return;
+    el.textContent = label;
+    el.setAttribute('data-tone', toneForStatus('task', label));
+  }
+
+  // かんたん表示の下に出す入力欄（申し送り・代表への質問・受け取る人）。5秒ごとの描き直しで消えないよう、別の箱に出す
+  function openSimplePanel(card, html) {
+    var panel = card.querySelector('[data-simple-panel]');
+    if (!panel) return null;
+    var wasOpen = panel.children.length > 0 && panel.getAttribute('data-open') === html.slice(0, 40);
+    closeInlinePanels();
+    panel.innerHTML = '';
+    panel.removeAttribute('data-open');
+    if (wasOpen) return null;
+    panel.innerHTML = html;
+    panel.setAttribute('data-open', html.slice(0, 40));
+    var t = panel.querySelector('textarea');
+    if (t) t.focus();
+    return panel;
+  }
+
+  function closeSimplePanel(card) {
+    var panel = card.querySelector('[data-simple-panel]');
+    if (panel) { panel.innerHTML = ''; panel.removeAttribute('data-open'); }
+  }
+
+  document.body.addEventListener('change', function (e) {
+    var cb = e.target.closest && e.target.closest('[data-step-key]');
+    if (!cb) return;
+    var card = jumpRegistry[cb.getAttribute('data-step-key')];
+    var el = card && card.querySelector('[data-role="content"]');
+    if (!el) return;
+    var lines = textOf(el).split('\n');
+    var i = +cb.getAttribute('data-step-line');
+    var m = STEP_LINE.exec((lines[i] || '').trim());
+    if (!m) return;
+    lines[i] = (cb.checked ? '✓ ' : '') + m[2] + '. ' + m[3];
+    el.textContent = lines.join('\n');
+    // 最初のチェックで「進行中」にする
+    if (cb.checked && statusOf(card) === '未着手') {
+      setTaskStatus(card, '進行中');
+      addHistoryEntry(card, 'task', '着手する', '進行中', null, '手順' + m[2] + 'を済ませた');
+    }
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    renderSimpleTasks();
+  });
+
+  document.body.addEventListener('click', function (e) {
+    // 受け取る人を選んだら、選ぶ欄を閉じる（受け取りの処理そのものは今日のボードと同じ assignCard）
+    var picked = e.target.closest && e.target.closest('[data-simple-panel] [data-assign-key]');
+    if (picked) { var pc = picked.closest('.card'); setTimeout(function () { closeSimplePanel(pc); }, 0); return; }
+    var t = e.target.closest && e.target.closest('[data-s-done],[data-s-pass],[data-s-ask],[data-s-claim],[data-s-reopen],[data-s-ask-send]');
+    if (!t) return;
+    var key = t.getAttribute('data-s-done') || t.getAttribute('data-s-pass') || t.getAttribute('data-s-ask') || t.getAttribute('data-s-claim') || t.getAttribute('data-s-reopen') || t.getAttribute('data-s-ask-send');
+    var card = jumpRegistry[key];
+    if (!card) return;
+    var who = ownerOf(card) !== UNASSIGNED ? ownerOf(card) : currentUser;
+    if (t.hasAttribute('data-s-done')) {
+      setTaskStatus(card, '完了');
+      addHistoryEntry(card, 'task', '完了にする', '完了', null, (who ? who + 'さんが完了' : '完了'));
+      closeSimplePanel(card);
+      applyAll();
+    } else if (t.hasAttribute('data-s-reopen')) {
+      setTaskStatus(card, '進行中');
+      addHistoryEntry(card, 'task', '未完了に戻す', '進行中', null, '');
+      applyAll();
+    } else if (t.hasAttribute('data-s-claim')) {
+      openSimplePanel(card, '<div class="picker"><span class="picker-label">誰が受け取りますか？</span>' +
+        STAFF.filter(function (n) { return n !== UNASSIGNED; }).map(function (n) {
+          return '<button type="button" class="picker-btn" data-assign-how="claim" data-assign-key="' + key + '" data-assign-to="' + esc(n) + '">' + esc(n) + '</button>';
+        }).join('') + '</div>');
+    } else if (t.hasAttribute('data-s-pass')) {
+      // 申し送りの入力と渡す先のボタン。押したときの処理は今日のボードの「渡す」と同じ（passBaton）
+      var panel = openSimplePanel(card, '<div class="passer"><label class="passer-label">申し送り（どこまで終わったか・次にやること・資料の場所・何を待っているか）</label>' +
+        '<textarea class="passer-text" rows="3"></textarea><div class="passer-actions">' +
+        '<button type="button" class="claim-btn" data-pass-to="' + UNASSIGNED + '" data-pass-card="' + key + '">次の走者募集に戻す</button>' +
+        STAFF.filter(function (n) { return n !== UNASSIGNED && n !== ownerOf(card); }).map(function (n) {
+          return '<button type="button" class="picker-btn" data-pass-to="' + esc(n) + '" data-pass-card="' + key + '">' + esc(n) + 'さんに渡す</button>';
+        }).join('') + '<span class="passer-hint" data-passer-hint></span></div></div>');
+      if (panel) panel.querySelector('textarea').value = roleVal(card, 'handover');
+    } else if (t.hasAttribute('data-s-ask')) {
+      openSimplePanel(card, '<div class="passer"><label class="passer-label">代表に聞きたいこと（何が分からないか・何を決めてほしいか）</label>' +
+        '<textarea class="passer-text" rows="3"></textarea><div class="passer-actions">' +
+        '<button type="button" class="claim-btn" data-s-ask-send="' + key + '">代表に送る</button><span class="passer-hint" data-ask-hint></span></div></div>');
+    } else if (t.hasAttribute('data-s-ask-send')) {
+      var box = t.closest('[data-simple-panel]');
+      var q = box ? box.querySelector('textarea').value.trim() : '';
+      if (!q) { box.querySelector('[data-ask-hint]').textContent = '聞きたいことを書いてください'; return; }
+      if (!window.__chatOps) { box.querySelector('[data-ask-hint]').textContent = 'まだ読み込み中です。少し待ってからもう一度押してください'; return; }
+      t.disabled = true;
+      var title = parseTaskContent(card).title;
+      window.__chatOps.createTask({
+        Title: ('代表への質問：' + q).slice(0, 60),
+        Content: '代表への質問（' + (who || '') + 'さんから）\n' + q + '\n\n関係する仕事：' + title + '（id ' + card.getAttribute('data-item-id') + '）',
+        Business: businessOf(card),
+        Priority: '中',
+        Owner: REP,
+        Requester: who || '',
+        Category: '代表の確認'
+      }, '代表に質問', (who || '') + 'さんから').then(function (created) {
+        if (!created) { t.disabled = false; box.querySelector('[data-ask-hint]').textContent = '送れませんでした。もう一度押してください'; return; }
+        addHistoryEntry(card, 'task', '代表に質問', statusOf(card), null, q);
+        card.querySelector('[data-role="content"]').dispatchEvent(new Event('input', { bubbles: true }));
+        closeSimplePanel(card);
+        applyAll();
+      });
+    }
+  });
 
   // ---- 今日の報告（ルーティンの報告）----
   // sync.js が「やり取りログ」の定時報告を読み、ルーティンごとの最新を setReports で渡してくる
@@ -4757,6 +4987,7 @@
     setRoleValue(card, 'owner', name);
     sel.dispatchEvent(new Event('change', { bubbles: true }));
     renderSkills();
+    renderSimpleTasks();
     renderToday();
   }
 
@@ -4782,6 +5013,9 @@
     setTimeout(function () { card.removeAttribute('data-local-flash'); }, 1600);
     // 「帰る前に申し送りを書く」から来たときは、そのまま書き始められるように申し送り欄へカーソルを置く
     var field = focusRole && card.querySelector('[data-role="' + focusRole + '"]');
+    // 仕事のカードは細かい項目を「詳しい項目」にしまっているので、そこへ飛ぶときは開く
+    var more = field && field.closest('details');
+    if (more) more.open = true;
     if (field) setTimeout(function () { field.focus(); }, 400);
   }
 

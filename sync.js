@@ -160,6 +160,18 @@
 
   function log(msg) { console.log("[sync] " + msg); }
 
+  // 文字を読む。仕事のカードは細かい項目を「詳しい項目」にしまっていて、閉じているあいだは innerText が空になる。
+  // そのまま保存すると中身・申し送り・履歴のメモが消えるので、見えていないときは改行を残して textContent から読む
+  function textOf(el) {
+    if (!el) return "";
+    // 閉じた <details> の中は、画面上の枠はあっても innerText が空になる（Chrome）。開いていて見えているときだけ innerText を使う
+    if (!(el.closest && el.closest("details:not([open])")) && el.getClientRects().length) return el.innerText;
+    var c = el.cloneNode(true);
+    c.querySelectorAll("br").forEach(function (b) { b.replaceWith("\n"); });
+    c.querySelectorAll("div, p").forEach(function (d) { d.before("\n"); });
+    return c.textContent.replace(/^\n+/, "");
+  }
+
   function getRoleEl(card, role) { return card.querySelector('[data-role="' + role + '"]'); }
 
   function readField(card, spec) {
@@ -171,7 +183,7 @@
       if (!elD.value) return null;
       return elD.value + "T00:00:00.000Z";
     }
-    if (spec.kind === "editable") { var el3 = getRoleEl(card, spec.role); return el3 ? el3.innerText.trim() : ""; }
+    if (spec.kind === "editable") { var el3 = getRoleEl(card, spec.role); return el3 ? textOf(el3).trim() : ""; }
     if (spec.kind === "datetime") {
       var el4 = getRoleEl(card, spec.role);
       if (!el4) return undefined;
@@ -271,7 +283,7 @@
         status: statusEl ? statusEl.textContent : "",
         tone: statusEl ? statusEl.getAttribute("data-tone") : "",
         due: (entry.querySelector(".history-due") || {}).textContent || "",
-        memo: (entry.querySelector(".history-memo") || {}).innerText || ""
+        memo: textOf(entry.querySelector(".history-memo"))
       });
     });
     return JSON.stringify(entries);
@@ -329,7 +341,7 @@
       fields.Title = (customerEl && customerEl.value) || "無題";
     } else if (kind === "task") {
       var contentEl = getRoleEl(card, "content");
-      var text = contentEl ? contentEl.innerText.trim() : "";
+      var text = contentEl ? textOf(contentEl).trim() : "";
       fields.Title = text.slice(0, 60) || "タスク";
     } else if (kind === "customer") {
       fields.Title = fields.Name || "無題";
@@ -430,11 +442,16 @@
     } catch (e) { log("save failed: " + e.message); }
   }
 
+  // 保存待ちのカード。保存が終わるまでは、5秒ごとの読み直しで SharePoint の古い値に戻さない
+  var pendingSave = {};
   function scheduleSave(card) {
     var key = card.getAttribute("data-item-id");
     if (!key) return;
+    pendingSave[key] = true;
     clearTimeout(saveTimers[key]);
-    saveTimers[key] = setTimeout(function () { saveCard(card); }, 700);
+    saveTimers[key] = setTimeout(function () {
+      saveCard(card).then(function () { delete pendingSave[key]; }, function () { delete pendingSave[key]; });
+    }, 700);
   }
 
   async function createCard(card) {
@@ -1268,7 +1285,7 @@
     if ((fields.Handover || "") !== snap.handover && key) {
       clearTimeout(handoverTimers[key]);
       handoverTimers[key] = setTimeout(function () {
-        var now = (getRoleEl(card, "handover") || {}).innerText || "";
+        var now = textOf(getRoleEl(card, "handover"));
         now = now.trim();
         if (!now || now === snap.handover) return;
         snap.handover = now;
@@ -1346,7 +1363,7 @@
           seenIds[item.id] = true;
           var existing = document.querySelector('.card[data-item-id="' + item.id + '"]');
           if (existing) {
-            if (!cardHasFocus(existing)) {
+            if (!cardHasFocus(existing) && !pendingSave[item.id]) {
               applyItemFields(existing, kind, item.fields);
               renderHistory(existing, item.fields.History);
               var deleted = !!item.fields.Deleted;
@@ -1709,7 +1726,8 @@
     addNote: addNote,
     scheduleSave: scheduleSave,
     writeField: writeField,
-    fieldMap: FIELD_MAP
+    fieldMap: FIELD_MAP,
+    textOf: textOf
   };
 
   async function boot() {

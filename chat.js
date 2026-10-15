@@ -173,7 +173,7 @@
     var el = card.querySelector('[data-role="' + role + '"]');
     if (!el) return "";
     if (el.tagName === "INPUT" || el.tagName === "SELECT") return (el.value || "").trim();
-    return (el.innerText || el.textContent || "").trim();
+    return (window.__chatOps && window.__chatOps.textOf ? window.__chatOps.textOf(el) : (el.innerText || el.textContent || "")).trim();
   }
   function taskCards() { return Array.prototype.slice.call(document.querySelectorAll('[data-list="task"] > .card')); }
   function taskById(id) { return document.querySelector('[data-list="task"] > .card[data-item-id="' + String(id).replace(/[^0-9A-Za-z_-]/g, "") + '"]'); }
@@ -209,7 +209,7 @@
     get_task: function (a) {
       var c = taskById(a.id);
       if (!c) return { error: "その id の仕事は見つかりません" };
-      var hist = Array.prototype.slice.call(c.querySelectorAll("[data-history] .history-entry")).slice(0, 10).map(function (h) { return h.innerText.replace(/\s+/g, " ").replace(/×/g, "").trim(); });
+      var hist = Array.prototype.slice.call(c.querySelectorAll("[data-history] .history-entry")).slice(0, 10).map(function (h) { return window.__chatOps.textOf(h).replace(/\s+/g, " ").replace(/×/g, "").trim(); });
       return Object.assign(taskSummary(c), { content: roleVal(c, "content"), handover: roleVal(c, "handover"), handoverBy: roleVal(c, "handoverBy"), requester: roleVal(c, "requester"), history: hist });
     },
     get_today: function () { return window.__app && window.__app.chatSnapshot ? window.__app.chatSnapshot() : { error: "読めません" }; },
