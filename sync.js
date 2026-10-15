@@ -570,15 +570,7 @@
       applying = false;
       window.__app.applyAll();
       // 問い合わせが来たら、パートさんが内容を確かめて代表に報告する仕事も入れる
-      await createTaskOnce("inquiry:" + srcId, {
-        Title: "問い合わせの確認と報告：" + (data.company || "（会社名なし）"),
-        Priority: "高",
-        Business: "業務改善・DX支援",
-        Category: "問い合わせ・営業",
-        Related: data.company || "",
-        Requester: data.source === "資料DL" ? "資料ダウンロード" : "お問い合わせフォーム",
-        Content: "問い合わせの確認と報告：" + (data.company || "（会社名なし）") + "\n" + String(data.content || "").slice(0, 300) + stepsText(STEPS.inquiry)
-      }, "問い合わせが届いた", "");
+      await createTaskOnce("inquiry:" + srcId, inquiryTaskFields(data), "問い合わせが届いた", "");
     }
     try {
       await graph("/drives/" + QUEUE_DRIVE_ID + "/items/" + file.id, {
@@ -724,6 +716,20 @@
       "お客様の件への返事 → 元のお客様の仕事に書き写して、お客様に返信する",
       "対応したら「完了」にする"
     ],
+    snsDx: [
+      "Meta Business Suite（https://business.facebook.com）の受信箱で、メッセージの全文を確認する（通知メールには全文が入らないことがある）",
+      "Teams の「一般」チャネルに、相手の名前と内容の要点を投稿して代表に報告する",
+      "代表の返事を待つ（待っている間は、申し送りに「代表の回答待ち」と書く）",
+      "代表が決めた内容で、Meta Business Suite の受信箱から返信する",
+      "返信したら「完了」にする"
+    ],
+    snsLilo: [
+      "Meta Business Suite（https://business.facebook.com）の LILOCLE の受信箱で、メッセージの全文を確認する",
+      "納期・キャンセル・商品の質問なら、お客様からのメールと同じやり方で「LILOCLE運営AIチーム」で返信文を作る（代表の確認はいりません）",
+      "価格・値引き・返品の可否など判断が要るものは、代表に回す（「AIに聞く」の「代表に質問を回す」でも可）",
+      "Meta Business Suite の受信箱から返信する",
+      "返信したら「完了」にする"
+    ],
     inquiry: [
       "案件管理の「問い合わせ」で内容を確認する",
       "Teams の「一般」チャネルに、会社名と内容の要点を投稿して代表に報告する",
@@ -736,6 +742,36 @@
       "パートさんに任せられる部分があれば、申し送りに書いてバトンを渡す"
     ]
   };
+
+  // 問い合わせから入れる仕事。Instagram・Facebook の DM（問い合わせチェックのルーティンが Meta の通知メールから拾ったもの。
+  // memo が「[自動反映: Instagram DM…]」「[自動反映: Facebook Messenger…]」）は、事業に合わせた手順にする（代表の指定 2026-10-15）
+  function inquiryTaskFields(data) {
+    var who = data.company || data.contactName || "（名前なし）";
+    var memo = String(data.memo || "");
+    var sns = /Instagram/i.test(memo) ? "Instagram" : /Facebook|Messenger|Meta/i.test(memo) ? "Facebook" : "";
+    if (sns) {
+      var lilo = /lilocle|リロクル/i.test(memo + " " + who + " " + (data.content || ""));
+      var title = sns + "の問い合わせ：" + who;
+      return {
+        Title: title.slice(0, 60),
+        Priority: "高",
+        Business: lilo ? "LILOCLE運営" : "業務改善・DX支援",
+        Category: lilo ? "お客様対応" : "問い合わせ・営業",
+        Related: who,
+        Requester: sns + "のメッセージ",
+        Content: title + "\n" + String(data.content || "").slice(0, 300) + stepsText(lilo ? STEPS.snsLilo : STEPS.snsDx)
+      };
+    }
+    return {
+      Title: "問い合わせの確認と報告：" + who,
+      Priority: "高",
+      Business: "業務改善・DX支援",
+      Category: "問い合わせ・営業",
+      Related: data.company || "",
+      Requester: data.source === "資料DL" ? "資料ダウンロード" : "お問い合わせフォーム",
+      Content: "問い合わせの確認と報告：" + who + "\n" + String(data.content || "").slice(0, 300) + stepsText(STEPS.inquiry)
+    };
+  }
 
   function stepsText(steps) {
     if (!steps || !steps.length) return "";
