@@ -5,7 +5,7 @@
   "use strict";
 
   // 中継の URL（Azure Functions を作ったら入れる）。試すときは localStorage の busilabo.chatEndpoint でも上書きできる
-  var CHAT_ENDPOINT = "";
+  var CHAT_ENDPOINT = "https://busilabo-work-chat.azurewebsites.net/api/chat";
   var MAX_ROUNDS = 8;
   var STORE_KEY = "busilabo.chat";
   var NAME_KEY = "busilabo.chatUser";
