@@ -1377,6 +1377,7 @@
   .s-steps li input { width: 20px; height: 20px; margin: 1px 0 0; flex: none; accent-color: var(--ok); }
   .s-steps li[data-done] label { background: var(--ok-soft); }
   .s-steps li[data-done] span { color: var(--text-muted); text-decoration: line-through; }
+  .s-add { align-self: flex-start; appearance: none; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; padding: 4px 10px; border-radius: 8px; border: 1px dashed var(--accent); background: none; color: var(--accent); }
   .s-handover { font-size: 13.5px; line-height: 1.55; background: var(--warn-soft); border-radius: 8px; padding: 8px 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
   .s-handover b { display: block; font-size: 12px; margin-bottom: 2px; }
   .s-handover small { display: block; color: var(--text-muted); margin-top: 2px; }
@@ -4131,6 +4132,7 @@
             '<span>' + linkify(s.text) + '</span></label></li>';
         }).join('') + '</ol>';
     }
+    if (status !== '完了') html += '<button type="button" class="s-add" data-s-addstep="' + key + '">＋ 手順を足す</button>';
     var handover = roleVal(card, 'handover');
     if (handover) html += '<div class="s-handover"><b>申し送り</b>' + linkify(handover) + '<small>' + esc(roleVal(card, 'handoverBy')) + '</small></div>';
     if (status === '完了') {
@@ -4151,6 +4153,29 @@
       var box = card.querySelector('[data-simple]');
       if (box) setHtml(box, simpleTaskHtml(card));
     });
+  }
+
+  // 手順を最後の手順の次に足す（手順がまだ無い仕事は【手順】を作る）。番号は続きから
+  function addSteps(card, texts, who) {
+    var el = card.querySelector('[data-role="content"]');
+    if (!el) return;
+    var lines = textOf(el).replace(/\s+$/, '').split('\n');
+    var c = parseTaskContent(card);
+    var insertAt, next;
+    if (c.steps.length) {
+      var last = c.steps[c.steps.length - 1];
+      insertAt = last.line + 1;
+      next = (+last.no || c.steps.length) + 1;
+    } else {
+      lines.push('', '【手順】');
+      insertAt = lines.length;
+      next = 1;
+    }
+    var newLines = texts.map(function (s, i) { return (next + i) + '. ' + s; });
+    Array.prototype.splice.apply(lines, [insertAt, 0].concat(newLines));
+    el.textContent = lines.join('\n');
+    addHistoryEntry(card, 'task', '手順を足す', statusOf(card), null, (who ? who + 'さん：' : '') + texts.join('／'));
+    el.dispatchEvent(new Event('input', { bubbles: true }));
   }
 
   function setTaskStatus(card, label) {
@@ -4206,9 +4231,9 @@
     // 受け取る人を選んだら、選ぶ欄を閉じる（受け取りの処理そのものは今日のボードと同じ assignCard）
     var picked = e.target.closest && e.target.closest('[data-simple-panel] [data-assign-key]');
     if (picked) { var pc = picked.closest('.card'); setTimeout(function () { closeSimplePanel(pc); }, 0); return; }
-    var t = e.target.closest && e.target.closest('[data-s-done],[data-s-pass],[data-s-ask],[data-s-claim],[data-s-reopen],[data-s-ask-send]');
+    var t = e.target.closest && e.target.closest('[data-s-done],[data-s-pass],[data-s-ask],[data-s-claim],[data-s-reopen],[data-s-ask-send],[data-s-addstep],[data-s-addstep-save]');
     if (!t) return;
-    var key = t.getAttribute('data-s-done') || t.getAttribute('data-s-pass') || t.getAttribute('data-s-ask') || t.getAttribute('data-s-claim') || t.getAttribute('data-s-reopen') || t.getAttribute('data-s-ask-send');
+    var key = t.getAttribute('data-s-done') || t.getAttribute('data-s-pass') || t.getAttribute('data-s-ask') || t.getAttribute('data-s-claim') || t.getAttribute('data-s-reopen') || t.getAttribute('data-s-ask-send') || t.getAttribute('data-s-addstep') || t.getAttribute('data-s-addstep-save');
     var card = jumpRegistry[key];
     if (!card) return;
     var who = ownerOf(card) !== UNASSIGNED ? ownerOf(card) : currentUser;
@@ -4235,6 +4260,17 @@
           return '<button type="button" class="picker-btn" data-pass-to="' + esc(n) + '" data-pass-card="' + key + '">' + esc(n) + 'さんに渡す</button>';
         }).join('') + '<span class="passer-hint" data-passer-hint></span></div></div>');
       if (panel) panel.querySelector('textarea').value = roleVal(card, 'handover');
+    } else if (t.hasAttribute('data-s-addstep')) {
+      openSimplePanel(card, '<div class="passer"><label class="passer-label">足す手順（1つずつ。改行すると複数足せます）</label>' +
+        '<textarea class="passer-text" rows="2"></textarea><div class="passer-actions">' +
+        '<button type="button" class="claim-btn" data-s-addstep-save="' + key + '">手順に足す</button><span class="passer-hint" data-add-hint></span></div></div>');
+    } else if (t.hasAttribute('data-s-addstep-save')) {
+      var abox = t.closest('[data-simple-panel]');
+      var added = abox.querySelector('textarea').value.split('\n').map(function (s) { return s.replace(/^\s*(\d+[.．、)]|[・\-])\s*/, '').trim(); }).filter(Boolean);
+      if (!added.length) { abox.querySelector('[data-add-hint]').textContent = '足す手順を書いてください'; return; }
+      addSteps(card, added, who);
+      closeSimplePanel(card);
+      applyAll();
     } else if (t.hasAttribute('data-s-ask')) {
       openSimplePanel(card, '<div class="passer"><label class="passer-label">代表に聞きたいこと（何が分からないか・何を決めてほしいか）</label>' +
         '<textarea class="passer-text" rows="3"></textarea><div class="passer-actions">' +
