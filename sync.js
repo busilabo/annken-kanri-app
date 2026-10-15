@@ -1666,6 +1666,16 @@
     setInterval(drainQueue, QUEUE_DRAIN_MS);
   }
 
+  // 「AIに聞く」チャット（chat.js）が使う操作。追加・保存は既存の仕組み（重複防止・やり取りログ）をそのまま通す
+  window.__chatOps = {
+    getToken: getToken,
+    createTask: createTaskItem,
+    addNote: addNote,
+    scheduleSave: scheduleSave,
+    writeField: writeField,
+    fieldMap: FIELD_MAP
+  };
+
   async function boot() {
     await msalApp.initialize();
     var started = false;

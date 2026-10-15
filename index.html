@@ -1354,6 +1354,31 @@
   .contact-howto { font-size: 12px; color: var(--text); background: var(--warn-soft); border-radius: 6px; padding: 3px 7px; white-space: pre-wrap; }
   .contact-rule { margin: 0 0 12px; padding: 8px 12px; border-radius: 8px; background: var(--accent-soft); color: var(--text); font-size: 13px; }
 
+  /* 「AIに聞く」チャット（chat.js） */
+  .chat-fab { position: fixed; right: 18px; bottom: 18px; z-index: 900; appearance: none; border: none; cursor: pointer; font: inherit; font-size: 14px; font-weight: 700; padding: 12px 18px; border-radius: 999px; background: var(--accent); color: var(--surface); box-shadow: 0 4px 14px rgba(27,35,51,0.25); }
+  .chat-fab[hidden] { display: none; }
+  .chat-panel { position: fixed; right: 18px; bottom: 18px; z-index: 900; width: min(420px, calc(100vw - 32px)); height: min(640px, calc(100vh - 36px)); display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: 0 8px 28px rgba(27,35,51,0.28); overflow: hidden; }
+  .chat-panel[hidden] { display: none; }
+  .chat-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--border); background: var(--accent-soft); }
+  .chat-head > b { font-size: 15px; margin-right: auto; white-space: nowrap; }
+  .chat-who { font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+  .chat-who select { font: inherit; font-size: 12.5px; padding: 2px 4px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); max-width: 110px; }
+  .chat-mini { appearance: none; font: inherit; font-size: 12px; cursor: pointer; padding: 4px 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); white-space: nowrap; flex: none; }
+  .chat-log { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .chat-msg { max-width: 88%; padding: 8px 11px; border-radius: 12px; font-size: 13.5px; line-height: 1.55; overflow-wrap: anywhere; }
+  .chat-ai { align-self: flex-start; background: var(--surface-2); color: var(--text); }
+  .chat-me { align-self: flex-end; background: var(--accent); color: var(--surface); }
+  .chat-wait { color: var(--text-muted); }
+  .chat-err { background: var(--crit-soft); color: var(--crit); }
+  .chat-tool { align-self: flex-start; font-size: 11.5px; color: var(--text-muted); }
+  .chat-confirm { align-self: stretch; border: 2px solid var(--warn); background: var(--warn-soft); border-radius: 12px; padding: 10px 12px; font-size: 13px; line-height: 1.55; }
+  .chat-confirm-btns { display: flex; gap: 8px; margin-top: 8px; }
+  .chat-preview { margin-top: 4px; padding: 6px 8px; background: var(--surface); border-radius: 8px; font-size: 12.5px; max-height: 160px; overflow-y: auto; }
+  .chat-form { display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--border); }
+  .chat-form textarea { flex: 1; resize: none; font: inherit; font-size: 13.5px; padding: 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); }
+  .chat-send { appearance: none; border: none; cursor: pointer; font: inherit; font-size: 13.5px; font-weight: 700; padding: 8px 14px; border-radius: 8px; background: var(--accent); color: var(--surface); }
+  .chat-note { margin: 0; padding: 0 12px 8px; font-size: 11px; color: var(--text-muted); }
+
   /* 今日の報告・代表の予定 */
   .top-info { display: grid; gap: 12px; margin-bottom: 16px; }
   .info-block { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; box-shadow: var(--shadow); min-width: 0; }
@@ -4086,6 +4111,23 @@
 
   function renderTopInfo() { renderReports(); renderRepSchedule(); }
 
+  // 「AIに聞く」チャットに渡す今日の様子（出勤・代表の予定・今日の報告）
+  function chatSnapshot() {
+    return {
+      today: todayStr,
+      shiftsLoaded: !!shiftState.loaded,
+      staffToday: shiftNames().filter(function (n) { return n !== REP; }).map(function (n) {
+        return { name: n, status: { working: "勤務中", before: "これから出勤", left: "退勤済み", off: "休み", unknown: "不明" }[shiftStatusOf(n)] || "",
+          shifts: bizShiftsOf(n, todayStr).map(function (e) { return e.allDay ? "終日" : e.start + "〜" + e.end; }) };
+      }),
+      repAwayToday: !!(shiftState.repAway && shiftState.repAway[todayStr]),
+      repSchedule: (repSchedState.events || []).map(function (e) { return { date: e.date, time: e.allDay ? "終日" : e.start + (e.end ? "〜" + e.end : ""), title: e.title, place: e.place }; }),
+      reports: (reportState.reports || []).filter(function (r) { return REPORT_ORDER.indexOf(r.routine) !== -1; }).map(function (r) {
+        return { title: r.title, at: r.at, summary: r.summary, actions: r.actions };
+      })
+    };
+  }
+
   // 今日ビジラボに出勤する人がいるか（代表を除く）。出勤予定が読めていなければ null（毎日の確認の仕事を入れる日の判断に使う）
   function someoneWorksToday() {
     if (!shiftState.loaded) return null;
@@ -5191,13 +5233,16 @@
     setOutlookShifts: setOutlookShifts,
     setReports: setReports,
     setRepSchedule: setRepSchedule,
-    someoneWorksToday: someoneWorksToday
+    someoneWorksToday: someoneWorksToday,
+    chatSnapshot: chatSnapshot,
+    staff: STAFF
   };
   document.dispatchEvent(new CustomEvent('app:ready'));
 })();
 </script>
 <script src="vendor/msal-browser.min.js"></script>
 <script src="sync.js"></script>
+<script src="chat.js"></script>
 </body>
 </html>
 
