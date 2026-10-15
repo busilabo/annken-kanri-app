@@ -1423,22 +1423,23 @@
   .info-head > b { font-size: 15px; }
   .info-head > span { font-size: 12px; color: var(--text-muted); }
   .info-empty { margin: 0; font-size: 13px; color: var(--text-muted); }
-  .report-grid { display: grid; grid-template-columns: 1fr; gap: 8px; }
-  .report { background: var(--surface-2); border-radius: 10px; border-left: 4px solid var(--ok); min-width: 0; }
+  .report-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
+  .report { background: var(--surface-2); border-radius: 10px; border-left: 5px solid var(--ok); min-width: 0; padding: 10px 14px; display: flex; flex-direction: column; gap: 6px; }
   .report[data-tone="crit"] { border-left-color: var(--crit); }
   .report[data-stale] { opacity: 0.7; }
-  .report > summary { list-style: none; cursor: pointer; padding: 8px 12px; display: flex; flex-direction: column; gap: 4px; }
-  .report > summary::-webkit-details-marker { display: none; }
   .report-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-  .report-title { font-weight: 700; font-size: 14px; }
+  .report-title { font-weight: 700; font-size: 15px; }
   .report-time { font-size: 12px; color: var(--text-muted); }
-  .report-summary { font-size: 13px; white-space: pre-wrap; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
-  .report[open] .report-summary { display: block; }
-  .report-actions { margin: 0 12px 8px; padding-left: 30px; font-size: 13px; color: var(--crit); }
-  .report-open { margin-left: auto; font-size: 12px; color: var(--accent); font-weight: 700; }
-  .report-open::after { content: "開く ▼"; }
-  .report[open] .report-open::after { content: "閉じる ▲"; }
-  .report-body { margin: 0 12px 10px; padding: 8px 10px; background: var(--surface); border-radius: 8px; font-size: 12.5px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 320px; overflow-y: auto; }
+  .report-todo { font-size: 14px; line-height: 1.55; background: var(--surface); border-radius: 8px; padding: 6px 10px; }
+  .report-todo b { display: block; font-size: 11.5px; color: var(--text-muted); }
+  .report[data-tone="crit"] .report-todo { background: var(--crit-soft); }
+  .report-tasks { display: flex; flex-wrap: wrap; gap: 6px; }
+  .report-task { appearance: none; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; padding: 5px 10px; border-radius: 8px; border: 1px solid var(--accent); background: var(--surface); color: var(--accent); text-align: left; }
+  .report-task span { font-weight: 400; }
+  .report-summary { font-size: 13px; line-height: 1.55; color: var(--text-muted); white-space: pre-wrap; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+  .report-more > summary { cursor: pointer; font-size: 12px; color: var(--accent); font-weight: 700; }
+  .report-actions { margin: 6px 0; padding-left: 20px; font-size: 13px; color: var(--crit); }
+  .report-body { margin: 6px 0 0; padding: 8px 10px; background: var(--surface); border-radius: 8px; font-size: 12.5px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 320px; overflow-y: auto; }
   .report-body a { color: var(--accent); }
   .rep-days { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(150px, 100%), 1fr)); gap: 8px; }
   .rep-day { background: var(--surface-2); border-radius: 10px; padding: 8px 10px; min-width: 0; }
@@ -1569,6 +1570,11 @@
 
   <!-- チーム状況。代表が全体を見る画面（引き継ぎの準備・仕事の偏り・一人しかできないスキル） -->
   <section class="panel" data-panel="team" data-local-hidden>
+    <div class="today-block" data-today-block="watch">
+      <h2>仕組みの見張り</h2>
+      <p class="info-empty">Power Automate やルーティンが止まっていないかを、毎日 9:10・15:10 に確かめます。止まっていれば代表にメールが届きます。</p>
+      <div data-watch></div>
+    </div>
     <div class="today-block" data-today-block="health">
       <h2>引き継ぎの状態</h2>
       <div class="today-body" data-today-body="health"></div>
@@ -4304,8 +4310,15 @@
   // sync.js が「やり取りログ」の定時報告を読み、ルーティンごとの最新を setReports で渡してくる
   var reportState = { loaded: false, reports: [] };
   // 並べる順（代表の指定 2026-10-15）。ここにないルーティンは出さない（毎朝の LILOCLE 照合は出さない）。routine はルーティンが報告に付ける名前
-  // 仕組みの見張り（watch）は、止まっているものがあるときだけ先頭、すべて動いていれば最後
-  var REPORT_ORDER = ["inquiry", "amazon-morning", "lilocle-juchu", "ai-news", "watch"];
+  // 仕組みの見張り（watch）は今日の報告に出さず、「チーム状況」に出す（代表の指定 2026-10-15）
+  var REPORT_ORDER = ["inquiry", "amazon-morning", "lilocle-juchu", "ai-news"];
+  // パートさんに分かりやすい名前と、ルーティンが「すること」を書いていないときの一言
+  var REPORT_INFO = {
+    "inquiry": { name: "📮 新しいお問い合わせ", none: "見るだけで大丈夫です。新しい問い合わせは、仕事一覧に自動で入ります" },
+    "amazon-morning": { name: "📦 Amazon の様子", none: "見るだけで大丈夫です（価格などは代表が確認します）" },
+    "lilocle-juchu": { name: "🌿 LILOCLE の注文と発送", none: "なし" },
+    "ai-news": { name: "📰 今日の AI ニュース", none: "時間があるときに読んでください" }
+  };
 
   function setReports(state) { reportState = state || { loaded: false, reports: [] }; renderTopInfo(); }
 
@@ -4318,32 +4331,68 @@
   function renderReports() {
     var box = document.querySelector('[data-reports]');
     if (!box) return;
-    var rank = function (r) { return r.routine === 'watch' && (r.actions || []).length ? -1 : REPORT_ORDER.indexOf(r.routine); };
     var list = (reportState.reports || []).filter(function (r) { return REPORT_ORDER.indexOf(r.routine) !== -1; }).sort(function (a, b) {
-      return rank(a) - rank(b);
+      return REPORT_ORDER.indexOf(a.routine) - REPORT_ORDER.indexOf(b.routine);
     });
+    renderWatch();
     if (!list.length) {
       setHtml(box, '<p class="info-empty">' + (reportState.loaded ? 'まだ報告が届いていません。ルーティンの次の実行から、ここに出ます。' : '報告を読み込んでいます…') + '</p>');
       return;
     }
     setHtml(box, '<div class="report-grid">' + list.map(function (r) {
+      var info = REPORT_INFO[r.routine] || { name: r.title || r.routine, none: "なし" };
       var t = localTime(r.at);
       var stale = t.date && t.date !== todayStr;
       var n = (r.actions || []).length;
-      var badge = n ? '<span class="row-badge" data-tone="crit">要対応 ' + n + '件</span>' : '<span class="row-badge" data-tone="ok">要対応なし</span>';
-      // 閉じているときは見出し1行＋要点3行まで。開くと要対応と全文
-      return '<details class="report" data-tone="' + (n ? 'crit' : 'ok') + '"' + (stale ? ' data-stale' : '') + '>' +
-        '<summary>' +
-        '<span class="report-line"><span class="report-title">' + esc(r.title || r.routine) + '</span>' +
-        '<span class="report-time">' + (stale ? esc(t.md) + ' ' : '') + esc(t.time) + '</span>' + badge +
-        '<span class="report-open"></span></span>' +
-        (r.summary ? '<span class="report-summary">' + esc(r.summary) + '</span>' : '') +
-        '</summary>' +
+      // 報告から仕事一覧に入った仕事（毎朝の Amazon は仕事にしないので、代表が見るだけ）
+      var repOnly = r.routine === 'amazon-morning';
+      var tasks = repOnly ? [] : reportTasks(r);
+      var todo = r.staffNote || (repOnly ? info.none : (n ? '仕事一覧に入った ' + n + ' 件を進めてください' : info.none));
+      var mine = !repOnly && (n > 0 || (r.staffNote && !/^なし/.test(r.staffNote)));
+      var badge = repOnly && n ? '<span class="row-badge">代表が確認 ' + n + '件</span>'
+        : mine ? '<span class="row-badge" data-tone="crit">パートさんの仕事あり</span>'
+        : '<span class="row-badge" data-tone="ok">見るだけでOK</span>';
+      return '<div class="report" data-tone="' + (mine ? 'crit' : 'ok') + '"' + (stale ? ' data-stale' : '') + '>' +
+        '<div class="report-line"><span class="report-title">' + esc(info.name) + '</span>' +
+        '<span class="report-time">' + (stale ? esc(t.md) + ' ' : '') + esc(t.time) + '</span>' + badge + '</div>' +
+        '<div class="report-todo"><b>パートさんがすること</b>' + esc(todo) + '</div>' +
+        (tasks.length ? '<div class="report-tasks">' + tasks.map(function (c) {
+          return '<button type="button" class="report-task" data-jump-key="' + jumpKeyOf(c) + '">' + esc(cardTitle(c)) + ' <span>→ 開く</span></button>';
+        }).join('') + '</div>' : '') +
+        (r.summary ? '<div class="report-summary">' + esc(r.summary) + '</div>' : '') +
+        '<details class="report-more"><summary>報告の全文を見る</summary>' +
         (n ? '<ul class="report-actions">' + r.actions.map(function (a) { return '<li>' + esc(a) + '</li>'; }).join('') + '</ul>' : '') +
         '<div class="report-body">' + linkify(r.body || '（全文なし）') +
         (/^https:\/\//.test(r.link || '') ? '\n\n<a href="' + esc(r.link) + '" target="_blank" rel="noopener">詳しいレポートを開く</a>' : '') + '</div>' +
-        '</details>';
+        '</details></div>';
     }).join('') + '</div>');
+  }
+
+  // 報告の要対応から入った仕事（仕事の名前が要対応の見出しと同じもの。終わっていないものだけ）
+  function reportTasks(r) {
+    var heads = (r.actions || []).map(function (a) { return String(a).split('（')[0].trim().slice(0, 30); }).filter(Boolean);
+    if (!heads.length) return [];
+    return liveCards('task').filter(function (c) {
+      if (statusOf(c) === '完了' || roleVal(c, 'teamsMessageId').indexOf('routine:') !== 0) return false;
+      var title = cardTitle(c);
+      return heads.some(function (h) { return title.indexOf(h) === 0 || h.indexOf(title.slice(0, 30)) === 0; });
+    });
+  }
+
+  // 仕組みの見張り（チーム状況タブ）。止まっているものがあれば赤く出す
+  function renderWatch() {
+    var box = document.querySelector('[data-watch]');
+    if (!box) return;
+    var r = (reportState.reports || []).filter(function (x) { return x.routine === 'watch'; })[0];
+    if (!r) { setHtml(box, '<p class="info-empty">まだ見張りの結果がありません（毎日 9:10・15:10 に確認します）。</p>'); return; }
+    var t = localTime(r.at);
+    var n = (r.actions || []).length;
+    setHtml(box, '<div class="report" data-tone="' + (n ? 'crit' : 'ok') + '">' +
+      '<div class="report-line"><span class="report-title">' + (n ? '⚠ 止まっている仕組みがあります' : '✓ すべて動いています') + '</span>' +
+      '<span class="report-time">' + esc(t.md) + ' ' + esc(t.time) + ' の確認</span></div>' +
+      (n ? '<ul class="report-actions">' + r.actions.map(function (a) { return '<li>' + esc(a) + '</li>'; }).join('') + '</ul>'
+        : (r.summary ? '<div class="report-summary">' + esc(r.summary) + '</div>' : '')) +
+      '<details class="report-more"><summary>確認した内容を見る</summary><div class="report-body">' + linkify(r.body || '') + '</div></details></div>');
   }
 
   // ---- 代表の予定 ----

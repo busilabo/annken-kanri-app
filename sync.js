@@ -1007,7 +1007,9 @@
 
   function reportSummaryText(data) {
     var actions = data.actions || [];
-    return "【要点】\n" + String(data.summary || "").trim() +
+    // 【すること】はパートさん向けの一言（今日の報告 取り込みルーティンが staffNote に入れる）
+    return (data.staffNote ? "【すること】\n" + String(data.staffNote).trim() + "\n" : "") +
+      "【要点】\n" + String(data.summary || "").trim() +
       "\n【要対応】\n" + (actions.length ? actions.map(function (a) { return "・" + (a.title || "") + (a.detail ? "（" + String(a.detail).split("\n")[0].slice(0, 120) + "）" : ""); }).join("\n") : "なし") +
       "\n【全文】\n" + String(data.body || "").trim();
   }
@@ -1070,7 +1072,9 @@
   }
 
   function parseReportSummary(text) {
-    var out = { summary: "", actions: [], body: "" };
+    var out = { staffNote: "", summary: "", actions: [], body: "" };
+    var sn = /^【すること】\n?([\s\S]*?)\n(【要点】[\s\S]*)$/.exec(text || "");
+    if (sn) { out.staffNote = sn[1].trim(); text = sn[2]; }
     var m = /【要点】\n?([\s\S]*?)\n【要対応】\n?([\s\S]*?)\n【全文】\n?([\s\S]*)$/.exec(text || "");
     if (!m) { out.summary = String(text || "").split("\n").slice(0, 3).join("\n"); out.body = text || ""; return out; }
     out.summary = m[1].trim();
@@ -1094,7 +1098,7 @@
         var at = f.OccurredAt || item.createdDateTime || "";
         if (latest[routine] && latest[routine].at >= at) return;
         var parsed = parseReportSummary(f.Summary || "");
-        latest[routine] = { routine: routine, title: f.Subject || "", business: f.Business || "", at: at, link: f.SourceLink || "", summary: parsed.summary, actions: parsed.actions, body: parsed.body };
+        latest[routine] = { routine: routine, title: f.Subject || "", business: f.Business || "", at: at, link: f.SourceLink || "", staffNote: parsed.staffNote, summary: parsed.summary, actions: parsed.actions, body: parsed.body };
       });
       window.__app.setReports({ loaded: true, reports: Object.keys(latest).map(function (k) { return latest[k]; }) });
     } catch (e) {
