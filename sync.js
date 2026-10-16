@@ -773,6 +773,9 @@
     rep: [
       "代表が内容を確認する",
       "スタッフに任せられる部分があれば、申し送りに書いてバトンを渡す"
+    ],
+    reply: [
+      "メールを読んで、必要なら返信する"
     ]
   };
 
@@ -912,7 +915,10 @@
   var WATAHAN = /@watahan\.co\.jp$/i;
   var WATAHAN_NAGOYA = /^nagoya@kaitorikensakukun\.com$/i;
   var DEFECT_WORD = /不良|故障|破損|交換|修理|動かない|異音|水漏れ/;
-  var ORDER_WORD = /配送|発注|納品|台数|出荷/;
+  // 配送案かどうか：件名に「配送案・発注・注文」があるか、本文に「○台」と台数が書いてあるときだけ。
+  // 「納品先」「納品日」だけのメール（日程の承知の返事など）は配送案ではない（2026-10-16 代表の指摘）
+  var ORDER_SUBJECT = /配送案|配送予定|発注|注文/;
+  var ORDER_QTY = /\d+\s*台/;
   var PAYMENT_WORD = /請求|支払|振込|入金/;
 
   function mailProfile(data) {
@@ -925,10 +931,10 @@
       if (WATAHAN_NAGOYA.test(from) || DEFECT_WORD.test(text)) {
         return { title: "不良対応：" + subject, business: "家電の卸販売", category: "不良対応", priority: "高", steps: STEPS.wholesaleDefect };
       }
-      if (ORDER_WORD.test(text)) {
+      if (ORDER_SUBJECT.test(subject) || ORDER_QTY.test(String(data.preview || ""))) {
         return { title: "発注（配送案）：" + subject, business: "家電の卸販売", category: "発注・納期", priority: "高", steps: STEPS.wholesaleOrder };
       }
-      return { title: "綿半様からのメール：" + subject, business: "家電の卸販売", category: "代表の確認", owner: "坂中", steps: STEPS.rep };
+      return { title: "綿半様からのメール：" + subject, business: "家電の卸販売", category: "代表の確認", owner: "坂中", steps: STEPS.reply };
     }
     if (/marketplace\.amazon/i.test(from) || business === "Amazon販売") {
       return { title: "Amazon購入者：" + subject, business: "Amazon販売", category: "お客様対応", priority: "高", due: nextWorkday(data.receivedAt), steps: STEPS.amazonBuyer };
