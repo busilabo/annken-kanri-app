@@ -1258,11 +1258,10 @@
   .kanban-row2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   @media (max-width: 900px) { .kanban-row, .kanban-row2 { grid-template-columns: 1fr; } }
   /* リレー：左から右へ（次の走者募集 → 走行中 → 今週のゴール）。時期は段で縦に重ねる */
-  .relay { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 14px; align-items: start; }
-  .relay-bands { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-  .relay-head { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-family: "Zen Kaku Gothic New", "Noto Sans JP", sans-serif; font-size: 16px; font-weight: 700; padding: 0 4px; }
-  .relay-head small { display: block; font-family: inherit; font-size: 11.5px; font-weight: 400; color: var(--text-muted); }
-  .band { border-radius: 14px; padding: 10px 12px; background: var(--surface-2); }
+  .relay { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; align-items: start; }
+  .relay .kb-col[data-col="recruit"] { background: var(--surface-2); outline: 2px solid var(--accent-soft); }
+  .relay-bands { display: flex; flex-direction: column; gap: 10px; min-width: 0; margin-top: 8px; }
+  .band { border-radius: 12px; padding: 8px 10px; background: var(--surface); }
   .band[data-band="urgent"] { background: var(--crit-soft); }
   .band[data-band="week"] { background: var(--warn-soft); }
   .band[data-band="next"] { background: var(--accent-soft); }
@@ -1271,15 +1270,8 @@
   details.band[open] > summary.band-head { margin-bottom: 8px; }
   .band-title { font-size: 15px; font-weight: 700; }
   .band-hint { font-size: 12px; color: var(--text-muted); }
-  .band-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .band-col { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-  .band-col[data-col="recruit"] { border-right: 2px dashed var(--border); padding-right: 12px; }
-  @media (max-width: 900px) {
-    .relay { grid-template-columns: 1fr; }
-    .relay-head { display: none; }
-    .band-cols { grid-template-columns: 1fr; }
-    .band-col[data-col="recruit"] { border-right: none; padding-right: 0; }
-  }
+  @media (max-width: 900px) { .relay { grid-template-columns: 1fr; } }
   .kb-add { appearance: none; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; margin-top: 8px; padding: 6px 12px; border-radius: 8px; border: 1px dashed var(--accent); background: var(--surface); color: var(--accent); }
   .kb-more > summary { cursor: pointer; font-size: 13px; font-weight: 700; color: var(--text-muted); padding: 4px 0; }
   .kb-more[open] > summary { margin-bottom: 10px; }
@@ -5037,27 +5029,32 @@
     };
     var md = function (d) { return (d.getMonth() + 1) + "/" + d.getDate(); };
     var nextStart = new Date(weekEnd); nextStart.setDate(nextStart.getDate() + 1);
-    // バトンは左から右へ（次の走者募集 → 走行中 → 今週のゴール）。急ぎ・今週・来週は段にして縦に重ねる（代表の指定 2026-10-16）
-    var band = function (key, title, hint, items, open) {
-      var recruitItems = items.filter(function (it) { return it.claim; });
-      var runningItems = items.filter(function (it) { return !it.claim; });
-      var cell = function (col, list, empty) {
-        return '<div class="band-col" data-col="' + col + '">' + (list.length ? list.map(tileHtml).join('') : '<p class="kb-empty">' + empty + '</p>') + '</div>';
-      };
-      var inner = '<div class="band-cols">' + cell('recruit', recruitItems, 'なし') + cell('running', runningItems, 'なし') + '</div>';
-      var head = '<span class="band-title">' + title + '</span><span class="band-hint">' + hint + '</span><span class="kb-count tabular">' + items.length + '</span>';
-      return open === false
-        ? '<details class="band" data-band="' + key + '"><summary class="band-head">' + head + '</summary>' + inner + '</details>'
-        : '<div class="band" data-band="' + key + '"><div class="band-head">' + head + '</div>' + inner + '</div>';
+    // バトンは左から右へ（次の走者募集 → 走行中 → 今週のゴール）の3列。各列の中を「急ぎ・今週・来週・そのほか」の段で縦に重ねる（代表の指定 2026-10-16）
+    var BANDS = [
+      { key: "urgent", title: "🔥 急ぎ", hint: "期限切れ・今日明日・優先「高」", items: buckets.urgent },
+      { key: "week", title: "📅 今週", hint: "〜" + md(weekEnd), items: buckets.week },
+      { key: "next", title: "🗓 来週", hint: md(nextStart) + "〜" + md(nextWeekEnd), items: buckets.next },
+      { key: "later", title: "そのほか", hint: "期限なし・再来週以降", items: buckets.later, closed: true }
+    ];
+    var relayCol = function (col, title, hint, pick) {
+      var total = 0;
+      var bands = BANDS.map(function (b) {
+        var list = b.items.filter(pick);
+        total += list.length;
+        var head = '<span class="band-title">' + b.title + '</span><span class="band-hint">' + b.hint + '</span><span class="kb-count tabular">' + list.length + '</span>';
+        var inner = '<div class="band-col">' + (list.length ? list.map(tileHtml).join('') : '<p class="kb-empty">なし</p>') + '</div>';
+        return b.closed
+          ? '<details class="band" data-band="' + b.key + '"><summary class="band-head">' + head + '</summary>' + inner + '</details>'
+          : '<div class="band" data-band="' + b.key + '"><div class="band-head">' + head + '</div>' + inner + '</div>';
+      }).join('');
+      return '<div class="kb-col" data-col="' + col + '"><div class="kb-head"><span class="kb-title">' + title + '</span><span class="kb-count tabular">' + total + '</span></div>' +
+        '<p class="kb-hint">' + hint + '</p><div class="relay-bands">' + bands + '</div></div>';
     };
     setHtml(document.querySelector('[data-kanban]'),
-      '<div class="relay"><div class="relay-bands">' +
-      '<div class="relay-head"><span>🏃 次の走者募集 <small>手が空いた人が受け取る</small></span><span>→ 走行中 <small>右下の顔が持っている人</small></span></div>' +
-      band("urgent", "🔥 急ぎ", "期限切れ・今日明日まで・優先「高」", buckets.urgent) +
-      band("week", "📅 今週", "〜" + md(weekEnd) + " が期限", buckets.week) +
-      band("next", "🗓 来週", md(nextStart) + "〜" + md(nextWeekEnd) + " が期限", buckets.next) +
-      band("later", "そのほか", "期限なし・再来週以降", buckets.later, false) +
-      '</div>' + column("goal", "→ 🏁 今週のゴール", "今週終わった仕事", goals, "今週はまだありません") + '</div>' +
+      '<div class="relay">' +
+      relayCol("recruit", "🏃 次の走者募集", "手が空いた人がバトンを受け取ってください", function (it) { return it.claim; }) +
+      relayCol("running", "→ 走行中", "右下の顔が、いまバトンを持っている人です", function (it) { return !it.claim; }) +
+      column("goal", "→ 🏁 今週のゴール", "今週終わった仕事", goals, "今週はまだありません") + '</div>' +
       '<div class="kanban-row kanban-row2">' +
       column("weekly", "🔁 毎週の仕事", "その週の分が自動で「今週」に入ります", weekly, "まだありません",
         '<button type="button" class="kb-add" data-add="task" data-add-recur="weekly">＋ 毎週の仕事を追加</button>') +
