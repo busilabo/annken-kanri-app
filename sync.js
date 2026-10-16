@@ -967,8 +967,10 @@
     var key = mailThreadKey(data);
     var existing = taskCards().filter(function (c) { return taskKeyOf(c) === key && isOpenTask(c); })[0];
     if (existing) {
-      // 同じ件の続き：履歴に足して保存する（新しい仕事は作らない）
-      addNote(existing, "追加のメールが届いた", firstLine);
+      // 同じ件の続き：履歴に足して保存する（新しい仕事は作らない）。
+      // Power Automate と Claude の両方から同じメールが届くことがあるので、同じ1行がもう履歴にあれば足さない
+      var already = Array.prototype.some.call(existing.querySelectorAll(".history-entry"), function (h) { return (h.textContent || "").indexOf(firstLine) !== -1; });
+      if (!already) addNote(existing, "追加のメールが届いた", firstLine);
     } else {
       var profile = mailProfile(data);
       if (profile) {
@@ -1306,27 +1308,19 @@
     } finally { recurRunning = false; }
   }
 
-  // ---- 毎日の確認 ----
-  // 出勤した日に1回、セラーセントラルで未返信のメッセージがないか確かめる（通知メールが届かなかったときの備え）。
-  // 誰かがビジラボに出勤する日だけ入れる。出勤予定が読めないときは平日だけ
-  var dailyCreated = {};
+  // ---- 毎日の確認（2026-10-16 廃止）----
+  // 以前は出勤日ごとに「セラーセントラルで未返信のメッセージがないか確認」を入れていたが、
+  // 購入者のメッセージは Claude（今日の報告ルーティン）が通知メールから見つけて仕事にするので、人が毎日見に行く必要はない。
+  // 残っている分は片付ける
+  var dailyClosed = false;
   async function ensureDailyTasks() {
-    if (!listIds.task || !window.__app) return;
-    var today = ymd(new Date());
-    if (dailyCreated[today]) return;
-    var works = window.__app.someoneWorksToday ? window.__app.someoneWorksToday() : null;
-    if (works === false) return;
-    if (works === null) { var dow = new Date().getDay(); if (dow === 0 || dow === 6) return; }
-    dailyCreated[today] = true;
-    await createTaskOnce("daily:amazon-sc:" + today, {
-      Title: "Amazon：未返信のメッセージがないか確認",
-      Priority: "中",
-      Business: "Amazon販売",
-      Category: "毎日の確認",
-      Due: today + "T00:00:00.000Z",
-      Requester: "毎日の確認",
-      Content: "Amazon：セラーセントラルで、未返信のメッセージがないか確認する" + stepsText(STEPS.amazonDaily)
-    }, "毎日の確認", "");
+    if (dailyClosed || !listIds.task || !window.__app || !window.__app.setTaskStatus) return;
+    dailyClosed = true;
+    taskCards().forEach(function (c) {
+      if (!/^daily:amazon-sc:/.test(taskKeyOf(c)) || !isOpenTask(c)) return;
+      window.__app.setTaskStatus(c, "完了");
+      addNote(c, "毎日の確認をやめた", "購入者のメッセージは Claude が見つけて仕事にするので、この確認はいらなくなりました");
+    });
   }
 
   // 保存のたびに、Teams から来た仕事の「バトンを持っている人」「状態」の変化を見て、元の投稿のスレッドに返す文を作る
