@@ -1253,14 +1253,19 @@
   .roster-state { font-size: 11.5px; color: var(--text-muted); }
   .roster-person[data-off] .roster-name { color: var(--text-muted); }
 
-  .kanban {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 14px;
-    align-items: start;
-    margin-bottom: 14px;
-  }
-  @media (max-width: 900px) { .kanban { grid-template-columns: 1fr; } }
+  .kanban { margin-bottom: 14px; display: flex; flex-direction: column; gap: 14px; }
+  .kanban-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; align-items: start; }
+  .kanban-row2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  @media (max-width: 900px) { .kanban-row, .kanban-row2 { grid-template-columns: 1fr; } }
+  .kb-col[data-col="urgent"] { background: var(--crit-soft); }
+  .kb-col[data-col="week"] { background: var(--warn-soft); }
+  .kb-col[data-col="next"] { background: var(--accent-soft); }
+  .kb-add { appearance: none; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; margin-top: 8px; padding: 6px 12px; border-radius: 8px; border: 1px dashed var(--accent); background: var(--surface); color: var(--accent); }
+  .kb-more > summary { cursor: pointer; font-size: 13px; font-weight: 700; color: var(--text-muted); padding: 4px 0; }
+  .kb-more[open] > summary { margin-bottom: 10px; }
+  .s-recur { font-size: 13.5px; color: var(--accent); font-weight: 700; }
+  .recur { display: flex; gap: 6px; }
+  .recur select { flex: 1; min-width: 0; }
   .kb-col {
     background: var(--surface-2);
     border-radius: 14px;
@@ -2025,6 +2030,7 @@
           <div class="field"><label>種類</label><select data-role="category" data-category-select></select></div>
           <div class="field"><label>バトンを持っている人</label><select data-role="owner" data-staff-select></select></div>
           <div class="field"><label>期限</label><input type="date" data-role="due"></div>
+          <div class="field"><label>繰り返し</label><div class="recur"><select data-recur-kind aria-label="繰り返し"><option value="">なし</option><option value="weekly">毎週</option><option value="monthly">毎月</option></select><select data-recur-day aria-label="曜日・日にち" hidden></select></div></div>
           <div class="field"><label>関連する顧客</label><input type="text" data-role="related" list="customerNames"></div>
           <div class="field"><label>必要なスキル</label><select data-role="skill" data-skill-select></select></div>
           <div class="field wide skill-who" data-skill-who hidden></div>
@@ -2305,7 +2311,7 @@
 
   // 仕事の種類。「未分類」は種類を足す前に作った仕事のための受け皿
   // 後ろの6つは、メール・定時報告・FAX・毎日の確認から自動で入る仕事の種類（sync.js の mailProfile など）
-  var CATEGORIES = ["未分類", "問い合わせ・営業", "制作", "発信", "事務・その他", "発注・納期", "不良対応", "お客様対応", "メーカー対応", "定時報告の対応", "毎日の確認", "代表の確認"];
+  var CATEGORIES = ["未分類", "問い合わせ・営業", "制作", "発信", "事務・その他", "発注・納期", "不良対応", "お客様対応", "メーカー対応", "定時報告の対応", "毎日の確認", "代表の確認", "毎週の仕事", "毎月の仕事", "定期の仕事"];
 
   // 顧客台帳の選択肢。担当と同じ理由（表記の割れ）で自由入力にしない
   var CHOICES = {
@@ -3699,6 +3705,7 @@
     renderSkills();
     renderContacts();
     renderTaskOrigins();
+    renderRecurFields();
     renderSimpleTasks();
     renderTopInfo();
     renderToday();
@@ -4089,11 +4096,89 @@
       else if (/^fax:/.test(key)) { origin = '📠 日立からの納期 FAX'; linkText = 'FAX を見る'; }
       else if (/^inquiry:/.test(key)) { origin = '📝 ' + esc(from || '問い合わせ') + 'からの問い合わせ'; linkText = '元の問い合わせを見る'; }
       else if (/^daily:/.test(key)) { origin = '🔁 毎日の確認'; linkText = ''; }
+      else if (/^recur:/.test(key)) { origin = ''; linkText = ''; }
+      else if (/^recurinst:/.test(key)) { var rd = key.split(':')[2] || ''; origin = '🔁 ' + esc(from || '定期の仕事') + '（' + esc(rd.slice(5).replace('-', '/')) + ' の分）'; linkText = ''; }
       else if (from || link) { origin = '📨 ' + (who ? who + 'からの依頼' : '依頼') + '（Teams）'; linkText = '元の投稿を見る'; }
       else origin = '';
       setHtml(box, origin + (safeLink && linkText ? ' <a href="' + esc(safeLink) + '" target="_blank" rel="noopener">' + linkText + '</a>' : '') + tag);
     });
   }
+
+  // ---- 毎週・毎月の仕事（繰り返し）----
+  // 繰り返しの仕事は「ひな形」。目印（TeamsMessageId）に recur:weekly:1（毎週月曜）／recur:monthly:25（毎月25日、31＝末日）を入れる。
+  // その回が近づくと sync.js の ensureRecurring がその回の仕事（期限つき）を作り、急ぎ・今週・来週に入る
+  var WEEKDAY_NAMES = ["月", "火", "水", "木", "金", "土", "日"];
+  function recurOf(card) {
+    var m = /^recur:(weekly|monthly):(\d+)$/.exec(roleVal(card, 'teamsMessageId'));
+    return m ? { kind: m[1], day: +m[2] } : null;
+  }
+  function recurLabel(r) {
+    if (!r) return '';
+    if (r.kind === 'weekly') return '毎週' + WEEKDAY_NAMES[(r.day - 1) % 7] + '曜';
+    return r.day >= 31 ? '毎月末日' : '毎月' + r.day + '日';
+  }
+  // 今日以降で次に来る日
+  function nextRecurDate(r) {
+    var d = new Date(todayStr + 'T00:00:00');
+    if (r.kind === 'weekly') {
+      var dow = d.getDay() === 0 ? 7 : d.getDay();
+      d.setDate(d.getDate() + ((r.day - dow + 7) % 7));
+      return d;
+    }
+    var pick = function (y, mo) { var last = new Date(y, mo + 1, 0).getDate(); return new Date(y, mo, Math.min(r.day, last)); };
+    var t = pick(d.getFullYear(), d.getMonth());
+    return t < d ? pick(d.getFullYear(), d.getMonth() + 1) : t;
+  }
+  function fillRecurDay(sel, kind, value) {
+    var opts = kind === 'weekly' ? WEEKDAY_NAMES.map(function (n, i) { return [i + 1, n + '曜']; })
+      : Array.apply(null, Array(28)).map(function (_, i) { return [i + 1, (i + 1) + '日']; }).concat([[31, '末日']]);
+    sel.innerHTML = opts.map(function (o) { return '<option value="' + o[0] + '">' + o[1] + '</option>'; }).join('');
+    sel.hidden = !kind;
+    if (value) sel.value = String(value);
+  }
+  // 繰り返しを設定する（kind が空なら外す）。メールなどから入った仕事（別の目印がある仕事）は繰り返しにしない
+  function setRecur(card, kind, day) {
+    var key = card.querySelector('[data-role="teamsMessageId"]');
+    var cat = card.querySelector('[data-role="category"]');
+    if (!key || (key.value && !/^recur:/.test(key.value))) return false;
+    var before = key.value;
+    key.value = kind ? 'recur:' + kind + ':' + day : '';
+    // いつから繰り返しにしたかを履歴に残す（その日より前の回は作らない）
+    if (key.value !== before) addHistoryEntry(card, 'task', kind ? '繰り返しにする' : '繰り返しをやめる', statusOf(card) || '未着手', null, kind ? recurLabel({ kind: kind, day: day }) : '');
+    if (cat) {
+      var label = kind === 'weekly' ? '毎週の仕事' : kind === 'monthly' ? '毎月の仕事' : '';
+      if (label) { ensureStaffOption(cat, label); cat.value = label; }
+      else if (/^毎(週|月)の仕事$/.test(cat.value)) cat.value = '未分類';
+    }
+    renderRecurFields();
+    return true;
+  }
+  function renderRecurFields() {
+    document.querySelectorAll('.card[data-kind="task"]').forEach(function (card) {
+      var kindSel = card.querySelector('[data-recur-kind]');
+      var daySel = card.querySelector('[data-recur-day]');
+      if (!kindSel || !daySel || card.contains(document.activeElement) && (document.activeElement === kindSel || document.activeElement === daySel)) return;
+      var r = recurOf(card);
+      var key = roleVal(card, 'teamsMessageId');
+      kindSel.disabled = !!key && !r;
+      kindSel.title = kindSel.disabled ? 'メールや報告から入った仕事は、繰り返しにできません' : '';
+      kindSel.value = r ? r.kind : '';
+      if (daySel.getAttribute('data-kind') !== (r ? r.kind : '')) { fillRecurDay(daySel, r ? r.kind : '', r && r.day); daySel.setAttribute('data-kind', r ? r.kind : ''); }
+      else if (r) daySel.value = String(r.day);
+      daySel.hidden = !r;
+    });
+  }
+  document.body.addEventListener('change', function (e) {
+    var k = e.target.closest && e.target.closest('[data-recur-kind], [data-recur-day]');
+    if (!k) return;
+    var card = k.closest('.card');
+    var kindSel = card.querySelector('[data-recur-kind]');
+    var daySel = card.querySelector('[data-recur-day]');
+    var kind = kindSel.value;
+    if (k === kindSel) { fillRecurDay(daySel, kind, kind === 'weekly' ? 1 : 25); daySel.setAttribute('data-kind', kind); }
+    setRecur(card, kind, +daySel.value || 1);
+    applyAll();
+  });
 
   // ---- 仕事のかんたん表示（パートさん向け）----
   // 仕事の中身の「【手順】」の行をチェックリストにし、やることを3つのボタン（終わった／申し送りを書いて渡す／代表に聞く）に絞る。
@@ -4138,10 +4223,15 @@
             '<span>' + linkify(s.text) + '</span></label></li>';
         }).join('') + '</ol>';
     }
+    var recur = recurOf(card);
     if (status !== '完了') html += '<button type="button" class="s-add" data-s-addstep="' + key + '">＋ 手順を足す</button>';
     var handover = roleVal(card, 'handover');
     if (handover) html += '<div class="s-handover"><b>申し送り</b>' + linkify(handover) + '<small>' + esc(roleVal(card, 'handoverBy')) + '</small></div>';
-    if (status === '完了') {
+    if (recur) {
+      // 繰り返しのひな形。ここでは作業せず、その回の仕事（自動で作られる）で進める
+      var nd = nextRecurDate(recur);
+      html += '<div class="s-actions"><span class="s-recur">🔁 ' + esc(recurLabel(recur)) + 'の仕事のひな形です。次は ' + (nd.getMonth() + 1) + '/' + nd.getDate() + '（' + WEEKDAYS[nd.getDay()] + '）。その回の仕事が近くなると自動で作られ、「今週」「急ぎ」に入ります</span></div>';
+    } else if (status === '完了') {
       html += '<div class="s-actions"><span class="s-done-note">✅ この仕事は終わっています</span><button type="button" class="s-btn" data-s-reopen="' + key + '">まだ終わっていなかった</button></div>';
     } else if (owner === UNASSIGNED) {
       html += '<div class="s-actions"><button type="button" class="s-btn s-primary" data-s-claim="' + key + '">🙋 バトンを受け取る</button>' +
@@ -4795,6 +4885,9 @@
 
     var all = [];
     WORK_KINDS.forEach(function (k) { all = all.concat(liveCards(k)); });
+    // 毎週・毎月の仕事のひな形は、下の「毎週の仕事」「毎月の仕事」にだけ出す（その回の仕事が急ぎ・今週に入る）
+    var templates = all.filter(function (c) { return c.getAttribute('data-kind') === 'task' && recurOf(c); });
+    all = all.filter(function (c) { return templates.indexOf(c) === -1; });
     var allOpen = all.filter(function (c) { return !isDone(c); });
     // 事業を選んでいたら、その事業の仕事だけにする
     var open = focusBusiness ? allOpen.filter(function (c) { return businessOf(c) === focusBusiness; }) : allOpen;
@@ -4868,49 +4961,78 @@
     if (focusRunner) rosterHtml += '<button type="button" class="link-inline roster-clear" data-focus-runner="">全員を表示</button>';
     setHtml(document.querySelector('[data-roster]'), rosterHtml);
 
-    // 1列目：次の走者募集（誰も持っていない仕事＋お休みの人の急ぎ）
-    var recruit = [];
-    var running = [];
+    // 仕事を「急ぎ・今週・来週」に分ける（代表の指定 2026-10-16）。だれも持っていない仕事には「バトンを受け取る」、持っている仕事には「渡す」
+    var todayD = new Date(todayStr + "T00:00:00");
+    var dowT = todayD.getDay() === 0 ? 7 : todayD.getDay();
+    var weekEnd = new Date(todayD); weekEnd.setDate(weekEnd.getDate() + (7 - dowT));
+    var nextWeekEnd = new Date(weekEnd); nextWeekEnd.setDate(nextWeekEnd.getDate() + 7);
+    var weekEndStr = fmtDate(weekEnd), nextWeekEndStr = fmtDate(nextWeekEnd);
+    var buckets = { urgent: [], week: [], next: [], later: [] };
+    var recruitN = 0;
     open.forEach(function (c) {
       if (!needsMove(c)) return;
       var owner = ownerOf(c);
       var kind = c.getAttribute('data-kind');
-      var meta = [kindMeta(c), canDoToday(c)].filter(Boolean).join(" · ");
+      var meta = [kindMeta(c), owner === UNASSIGNED ? "次の走者募集" : "", canDoToday(c)].filter(Boolean).join(" · ");
       var note = hasHandover(c) ? "申し送り：" + firstLine(roleVal(c, 'handover'), 40) : "";
-      if (owner === UNASSIGNED) {
-        if (kind === 'task' || (kind === 'inquiry' && statusOf(c) === '未対応')) recruit.push({ card: c, claim: true, badges: baseBadges(c), meta: meta, note: note, avatar: false });
-        return;
-      }
       // 持ち主が休み、または今日の勤務を終えて帰った（退勤済み）なら、期限の近い仕事はその日のうちに次の走者へ
-      var gone = presence[owner] === false || shiftStatusOf(owner) === "left";
-      if (gone && (isUrgent(c) || isSoon(c))) {
-        var why = presence[owner] === false ? "さんお休み" : "さん退勤済み";
-        recruit.push({ card: c, claim: true, badges: [{ text: owner + why, tone: "warn" }].concat(baseBadges(c)), meta: meta, note: note, ownerOff: true });
-        return;
-      }
-      // 2列目：走行中
-      running.push({
-        card: c, meta: meta, ownerOff: gone,
-        badges: baseBadges(c).concat([noHandover(c) ? { text: "申し送りなし", tone: "warn" } : null]),
-        pass: kind === 'task' && !gone
-      });
+      var gone = owner !== UNASSIGNED && (presence[owner] === false || shiftStatusOf(owner) === "left");
+      var due = cardDue(c);
+      var high = kind === 'task' && roleVal(c, 'priority') === '高';
+      var isUrg = isUrgent(c) || isSoon(c) || (!due && high);
+      var claimable = owner === UNASSIGNED ? (kind === 'task' || (kind === 'inquiry' && statusOf(c) === '未対応')) : (gone && isUrg);
+      if (claimable) recruitN++;
+      var item = {
+        card: c, meta: meta, note: note, ownerOff: gone, claim: claimable,
+        pass: !claimable && kind === 'task' && owner !== UNASSIGNED && !gone,
+        avatar: owner !== UNASSIGNED,
+        badges: (gone && isUrg ? [{ text: owner + (presence[owner] === false ? "さんお休み" : "さん退勤済み"), tone: "warn" }] : [])
+          .concat(baseBadges(c)).concat([noHandover(c) ? { text: "申し送りなし", tone: "warn" } : null])
+      };
+      if (isUrg) buckets.urgent.push(item);
+      else if (due && due <= weekEndStr) buckets.week.push(item);
+      else if (due && due <= nextWeekEndStr) buckets.next.push(item);
+      else buckets.later.push(item);
     });
-    recruit.sort(byUrgency);
-    running.sort(byUrgency);
+    buckets.urgent.sort(byUrgency); buckets.week.sort(byDue); buckets.next.sort(byDue); buckets.later.sort(byDue);
 
-    // 3列目：今週のゴール
+    // 毎週・毎月の仕事（ひな形）
+    var tpl = function (kindName) {
+      return templates.filter(function (c) { var r = recurOf(c); return r && r.kind === kindName && (!focusBusiness || businessOf(c) === focusBusiness); })
+        .map(function (c) {
+          var r = recurOf(c), nd = nextRecurDate(r);
+          return { card: c, avatar: false, meta: businessOf(c) + " · " + recurLabel(r), badges: [{ text: "次は " + (nd.getMonth() + 1) + "/" + nd.getDate(), tone: "neutral" }], key: fmtDate(nd) };
+        }).sort(function (a, b) { return a.key < b.key ? -1 : a.key > b.key ? 1 : 0; });
+    };
+    var weekly = tpl('weekly'), monthly = tpl('monthly');
+
+    // 今週終わった仕事。履歴の「→ 完了」の記録から読む
     var goals = all.filter(completedThisWeek).map(function (c) { return { card: c, meta: kindMeta(c), badges: [{ text: "ゴール", tone: "ok" }], tone: 'ok' }; });
 
-    var column = function (key, title, hint, items, emptyText) {
+    var column = function (key, title, hint, items, emptyText, extra) {
       return '<div class="kb-col" data-col="' + key + '">' +
         '<div class="kb-head"><span class="kb-title">' + title + '</span><span class="kb-count tabular">' + items.length + '</span></div>' +
         (hint ? '<p class="kb-hint">' + hint + '</p>' : '') +
-        '<div class="kb-list">' + (items.length ? items.map(tileHtml).join('') : '<p class="kb-empty">' + emptyText + '</p>') + '</div></div>';
+        '<div class="kb-list">' + (items.length ? items.map(tileHtml).join('') : '<p class="kb-empty">' + emptyText + '</p>') + '</div>' + (extra || '') + '</div>';
     };
+    var md = function (d) { return (d.getMonth() + 1) + "/" + d.getDate(); };
+    var nextStart = new Date(weekEnd); nextStart.setDate(nextStart.getDate() + 1);
     setHtml(document.querySelector('[data-kanban]'),
-      column("recruit", "🏃 次の走者募集", "手が空いた人がバトンを受け取ってください", recruit, "募集中の仕事はありません") +
-      column("running", "走行中", "右下の顔が、いまバトンを持っている人です", running, "走行中の仕事はありません") +
-      column("goal", "🏁 今週のゴール", "", goals, "今週はまだありません"));
+      '<div class="kanban-row">' +
+      column("urgent", "🔥 急ぎ", "期限切れ・今日明日まで・優先「高」。だれも持っていなければ「バトンを受け取る」", buckets.urgent, "急ぎの仕事はありません") +
+      column("week", "📅 今週", "今週（〜" + md(weekEnd) + "）が期限の仕事", buckets.week, "今週が期限の仕事はありません") +
+      column("next", "🗓 来週", "来週（" + md(nextStart) + "〜" + md(nextWeekEnd) + "）が期限の仕事", buckets.next, "来週が期限の仕事はありません") +
+      '</div><div class="kanban-row kanban-row2">' +
+      column("weekly", "🔁 毎週の仕事", "その週の分が自動で「今週」に入ります", weekly, "まだありません",
+        '<button type="button" class="kb-add" data-add="task" data-add-recur="weekly">＋ 毎週の仕事を追加</button>') +
+      column("monthly", "📆 毎月の仕事", "その日の1週間前に自動で「今週」「来週」に入ります", monthly, "まだありません",
+        '<button type="button" class="kb-add" data-add="task" data-add-recur="monthly">＋ 毎月の仕事を追加</button>') +
+      '</div>' +
+      '<details class="kb-more"><summary>そのほかの仕事（期限なし・再来週以降） <span class="tab-count">' + buckets.later.length + '</span>　／　今週終わった仕事 <span class="tab-count">' + goals.length + '</span></summary>' +
+      '<div class="kanban-row kanban-row2">' +
+      column("later", "そのほか", "期限が決まっていない、または再来週以降の仕事", buckets.later, "ありません") +
+      column("goal", "🏁 今週終わった仕事", "", goals, "今週はまだありません") +
+      '</div></details>');
 
     // みんなの申し送り（折りたたみ）。新しく書かれたものから
     var handovers = open.filter(hasHandover).map(function (c) {
@@ -4920,14 +5042,12 @@
     renderRows('handover', handovers, "申し送りはありません");
 
     // 上部の数字（チーム全体）
-    var moving = open.filter(needsMove);
-    var urgentN = moving.filter(isUrgent).length;
-    var soonN = moving.filter(function (c) { return !isUrgent(c) && isSoon(c); }).length;
+    var urgentN = buckets.urgent.length;
     var noHoN = open.filter(noHandover).length;
     renderKpis([
-      { label: "急ぎ（期限切れ・要対応）", value: urgentN, tone: urgentN ? "crit" : "ok" },
-      { label: "今日・明日まで", value: soonN, tone: soonN ? "warn" : "ok" },
-      { label: "次の走者募集", value: recruit.length, tone: recruit.length ? "accent" : "ok" },
+      { label: "🔥 急ぎ", value: urgentN, tone: urgentN ? "crit" : "ok" },
+      { label: "📅 今週", value: buckets.week.length, tone: buckets.week.length ? "warn" : "ok" },
+      { label: "次の走者募集", value: recruitN, tone: recruitN ? "accent" : "ok" },
       { label: "申し送りのない進行中", value: noHoN, tone: noHoN ? "warn" : "ok" }
     ]);
     var todayCount = document.querySelector('[data-local-count="today"]');
@@ -5486,7 +5606,13 @@
       if (!list || !card2) return;
       list.appendChild(card2);
       applyPanel(kind2);
-      var firstField = card2.querySelector('input[type="text"], .editable');
+      // 仕事のカードは細かい項目をしまっているので、新しく作るときは開いて「仕事の内容」から書けるようにする
+      var more2 = card2.querySelector('[data-card-more]');
+      if (more2) more2.open = true;
+      var recurPreset = addBtn.getAttribute('data-add-recur');
+      if (recurPreset) setRecur(card2, recurPreset, recurPreset === 'weekly' ? 1 : 25);
+      var firstField = kind2 === 'task' ? card2.querySelector('[data-role="content"]') : card2.querySelector('input[type="text"], .editable');
+      if (kind2 === 'task' && addBtn.closest('[data-panel="today"]')) { activateTab('task'); card2.scrollIntoView({ block: 'center' }); }
       if (firstField) firstField.focus();
       return;
     }

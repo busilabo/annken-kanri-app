@@ -482,6 +482,7 @@
       await drainOne(files[i]);
     }
     try { await ensureDailyTasks(); } catch (e) { log("daily task failed: " + e.message); }
+    try { await ensureRecurring(); } catch (e) { log("recurring task failed: " + e.message); }
   }
 
   // 成約管理タスクの「確認する」ボタン。ルーティンはSharePointリストを読めないため、
@@ -1154,6 +1155,76 @@
     await moveToProcessed(file, "fax notice");
   }
 
+  // ---- 毎週・毎月の仕事 ----
+  // ひな形（目印 recur:weekly:1〜7 ＝毎週月〜日曜／recur:monthly:1〜31 ＝毎月その日、31は末日）から、その回の仕事を作る。
+  // 毎週：その週の分を週のはじめから。毎月：その日の7日前から（過ぎていても、作っていなければ作る＝急ぎに入る）。
+  // 目印 recurinst:{ひな形のid}:{日付} で、同じ回を二度作らない
+  var RECUR_LEAD_DAYS = 7;
+  function recurDates(kind, day, today) {
+    var out = [];
+    if (kind === "weekly") {
+      var dow = today.getDay() === 0 ? 7 : today.getDay();
+      var d = new Date(today); d.setDate(d.getDate() + (day - dow));   // 今週のその曜日（過ぎていても今週の分）
+      out.push(d);
+    } else {
+      [0, 1].forEach(function (add) {
+        var y = today.getFullYear(), m = today.getMonth() + add;
+        var last = new Date(y, m + 1, 0).getDate();
+        var d = new Date(y, m, Math.min(day, last));
+        var diff = (d - today) / 86400000;
+        if (diff <= RECUR_LEAD_DAYS && (add === 1 ? diff >= 0 : true)) out.push(d);
+      });
+    }
+    return out;
+  }
+
+  // 仕事を作った日（いちばん古い履歴の日付。年は書いていないので、今日より先なら去年とみなす）
+  function createdOn(card) {
+    var entries = card.querySelectorAll("[data-history] .history-entry .history-time");
+    var t = entries.length ? entries[entries.length - 1].textContent : "";
+    var m = /(\d{1,2})\/(\d{1,2})/.exec(t);
+    if (!m) return null;
+    var now = new Date();
+    var d = new Date(now.getFullYear(), +m[1] - 1, +m[2]);
+    if (d > now) d.setFullYear(d.getFullYear() - 1);
+    return d;
+  }
+
+  var recurRunning = false;
+  async function ensureRecurring() {
+    if (recurRunning || !listIds.task) return;
+    recurRunning = true;
+    try {
+      var today = new Date(); today.setHours(0, 0, 0, 0);
+      var tpls = taskCards().filter(function (c) { return !c.hasAttribute("data-deleted") && /^recur:(weekly|monthly):\d+$/.test(taskKeyOf(c)); });
+      for (var i = 0; i < tpls.length; i++) {
+        var c = tpls[i], id = c.getAttribute("data-item-id");
+        if (!id) continue;
+        var m = /^recur:(weekly|monthly):(\d+)$/.exec(taskKeyOf(c));
+        var label = m[1] === "weekly" ? "毎週の仕事" : "毎月の仕事";
+        var dates = recurDates(m[1], +m[2], today);
+        var since = createdOn(c) || today;
+        for (var j = 0; j < dates.length; j++) {
+          var d = dates[j], ds = ymd(d);
+          // ひな形を作る前の回は作らない（金曜に「毎週月曜」を作ったとき、過ぎた月曜の分を作らない）
+          if (d < today && since && d < since) continue;
+          var content = textOf(getRoleEl(c, "content")).split("\n").map(function (l) { return l.replace(/^✓\s*/, ""); }).join("\n");
+          var owner = (getRoleEl(c, "owner") || {}).value || "未定";
+          await createTaskOnce("recurinst:" + id + ":" + ds, {
+            Title: (content.split("\n")[0] || label).slice(0, 60),
+            Content: content,
+            Business: (getRoleEl(c, "business") || {}).value || "社内・共通",
+            Priority: (getRoleEl(c, "priority") || {}).textContent || "中",
+            Owner: owner,
+            Category: "定期の仕事",
+            Requester: label,
+            Due: ds + "T00:00:00.000Z"
+          }, label + "の回", (d.getMonth() + 1) + "/" + d.getDate() + " の分");
+        }
+      }
+    } finally { recurRunning = false; }
+  }
+
   // ---- 毎日の確認 ----
   // 出勤した日に1回、セラーセントラルで未返信のメッセージがないか確かめる（通知メールが届かなかったときの備え）。
   // 誰かがビジラボに出勤する日だけ入れる。出勤予定が読めないときは平日だけ
@@ -1186,7 +1257,7 @@
     card._last = now;
     if (!threadId || last.owner === undefined) return null;
     // メール・定時報告・FAX・問い合わせ・毎日の確認から来た仕事は Teams に返信しない（返す投稿がない）
-    if (/^(mail|routine|fax|inquiry|daily):/.test(threadId)) return null;
+    if (/^(mail|routine|fax|inquiry|daily|recur|recurinst):/.test(threadId)) return null;
     var title = (fields.Title || "").slice(0, 40);
     var handover = (fields.Handover || "").split("\n")[0].slice(0, 80);
     if (now.status === "完了" && last.status !== "完了") {
