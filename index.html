@@ -4109,6 +4109,7 @@
       else if (/^inquiry:/.test(key)) { origin = '📝 ' + esc(from || '問い合わせ') + 'からの問い合わせ'; linkText = '元の問い合わせを見る'; }
       else if (/^daily:/.test(key)) { origin = '🔁 毎日の確認'; linkText = ''; }
       else if (/^recur:/.test(key)) { origin = ''; linkText = ''; }
+      else if (/^sns:/.test(key)) { origin = '💬 ' + esc(from || 'メッセージ') + '（届いた瞬間に自動で入りました）'; linkText = '受信箱を開いて返信する'; }
       else if (/^recurinst:/.test(key)) { var rd = key.split(':')[2] || ''; origin = '🔁 ' + esc(from || '定期の仕事') + '（' + esc(rd.slice(5).replace('-', '/')) + ' の分）'; linkText = ''; }
       else if (from || link) { origin = '📨 ' + (who ? who + 'からの依頼' : '依頼') + '（Teams）'; linkText = '元の投稿を見る'; }
       else origin = '';

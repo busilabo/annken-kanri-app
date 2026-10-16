@@ -483,6 +483,7 @@
     }
     try { await ensureDailyTasks(); } catch (e) { log("daily task failed: " + e.message); }
     try { await ensureRecurring(); } catch (e) { log("recurring task failed: " + e.message); }
+    try { await drainInbox(); } catch (e) { log("inbox failed: " + e.message); }
   }
 
   // 成約管理タスクの「確認する」ボタン。ルーティンはSharePointリストを読めないため、
@@ -746,6 +747,20 @@
       "納期・キャンセル・商品の質問なら、お客様からのメールと同じやり方で「LILOCLE運営AIチーム」で返信文を作る（代表の確認はいりません）",
       "価格・値引き・返品の可否など判断が要るものは、代表に回す（「AIに聞く」の「代表に質問を回す」でも可）",
       "Meta Business Suite の受信箱から返信する",
+      "返信したら「完了」にする"
+    ],
+    lineLilo: [
+      "LINE 公式アカウントのチャット（https://chat.line.biz）で、メッセージの全文を確認する",
+      "納期・キャンセル・商品の質問なら、お客様からのメールと同じやり方で「LILOCLE運営AIチーム」で返信文を作る（代表の確認はいりません）",
+      "価格・値引き・返品の可否など判断が要るものは、代表に回す",
+      "LINE 公式アカウントのチャットから返信する",
+      "返信したら「完了」にする"
+    ],
+    lineDx: [
+      "LINE 公式アカウントのチャット（https://chat.line.biz）で、メッセージの全文を確認する",
+      "Teams の「一般」チャネルに、相手の名前と内容の要点を投稿して代表に報告する",
+      "代表の返事を待つ（待っている間は、申し送りに「代表の回答待ち」と書く）",
+      "代表が決めた内容で、LINE 公式アカウントのチャットから返信する",
       "返信したら「完了」にする"
     ],
     inquiry: [
@@ -1155,6 +1170,72 @@
     await moveToProcessed(file, "fax notice");
   }
 
+  // ---- Instagram・Facebook・LINE のメッセージ ----
+  // Azure の受け口（BUSILABO-AI-Team/tools/work-chat-function の meta・line）が、届いた瞬間に保管している。
+  // ここで受け取り、同じお客様の続きは同じ仕事の履歴に足し、新しいお客様なら仕事を作る。仕事にしたものは受け口で片付ける
+  var INBOX_ENDPOINT = "https://busilabo-work-chat.azurewebsites.net/api/inbox";
+  var SNS = {
+    instagram: { label: "Instagram", link: "https://business.facebook.com/latest/inbox/all" },
+    facebook: { label: "Facebook", link: "https://business.facebook.com/latest/inbox/all" },
+    line: { label: "LINE", link: "https://chat.line.biz/" }
+  };
+  var inboxRunning = false;
+  async function drainInbox() {
+    if (inboxRunning || !listIds.task) return;
+    inboxRunning = true;
+    try {
+      var token = await getToken();
+      var res = await fetch(INBOX_ENDPOINT, { headers: { "Authorization": "Bearer " + token } });
+      if (!res.ok) { log("inbox: " + res.status); return; }
+      var items = ((await res.json()) || {}).items || [];
+      var done = [];
+      for (var i = 0; i < items.length; i++) {
+        var it = items[i], src = SNS[it.source] || { label: it.source, link: "" };
+        var key = "sns:" + it.source + ":" + it.senderId;
+        var who = it.senderName || ("お客様（ID末尾 " + String(it.senderId || "").slice(-4) + "）");
+        var line = String(it.text || "").split("\n")[0].slice(0, 120);
+        var open = taskCards().filter(function (c) { return taskKeyOf(c) === key && isOpenTask(c); })[0];
+        if (open) {
+          addNote(open, "追加のメッセージ", who + "：" + line);
+        } else {
+          var lilo = (it.business || "") === "LILOCLE運営";
+          var title = src.label + "の問い合わせ：" + who + (it.accountName ? "（" + it.accountName + "）" : "");
+          var steps = it.source === "line" ? (lilo ? STEPS.lineLilo : STEPS.lineDx) : (lilo ? STEPS.snsLilo : STEPS.snsDx);
+          var created = await createTaskItem({
+            Title: title.slice(0, 60),
+            Priority: "高",
+            Business: it.business || "業務改善・DX支援",
+            Category: lilo ? "お客様対応" : "問い合わせ・営業",
+            Related: who,
+            Requester: src.label + "のメッセージ",
+            TeamsMessageId: key,
+            TeamsLink: src.link,
+            Content: title + "\n" + String(it.text || "").slice(0, 600) + stepsText(steps)
+          }, src.label + "でメッセージ", who + "：" + line);
+          if (!created) continue;   // 入れられなかったら、次の受け取りでもう一度
+        }
+        postActivity({
+          Title: src.label + "：" + who,
+          OccurredAt: it.sentAt && !isNaN(new Date(it.sentAt).getTime()) ? new Date(it.sentAt).toISOString() : new Date().toISOString(),
+          Channel: src.label,
+          Business: it.business || "業務改善・DX支援",
+          Direction: "受信",
+          Customer: who,
+          CustomerId: "",
+          Staff: "",
+          Subject: line.slice(0, 200),
+          Summary: String(it.text || ""),
+          SourceLink: src.link,
+          SourceId: "sns:" + it.id
+        });
+        done.push(it.id);
+      }
+      if (done.length) {
+        await fetch(INBOX_ENDPOINT, { method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify({ done: done }) });
+      }
+    } finally { inboxRunning = false; }
+  }
+
   // ---- 毎週・毎月の仕事 ----
   // ひな形（目印 recur:weekly:1〜7 ＝毎週月〜日曜／recur:monthly:1〜31 ＝毎月その日、31は末日）から、その回の仕事を作る。
   // 毎週：その週の分を週のはじめから。毎月：その日の7日前から（過ぎていても、作っていなければ作る＝急ぎに入る）。
@@ -1257,7 +1338,7 @@
     card._last = now;
     if (!threadId || last.owner === undefined) return null;
     // メール・定時報告・FAX・問い合わせ・毎日の確認から来た仕事は Teams に返信しない（返す投稿がない）
-    if (/^(mail|routine|fax|inquiry|daily|recur|recurinst):/.test(threadId)) return null;
+    if (/^(mail|routine|fax|inquiry|daily|recur|recurinst|sns):/.test(threadId)) return null;
     var title = (fields.Title || "").slice(0, 40);
     var handover = (fields.Handover || "").split("\n")[0].slice(0, 80);
     if (now.status === "完了" && last.status !== "完了") {
