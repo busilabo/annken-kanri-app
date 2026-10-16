@@ -1005,6 +1005,8 @@
   var REPORT_REFRESH_MS = 5 * 60 * 1000;
   var IGNORED_REPORTS = ["lilocle-check"];
   var NO_TASK_REPORTS = ["amazon-morning", "ai-news"];
+  // 仕事にしない要対応。「キューに残ったまま」はアプリを開けば片付くので、仕事にしない（2026-10-16 代表の指定）
+  var NO_TASK_ACTIONS = ["watch-queue"];
 
   var ROUTINE_KEY_BUSINESS = [[/^routine:amazon-/, "Amazon販売"], [/^routine:lilocle-/, "LILOCLE運営"], [/^routine:inquiry-/, "業務改善・DX支援"], [/^routine:watch-/, "社内・共通"]];
   function businessOfRoutineKey(key) {
@@ -1055,7 +1057,9 @@
       SourceId: "routine:" + (data.routine || "unknown") + ":" + at.toISOString()
     });
     // 毎朝の Amazon チェックは報告だけ（価格の判断は代表が報告を見て行う。代表の指定 2026-10-15）
-    var actions = NO_TASK_REPORTS.indexOf(data.routine) !== -1 ? [] : (data.actions || []).slice(0, 20);
+    var actions = NO_TASK_REPORTS.indexOf(data.routine) !== -1 ? [] : (data.actions || []).filter(function (a) {
+      return NO_TASK_ACTIONS.indexOf(a && a.id) === -1;
+    }).slice(0, 20);
     for (var i = 0; i < actions.length; i++) {
       var a = actions[i] || {};
       if (!a.title) continue;
@@ -1317,9 +1321,15 @@
     if (dailyClosed || !listIds.task || !window.__app || !window.__app.setTaskStatus) return;
     dailyClosed = true;
     taskCards().forEach(function (c) {
-      if (!/^daily:amazon-sc:/.test(taskKeyOf(c)) || !isOpenTask(c)) return;
-      window.__app.setTaskStatus(c, "完了");
-      addNote(c, "毎日の確認をやめた", "購入者のメッセージは Claude が見つけて仕事にするので、この確認はいらなくなりました");
+      if (!isOpenTask(c)) return;
+      var k = taskKeyOf(c);
+      if (/^daily:amazon-sc:/.test(k)) {
+        window.__app.setTaskStatus(c, "完了");
+        addNote(c, "毎日の確認をやめた", "購入者のメッセージは Claude が見つけて仕事にするので、この確認はいらなくなりました");
+      } else if (k === "routine:watch-queue") {
+        window.__app.setTaskStatus(c, "完了");
+        addNote(c, "仕事にしないことにした", "キューに残った報告は、アプリを開けば自動で取り込まれます");
+      }
     });
   }
 

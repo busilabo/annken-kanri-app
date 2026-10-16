@@ -4351,6 +4351,9 @@
       addHistoryEntry(card, 'task', '完了にする', '完了', null, (who ? who + 'さんが完了' : '完了'));
       closeSimplePanel(card);
       applyAll();
+      // 終わったら最初の画面（今日）に戻る
+      activateTab('today');
+      window.scrollTo(0, 0);
     } else if (t.hasAttribute('data-s-reopen')) {
       setTaskStatus(card, '進行中');
       addHistoryEntry(card, 'task', '未完了に戻す', '進行中', null, '');
