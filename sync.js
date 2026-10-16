@@ -587,7 +587,7 @@
       if (card && list) list.appendChild(card);
       applying = false;
       window.__app.applyAll();
-      // 問い合わせが来たら、パートさんが内容を確かめて代表に報告する仕事も入れる
+      // 問い合わせが来たら、スタッフが内容を確かめて代表に報告する仕事も入れる
       await createTaskOnce("inquiry:" + srcId, inquiryTaskFields(data), "問い合わせが届いた", "");
     }
     try {
@@ -682,7 +682,7 @@
   // メール・定時報告・FAX・問い合わせ・毎日の確認から入る仕事は、元の目印を TeamsMessageId 列に入れて、二重に入らないようにする。
   // 目印の頭：mail:（メール）／routine:（定時報告）／fax:（FAX）／inquiry:（問い合わせ）／daily:（毎日の確認）
 
-  // 仕事の手順。パートさんが仕事を受け取ったら、上から順に進めれば終わるように書く（docs/事業ごとの業務とツール.md の聞き取り 2026-10-14）
+  // 仕事の手順。スタッフが仕事を受け取ったら、上から順に進めれば終わるように書く（docs/事業ごとの業務とツール.md の聞き取り 2026-10-14）
   var STEPS = {
     wholesaleOrder: [
       "メールの配送案（日付ごとの台数）を確認する",
@@ -757,7 +757,7 @@
     ],
     rep: [
       "代表が内容を確認する",
-      "パートさんに任せられる部分があれば、申し送りに書いてバトンを渡す"
+      "スタッフに任せられる部分があれば、申し送りに書いてバトンを渡す"
     ]
   };
 
@@ -1008,7 +1008,7 @@
 
   function reportSummaryText(data) {
     var actions = data.actions || [];
-    // 【すること】はパートさん向けの一言（今日の報告 取り込みルーティンが staffNote に入れる）
+    // 【すること】はスタッフ向けの一言（今日の報告 取り込みルーティンが staffNote に入れる）
     return (data.staffNote ? "【すること】\n" + String(data.staffNote).trim() + "\n" : "") +
       "【要点】\n" + String(data.summary || "").trim() +
       "\n【要対応】\n" + (actions.length ? actions.map(function (a) { return "・" + (a.title || "") + (a.detail ? "（" + String(a.detail).split("\n")[0].slice(0, 120) + "）" : ""); }).join("\n") : "なし") +
@@ -1283,7 +1283,7 @@
 
   // ---- やり取りログ（日々の記録をデータベースにためる）----
   // アプリの中で起きたこと（履歴に記録したアクション・バトンの受け渡し・申し送り）を、1件1行で「やり取りログ」に足す。
-  // パートさんは普段どおりアプリを使うだけで、日々の記録がたまっていく。顧客IDも付けるので、顧客ごとに時系列で追える。
+  // スタッフは普段どおりアプリを使うだけで、日々の記録がたまっていく。顧客IDも付けるので、顧客ごとに時系列で追える。
   // 他の人の画面での変更は、その人の画面が記録する（読み込んだ値を「記録済み」として覚え、二重に記録しない）。
   var ACTIVITY_LIST = "やり取りログ";
   var ACTIVITY_KIND_LABEL = { inquiry: "問い合わせ", wontask: "システム構築", ops: "運用", task: "仕事" };
@@ -1518,7 +1518,7 @@
   }
 
   // ---- 出勤予定（Outlook）----
-  // パートさんは各自のメールアドレスの予定表に出勤を入れ、busilabo@ の Outlook に重ねて表示している。
+  // スタッフは各自のメールアドレスの予定表に出勤を入れ、busilabo@ の Outlook に重ねて表示している。
   // ここでは、サインイン中の人から見える予定表（自分の予定表＋共有されている予定表）をすべて読み、
   // 件名に「出勤」「勤務」を含む予定だけを拾う。予定表の追加・削除をしてもアプリ側の設定は要らない。
   // 予定表を読む権限は SharePoint とは別に同意が要るので、トークンも別に取る。
@@ -1594,7 +1594,7 @@
   }
 
   // 出勤予定は2か所から読む。どちらか一方でも読めれば表示する。
-  // ① パートさんの出勤：各自の個人用 Outlook（outlook.jp）の予定表に入っており、会社のアカウントからは直接読めない。
+  // ① スタッフの出勤：各自の個人用 Outlook（outlook.jp）の予定表に入っており、会社のアカウントからは直接読めない。
   //    Power Automate（Outlook.com コネクタ）が15分ごとに読み、案件管理キュー/shifts に1人1ファイルで置くので、それを読む。
   // ② 代表の不在（出張・ツアーなど）：busilabo@ の予定表を読む（予定表の読み取り許可が要る）。
   var SHIFT_FOLDER = "案件管理キュー/shifts";
@@ -1616,12 +1616,12 @@
     try {
       listing = await graph("/drives/" + QUEUE_DRIVE_ID + "/root:/" + encodeURIComponent(SHIFT_FOLDER) + ":/children");
     } catch (e) {
-      report.push({ label: "パートさんの予定表（Power Automate）", ok: false, reason: /404/.test(e.message) ? "まだ取り込まれていません（Power Automate の設定待ち）" : e.message.slice(0, 80) });
+      report.push({ label: "スタッフの予定表（Power Automate）", ok: false, reason: /404/.test(e.message) ? "まだ取り込まれていません（Power Automate の設定待ち）" : e.message.slice(0, 80) });
       return false;
     }
     var files = (listing.value || []).filter(function (f) { return /\.json$/i.test(f.name || ""); });
     if (!files.length) {
-      report.push({ label: "パートさんの予定表（Power Automate）", ok: false, reason: "まだ取り込まれていません（Power Automate の設定待ち）" });
+      report.push({ label: "スタッフの予定表（Power Automate）", ok: false, reason: "まだ取り込まれていません（Power Automate の設定待ち）" });
       return true;
     }
     for (var i = 0; i < files.length; i++) {
@@ -1657,7 +1657,7 @@
     return true;
   }
 
-  // 代表の予定をトップに出す（パートさんが代表の予定を確かめられるように）。私用の予定は件名を出さず「予定あり」にする。
+  // 代表の予定をトップに出す（スタッフが代表の予定を確かめられるように）。私用の予定は件名を出さず「予定あり」にする。
   // 私用の判断は Outlook の「非公開」と、件名の言葉（Excel のスケジュールに反映するルーティンと同じ基準）
   var PRIVATE_WORD = /バンド|練習|誕生|ライブ|ヴァイオリン|バイオリン|家族|趣味|私用|プライベート|通院|病院|歯医者/;
   var PRIVATE_CATEGORY = /個人|私用|プライベート|personal|private/i;

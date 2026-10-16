@@ -2025,7 +2025,7 @@
 
     <template data-card-template="task">
       <article class="card" data-kind="task">
-        <!-- パートさん向けのかんたん表示（renderSimpleTasks）。細かい項目は下の「詳しい項目・履歴」にしまう -->
+        <!-- スタッフ向けのかんたん表示（renderSimpleTasks）。細かい項目は下の「詳しい項目・履歴」にしまう -->
         <div class="simple"><div data-simple></div><div data-simple-panel></div></div>
         <details class="card-more" data-card-more>
         <summary>詳しい項目・履歴（事業・種類・期限の変更、削除など）</summary>
@@ -2092,16 +2092,16 @@
     </template>
   </section>
 
-  <!-- 出勤予定。Outlook の予定表（各パートさんの予定表）から読む表示専用の画面。予定の変更は Outlook 側で行う -->
+  <!-- 出勤予定。Outlook の予定表（各スタッフの予定表）から読む表示専用の画面。予定の変更は Outlook 側で行う -->
   <section class="panel" data-panel="shift" data-local-hidden>
     <div class="shift-status" data-shift-status></div>
     <div class="shift-week" data-shift-week></div>
   </section>
 
-  <!-- 連絡先。事業ごとの取引先・メーカーの担当者。何かあったときに、パートさんがすぐ連絡先を見つけられるように -->
+  <!-- 連絡先。事業ごとの取引先・メーカーの担当者。何かあったときに、スタッフがすぐ連絡先を見つけられるように -->
   <section class="panel" data-panel="contact" data-local-hidden>
     <p class="missing-list" data-missing-list="contact" hidden>SharePoint に「連絡先」リストがまだありません。scripts/setup-lists.ps1 を実行してください。</p>
-    <p class="contact-rule">パートさんから社外への連絡は、事業を問わず <b>staff@busilabo.com</b> から行います（代表のアドレスは使いません）。</p>
+    <p class="contact-rule">スタッフから社外への連絡は、事業を問わず <b>staff@busilabo.com</b> から行います（代表のアドレスは使いません）。</p>
     <div class="toolbar">
       <input class="search" data-local data-search="contact" type="text" placeholder="会社名・お名前・事業で検索">
       <select class="toolbar-select" data-local data-contact-biz aria-label="事業で絞り込む"><option value="">事業：すべて</option></select>
@@ -3809,7 +3809,7 @@
   }
 
   // ---- 出勤予定（Outlook から読む）----
-  // パートさんは各自のメールアドレスの予定表に「植野　出勤」「石﨑　勤務」「上田　出勤可能(ビジラボ…)」のような件名で入れ、
+  // スタッフは各自のメールアドレスの予定表に「植野　出勤」「石﨑　勤務」「上田　出勤可能(ビジラボ…)」のような件名で入れ、
   // それを busilabo@ の Outlook に重ねて表示している。sync.js が busilabo@ から見える予定表をすべて読み、
   // 件名に「出勤」「勤務」を含む予定の先頭を名前として setOutlookShifts に渡してくる。
   // 「(坂中商店…)」のようにビジラボ以外の勤務先が書かれた予定は、ビジラボの出勤には数えない。
@@ -3931,9 +3931,9 @@
         // どの予定表から何件読めたか。出勤が0件のときは開いた状態で出す（原因がすぐ分かるように）
         shiftReportHtml();
     } else if (shiftState.error) {
-      // パートさんは許可の操作ができない。代表が管理者として会社全体に一度だけ許可すれば、全員そのまま見られる
+      // スタッフは許可の操作ができない。代表が管理者として会社全体に一度だけ許可すれば、全員そのまま見られる
       statusHtml = '<div class="shift-wait">' +
-        '<p class="shift-err">出勤予定は、代表の設定待ちです（パートさんの操作は不要です）</p>' +
+        '<p class="shift-err">出勤予定は、代表の設定待ちです（スタッフの操作は不要です）</p>' +
         '<p class="shift-help">代表が管理者として一度だけ許可すると、全員がサインインするだけで見られるようになります。</p>' +
         '<p class="shift-help shift-detail">くわしい理由：' + esc(shiftState.error) + '</p>' +
         '<div class="shift-actions">' +
@@ -4192,7 +4192,7 @@
     applyAll();
   });
 
-  // ---- 仕事のかんたん表示（パートさん向け）----
+  // ---- 仕事のかんたん表示（スタッフ向け）----
   // 仕事の中身の「【手順】」の行をチェックリストにし、やることを3つのボタン（終わった／申し送りを書いて渡す／代表に聞く）に絞る。
   // チェックは中身の行頭に「✓ 」を付けて保存する（列を増やさずに、誰の画面でも同じに見えるように）
   var STEP_LINE = /^(✓\s*)?(\d+)\.\s*(.*)$/;
@@ -4414,7 +4414,7 @@
   // 並べる順（代表の指定 2026-10-15）。ここにないルーティンは出さない（毎朝の LILOCLE 照合は出さない）。routine はルーティンが報告に付ける名前
   // 仕組みの見張り（watch）は今日の報告に出さず、「チーム状況」に出す（代表の指定 2026-10-15）
   var REPORT_ORDER = ["inquiry", "amazon-morning", "lilocle-juchu", "ai-news"];
-  // パートさんに分かりやすい名前と、ルーティンが「すること」を書いていないときの一言
+  // スタッフに分かりやすい名前と、ルーティンが「すること」を書いていないときの一言
   var REPORT_INFO = {
     "inquiry": { name: "📮 新しいお問い合わせ", none: "見るだけで大丈夫です。新しい問い合わせは、仕事一覧に自動で入ります" },
     "amazon-morning": { name: "📦 Amazon の様子", none: "見るだけで大丈夫です（価格などは代表が確認します）" },
@@ -4452,12 +4452,12 @@
       var todo = r.staffNote || (repOnly ? info.none : (n ? '仕事一覧に入った ' + n + ' 件を進めてください' : info.none));
       var mine = !repOnly && (n > 0 || (r.staffNote && !/^なし/.test(r.staffNote)));
       var badge = repOnly && n ? '<span class="row-badge">代表が確認 ' + n + '件</span>'
-        : mine ? '<span class="row-badge" data-tone="crit">パートさんの仕事あり</span>'
+        : mine ? '<span class="row-badge" data-tone="crit">スタッフの仕事あり</span>'
         : '<span class="row-badge" data-tone="ok">見るだけでOK</span>';
       return '<div class="report" data-tone="' + (mine ? 'crit' : 'ok') + '"' + (stale ? ' data-stale' : '') + '>' +
         '<div class="report-line"><span class="report-title">' + esc(info.name) + '</span>' +
         '<span class="report-time">' + (stale ? esc(t.md) + ' ' : '') + esc(t.time) + '</span>' + badge + '</div>' +
-        '<div class="report-todo"><b>パートさんがすること</b>' + esc(todo) + '</div>' +
+        '<div class="report-todo"><b>スタッフがすること</b>' + esc(todo) + '</div>' +
         (tasks.length ? '<div class="report-tasks">' + tasks.map(function (c) {
           return '<button type="button" class="report-task" data-jump-key="' + jumpKeyOf(c) + '">' + esc(cardTitle(c)) + ' <span>→ 開く</span></button>';
         }).join('') + '</div>' : '') +
@@ -4627,7 +4627,7 @@
     var rank = function (c) { var k = roleVal(c, 'side'); return k in order ? order[k] : 9; };
     list.sort(function (a, b) { return rank(a) - rank(b); });
     setHtml(box, '<div class="biz-contacts-head"><b>' + esc(focusBusiness) + ' の連絡先</b>' +
-      '<span>パートさんからの連絡は <b>' + STAFF_MAIL + '</b> から</span>' +
+      '<span>スタッフからの連絡は <b>' + STAFF_MAIL + '</b> から</span>' +
       '<button type="button" class="link-inline" data-open-tab="contact">連絡先を登録・修正する</button></div>' +
       (list.length ? '<div class="contact-grid">' + list.map(function (c) { return contactHtml(c, true); }).join('') + '</div>'
         : '<p class="today-empty">この事業の連絡先はまだ登録されていません。「連絡先」タブで登録してください。</p>'));
@@ -5285,7 +5285,7 @@
     banner.className = "consent-banner";
     if (!ok) banner.setAttribute("data-tone", "crit");
     banner.textContent = ok
-      ? "会社全体への許可が完了しました。パートさんは、サインインするだけで出勤予定が見られます。このタブは閉じて構いません。"
+      ? "会社全体への許可が完了しました。スタッフは、サインインするだけで出勤予定が見られます。このタブは閉じて構いません。"
       : "許可できませんでした：" + (q.get("error_description") || q.get("error") || "") ;
     var header = document.querySelector("header.top");
     if (header) header.parentNode.insertBefore(banner, header.nextSibling);
