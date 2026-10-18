@@ -946,6 +946,10 @@
   var ORDER_SUBJECT = /配送案|配送予定|発注|注文/;
   var ORDER_QTY = /\d+\s*台/;
   var PAYMENT_WORD = /請求|支払|振込|入金/;
+  var OWN_SENDER = /@(busilabo\.com|lilocle\.jp)$|^businesslab\.t@gmail\.com$/i;
+  var TEST_WORD = /テスト|test|試し|確認用/i;
+  // 自動の通知・お知らせ（返事のいらないもの）
+  var NOT_WORK_SUBJECT = /^(自動返信|Automatic reply|不在|Out of Office|配信停止|Undeliverable|配信不能|Delivery Status Notification)/i;
 
   function mailProfile(data) {
     var from = String(data.fromAddress || "").trim();
@@ -953,6 +957,9 @@
     var text = subject + " " + String(data.preview || "");
     var mailbox = String(data.mailbox || "").toLowerCase();
     var business = data.business || "";
+    // 明らかに仕事ではないもの（2026-10-18 代表の指定）：自分たちが送った試しのメールなど
+    if (OWN_SENDER.test(from) && TEST_WORD.test(subject)) return null;
+    if (NOT_WORK_SUBJECT.test(subject)) return null;
     if (WATAHAN.test(from) || WATAHAN_NAGOYA.test(from)) {
       if (WATAHAN_NAGOYA.test(from) || DEFECT_WORD.test(text)) {
         return { title: "不良対応：" + subject, business: "家電の卸販売", category: "不良対応", priority: "高", steps: STEPS.wholesaleDefect };
@@ -1097,6 +1104,17 @@
     var actions = NO_TASK_REPORTS.indexOf(data.routine) !== -1 ? [] : (data.actions || []).filter(function (a) {
       return NO_TASK_ACTIONS.indexOf(a && a.id) === -1;
     }).slice(0, 20);
+    // 仕組みの見張り：今回の報告に出てこない「止まっています」の仕事は、直った（または誤報だった）ので片付ける
+    if (data.routine === "watch" && window.__app && window.__app.setTaskStatus) {
+      var stillIds = actions.map(function (a) { return "routine:" + (a && a.id); });
+      taskCards().forEach(function (c) {
+        var k = taskKeyOf(c);
+        if (/^routine:watch-/.test(k) && isOpenTask(c) && stillIds.indexOf(k) === -1) {
+          window.__app.setTaskStatus(c, "完了");
+          addNote(c, "自動で片付けた", "仕組みの見張りで、もう止まっていないことを確かめました");
+        }
+      });
+    }
     for (var i = 0; i < actions.length; i++) {
       var a = actions[i] || {};
       if (!a.title) continue;
