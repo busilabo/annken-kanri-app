@@ -4477,7 +4477,8 @@
     });
     renderWatch();
     if (!list.length) {
-      setHtml(box, '<p class="info-empty">' + (reportState.loaded ? 'まだ報告が届いていません。ルーティンの次の実行から、ここに出ます。' : '報告を読み込んでいます…') + '</p>');
+      setHtml(box, '<p class="info-empty">' + (reportState.loaded ? 'まだ報告が届いていません。ルーティンの次の実行から、ここに出ます。' : '報告を読み込んでいます…') + '</p>' +
+        '<div class="report-grid">' + checkupHtml() + '</div>');
       return;
     }
     setHtml(box, '<div class="report-grid">' + list.map(function (r) {
@@ -4506,7 +4507,51 @@
         '<div class="report-body">' + linkify(r.body || '（全文なし）') +
         (/^https:\/\//.test(r.link || '') ? '\n\n<a href="' + esc(r.link) + '" target="_blank" rel="noopener">詳しいレポートを開く</a>' : '') + '</div>' +
         '</details></div>';
-    }).join('') + '</div>');
+    }).join('') + checkupHtml() + '</div>');
+  }
+
+  // ---- 仕事の点検（2026-10-18）----
+  // 流れが止まっている仕事を「今日の報告」の最後に出す。アプリの中の仕事から毎回数えるので、ルーティンもお金もいらない。
+  // 期限切れ／3日以上動きがない進行中／2日以上だれも受け取らない／申し送りのない進行中
+  function lastTouched(card) {
+    // 履歴のいちばん新しい日付（「10/16 11:31」の形）。年は今年として、未来になるなら去年
+    var latest = null;
+    card.querySelectorAll('[data-history] .history-entry .history-time').forEach(function (t) {
+      var m = /(\d{1,2})\/(\d{1,2})/.exec(t.textContent || "");
+      if (!m) return;
+      var now = new Date(todayStr + "T00:00:00");
+      var d = new Date(now.getFullYear(), +m[1] - 1, +m[2]);
+      if (d > now) d.setFullYear(d.getFullYear() - 1);
+      if (!latest || d > latest) latest = d;
+    });
+    return latest;
+  }
+  function daysSince(d) { return d ? Math.floor((new Date(todayStr + "T00:00:00") - d) / 86400000) : null; }
+  function checkupItems() {
+    var open = liveCards('task').filter(function (c) { return statusOf(c) !== '完了' && !recurOf(c); });
+    var rows = [];
+    open.forEach(function (c) {
+      var owner = ownerOf(c), status = statusOf(c) || '未着手', idle = daysSince(lastTouched(c));
+      if (isOverdue(c)) rows.push({ card: c, why: '期限切れ（' + roleVal(c, 'due').slice(5).replace('-', '/') + '）', tone: 'crit' });
+      else if (owner === UNASSIGNED && idle !== null && idle >= 2) rows.push({ card: c, why: idle + '日間だれも受け取っていない', tone: 'warn' });
+      else if (owner !== UNASSIGNED && status === '進行中' && idle !== null && idle >= 3) rows.push({ card: c, why: owner + 'さん：' + idle + '日間動きがない', tone: 'warn' });
+      else if (owner !== UNASSIGNED && status === '進行中' && !hasHandover(c)) rows.push({ card: c, why: owner + 'さん：申し送りがない', tone: 'neutral' });
+    });
+    return rows;
+  }
+  function checkupHtml() {
+    var rows = checkupItems();
+    var crit = rows.filter(function (r) { return r.tone === 'crit'; }).length;
+    return '<div class="report" data-tone="' + (rows.length ? 'crit' : 'ok') + '">' +
+      '<div class="report-line"><span class="report-title">🧹 仕事の点検</span><span class="report-time">いま</span>' +
+      (rows.length ? '<span class="row-badge" data-tone="crit">止まっている仕事 ' + rows.length + '件</span>' : '<span class="row-badge" data-tone="ok">止まっている仕事なし</span>') + '</div>' +
+      '<div class="report-todo"><b>スタッフがすること</b>' + (rows.length
+        ? (crit ? '期限切れの仕事から先に、' : '') + '下の仕事を開いて、進める・申し送りを書いて渡す・代表に聞く のどれかをしてください'
+        : 'なし（流れは止まっていません）') + '</div>' +
+      (rows.length ? '<div class="report-tasks">' + rows.slice(0, 12).map(function (r) {
+        return '<button type="button" class="report-task" data-jump-key="' + jumpKeyOf(r.card) + '">' + esc(cardTitle(r.card)) + ' <span>' + esc(r.why) + ' → 開く</span></button>';
+      }).join('') + (rows.length > 12 ? '<p class="info-empty">ほか ' + (rows.length - 12) + ' 件</p>' : '') + '</div>' : '') +
+      '</div>';
   }
 
   // 報告の要対応から入った仕事（仕事の名前が要対応の見出しと同じもの。終わっていないものだけ）
