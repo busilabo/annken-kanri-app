@@ -745,7 +745,7 @@
     snsLilo: [
       "Meta Business Suite（https://business.facebook.com）の LILOCLE の受信箱で、メッセージの全文を確認する",
       "納期・キャンセル・商品の質問なら、上の「返信の下書き」を読んで直す（下書きがなければ「LILOCLE運営AIチーム」で作る。代表の確認はいりません）",
-      "価格・値引き・返品の可否など判断が要るものは、代表に回す（右下の「ビジラボのマネージャーに聞く」に頼んでもよい）",
+      "価格・値引き・返品の可否など判断が要るものは、代表に回す（右下の「マネージャーに聞く」に頼んでもよい）",
       "Meta Business Suite の受信箱から返信する",
       "返信したら「完了」にする"
     ],
@@ -1943,8 +1943,8 @@
 
   // ---- マニュアル（2026-10-18）----
   // SharePoint のリスト「マニュアル」。仕事の種類（事業×種類）ごとに1件。State：下書き（AI が作った）／正式（代表が確認した）。
-  // 仕事が終わったとき、その種類のマニュアルが無ければ「ビジラボのマネージャー」（Azure の manual）が下書きを作り、代表あての確認の仕事を入れる。
-  // あれば、直したほうがよい点だけを Suggestion に書き足す
+  // 仕事が終わったとき、その種類のマニュアルが無ければ「マネージャー」（Azure の manual）が下書きを作り、代表あての確認の仕事を入れる。
+  // あれば、終わった仕事をもとに書き直し（直すほどでなければそのまま）、直したところを代表に知らせる。更新の記録は Suggestion 列に残す
   var MANUAL_LIST = "マニュアル";
   var MANUAL_ENDPOINT = "https://busilabo-work-chat.azurewebsites.net/api/manual";
   var manualListId = null;
@@ -1955,7 +1955,7 @@
     try {
       var made = await graph("/sites/" + siteId + "/lists", { method: "POST", body: {
         displayName: MANUAL_LIST,
-        description: "仕事の種類ごとのマニュアル（ビジラボのマネージャーが下書き、代表が確認して正式にする）",
+        description: "仕事の種類ごとのマニュアル（マネージャーが下書き、代表が確認して正式にする）",
         list: { template: "genericList" },
         columns: [
           { name: "Business", text: {} },
@@ -1999,7 +1999,7 @@
   async function manualOnComplete(card) {
     var business = roleValS(card, "business") || "社内・共通", category = roleValS(card, "category");
     var key = taskKeyOf(card);
-    if (MANUAL_SKIP.indexOf(category) !== -1 || /^(recur:|manual:)/.test(key) || !manualListId) return;
+    if (MANUAL_SKIP.indexOf(category) !== -1 || /^(recur:|manual:|manual-update:)/.test(key) || !manualListId) return;
     var mk = business + "|" + category;
     if (manualBusy[mk]) return;
     manualBusy[mk] = true;
@@ -2016,22 +2016,41 @@
       var out = await res.json();
       var src = "仕事 " + card.getAttribute("data-item-id") + "：" + roleValS(card, "content").split("\n")[0].slice(0, 60);
       if (!existing && out.body) {
-        var id = await saveManual(null, { Title: business + "／" + category, Business: business, Category: category, Body: out.body, State: "下書き", SourceTask: src, Updater: "ビジラボのマネージャー" });
+        var id = await saveManual(null, { Title: business + "／" + category, Business: business, Category: category, Body: out.body, State: "下書き", SourceTask: src, Updater: "マネージャー" });
         await createTaskOnce("manual:" + id, {
           Title: ("マニュアルの下書きを確認：" + business + "／" + category).slice(0, 60),
-          Priority: "低", Owner: "坂中", Business: business, Category: "代表の確認", Requester: "ビジラボのマネージャー",
-          Content: "マニュアルの下書きを確認：" + business + "／" + category + "\n終わった仕事（" + src + "）から、ビジラボのマネージャーが下書きを作りました。下の「📘 マニュアルの下書き」を読み、よければ「正式にする」を押してください。直すときは SharePoint の「マニュアル」リストで直せます。"
+          Priority: "低", Owner: "坂中", Business: business, Category: "代表の確認", Requester: "マネージャー",
+          Content: "マニュアルの下書きを確認：" + business + "／" + category + "\n終わった仕事（" + src + "）から、マネージャーが下書きを作りました。下の「📘 マニュアルの下書き」を読み、よければ「正式にする」を押してください。直すときは SharePoint の「マニュアル」リストで直せます。"
         }, "マニュアルの下書き", src);
-      } else if (existing && out.suggestion && !/^なし/.test(out.suggestion)) {
+      } else if (existing && out.changed && out.body) {
+        // 終わった仕事から、マニュアルを書き直す（2026-10-18 代表の指定「随時更新」）。
+        // 正式のマニュアルも書き直し、代表に「何を直したか」を知らせる（前の版は SharePoint の版の履歴から戻せる）
         var stamp = new Date().toLocaleDateString("ja-JP");
-        await saveManual(existing.id, { Suggestion: ((existing.suggestion ? existing.suggestion + "\n" : "") + "・" + stamp + "（" + src + "）" + out.suggestion).slice(-4000) });
+        var changes = String(out.changes || "").trim();
+        await saveManual(existing.id, {
+          Body: out.body, Updater: "マネージャー（" + src + "）",
+          Suggestion: ((existing.suggestion ? existing.suggestion + "\n" : "") + "・" + stamp + " 更新（" + src + "）\n" + changes).slice(-4000)
+        });
+        // まだ確認前（下書き）で、確認の仕事が開いていれば、そこに一言足すだけ（仕事を増やさない）
+        var pending = existing.state !== "正式" && taskCards().filter(function (c) { return taskKeyOf(c) === "manual:" + existing.id && isOpenTask(c); })[0];
+        if (pending) { addNote(pending, "下書きを書き直した", changes.split("\n")[0]); return; }
+        var rkey = "manual-update:" + existing.id;
+        var openReview = taskCards().filter(function (c) { return taskKeyOf(c) === rkey && isOpenTask(c); })[0];
+        if (openReview) addNote(openReview, "マニュアルをまた更新", changes.split("\n")[0]);
+        else await createTaskOnce(rkey, {
+          Title: ("マニュアルを更新しました：" + business + "／" + category).slice(0, 60),
+          Priority: "低", Owner: "坂中", Business: business, Category: "代表の確認", Requester: "マネージャー",
+          Content: "マニュアルを更新しました：" + business + "／" + category + "\n終わった仕事（" + src + "）をもとに、マネージャーがマニュアルを書き直しました。\n\n直したところ：\n" + changes +
+            "\n\n問題なければ「終わった」を押してください。元に戻したいときは、SharePoint の「マニュアル」リストでこの行の「バージョン履歴」から前の版に戻せます。" +
+            (existing.webUrl ? "\n" + existing.webUrl : "")
+        }, "マニュアルの更新", src);
       }
     } catch (e) { log("manual on complete failed: " + e.message); }
     finally { manualBusy[mk] = false; }
   }
   function roleValS(card, role) { var el = getRoleEl(card, role); return el ? (el.value !== undefined && el.tagName !== "DIV" ? el.value : textOf(el)) : ""; }
 
-  // 「AIに聞く」（ビジラボのマネージャー、chat.js）が使う操作。追加・保存は既存の仕組み（重複防止・やり取りログ）をそのまま通す
+  // 「AIに聞く」（マネージャー、chat.js）が使う操作。追加・保存は既存の仕組み（重複防止・やり取りログ）をそのまま通す
   window.__chatOps = {
     getToken: getToken,
     createTask: createTaskItem,

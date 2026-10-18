@@ -1,4 +1,4 @@
-// 「ビジラボのマネージャー」（AI 社員）のチャット。画面の右下から開く（2026-10-18 「AIに聞く」から作り替え）。
+// 「マネージャー」（AI 社員）のチャット。画面の右下から開く（2026-10-18 「AIに聞く」から作り替え）。
 // Claude とのやり取りは Azure Functions の中継（BUSILABO-AI-Team/tools/work-chat-function）を通す。API キーはこのファイルには無い。
 // 道具（仕事・データベース・マニュアルを読む／書く）はこのブラウザで、話している人のサインインで実行する。
 // 書き込みは代表の方針（2026-10-18「全部任せる」）で確認なしに行い、何をしたかを会話に残す。削除はごみ箱に移すだけ（元に戻せる）
@@ -7,7 +7,7 @@
 
   // 中継の URL。試すときは localStorage の busilabo.chatEndpoint でも上書きできる
   var CHAT_ENDPOINT = "https://busilabo-work-chat.azurewebsites.net/api/chat";
-  var AI_NAME = "ビジラボのマネージャー";
+  var AI_NAME = "マネージャー";
   var MAX_ROUNDS = 10;
   var STORE_KEY = "busilabo.chat";
   var NAME_KEY = "busilabo.chatUser";
