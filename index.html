@@ -4487,13 +4487,14 @@
   var reportState = { loaded: false, reports: [] };
   // 並べる順（代表の指定 2026-10-15）。ここにないルーティンは出さない（毎朝の LILOCLE 照合は出さない）。routine はルーティンが報告に付ける名前
   // 仕組みの見張り（watch）は今日の報告に出さず、「チーム状況」に出す（代表の指定 2026-10-15）
-  var REPORT_ORDER = ["inquiry", "amazon-morning", "lilocle-juchu", "ai-news"];
+  var REPORT_ORDER = ["inquiry", "amazon-morning", "lilocle-juchu", "ai-news", "db-guard"];
   // スタッフに分かりやすい名前と、ルーティンが「すること」を書いていないときの一言
   var REPORT_INFO = {
     "inquiry": { name: "📮 新しいお問い合わせ", none: "見るだけで大丈夫です。新しい問い合わせは、仕事一覧に自動で入ります" },
     "amazon-morning": { name: "📦 Amazon の様子", none: "見るだけで大丈夫です（価格などは代表が確認します）" },
     "lilocle-juchu": { name: "🌿 LILOCLE の注文と発送", none: "なし" },
-    "ai-news": { name: "📰 今日の AI ニュース", none: "時間があるときに読んでください" }
+    "ai-news": { name: "📰 今日の AI ニュース", none: "時間があるときに読んでください" },
+    "db-guard": { name: "🗄 データベースの点検（データベースAI社員）", none: "なし（毎晩、控えを取って点検しています）" }
   };
 
   function setReports(state) { reportState = state || { loaded: false, reports: [] }; renderTopInfo(); }
@@ -4522,7 +4523,7 @@
       var stale = t.date && t.date !== todayStr;
       var n = (r.actions || []).length;
       // 報告から仕事一覧に入った仕事（毎朝の Amazon は仕事にしないので、代表が見るだけ）
-      var repOnly = r.routine === 'amazon-morning';
+      var repOnly = r.routine === 'amazon-morning' || r.routine === 'db-guard';
       var tasks = repOnly ? [] : reportTasks(r);
       var todo = r.staffNote || (repOnly ? info.none : (n ? '仕事一覧に入った ' + n + ' 件を進めてください' : info.none));
       var mine = !repOnly && (n > 0 || (r.staffNote && !/^なし/.test(r.staffNote)));
