@@ -745,7 +745,7 @@
     snsLilo: [
       "Meta Business Suite（https://business.facebook.com）の LILOCLE の受信箱で、メッセージの全文を確認する",
       "納期・キャンセル・商品の質問なら、上の「返信の下書き」を読んで直す（下書きがなければ「LILOCLE運営AIチーム」で作る。代表の確認はいりません）",
-      "価格・値引き・返品の可否など判断が要るものは、代表に回す（「AIに聞く」の「代表に質問を回す」でも可）",
+      "価格・値引き・返品の可否など判断が要るものは、代表に回す（右下の「ビジラボのマネージャーに聞く」に頼んでもよい）",
       "Meta Business Suite の受信箱から返信する",
       "返信したら「完了」にする"
     ],
@@ -1935,11 +1935,103 @@
     setInterval(pollRefresh, POLL_MS);
     loadReports();
     setInterval(loadReports, REPORT_REFRESH_MS);
+    try { await ensureManualList(); await loadManuals(); } catch (e) { log("manuals failed: " + e.message); }
+    setInterval(loadManuals, 10 * 60 * 1000);
     await drainQueue();
     setInterval(drainQueue, QUEUE_DRAIN_MS);
   }
 
-  // 「AIに聞く」チャット（chat.js）が使う操作。追加・保存は既存の仕組み（重複防止・やり取りログ）をそのまま通す
+  // ---- マニュアル（2026-10-18）----
+  // SharePoint のリスト「マニュアル」。仕事の種類（事業×種類）ごとに1件。State：下書き（AI が作った）／正式（代表が確認した）。
+  // 仕事が終わったとき、その種類のマニュアルが無ければ「ビジラボのマネージャー」（Azure の manual）が下書きを作り、代表あての確認の仕事を入れる。
+  // あれば、直したほうがよい点だけを Suggestion に書き足す
+  var MANUAL_LIST = "マニュアル";
+  var MANUAL_ENDPOINT = "https://busilabo-work-chat.azurewebsites.net/api/manual";
+  var manualListId = null;
+  var MANUAL_SKIP = ["代表の確認", "毎日の確認", "未分類", ""];
+  async function ensureManualList() {
+    var res = await graph("/sites/" + siteId + "/lists?$filter=" + encodeURIComponent("displayName eq '" + MANUAL_LIST + "'"));
+    if (res.value && res.value[0]) { manualListId = res.value[0].id; return; }
+    try {
+      var made = await graph("/sites/" + siteId + "/lists", { method: "POST", body: {
+        displayName: MANUAL_LIST,
+        description: "仕事の種類ごとのマニュアル（ビジラボのマネージャーが下書き、代表が確認して正式にする）",
+        list: { template: "genericList" },
+        columns: [
+          { name: "Business", text: {} },
+          { name: "Category", text: {} },
+          { name: "Body", text: { allowMultipleLines: true, linesForEditing: 20 } },
+          { name: "State", choice: { choices: ["下書き", "正式"], displayAs: "dropDownMenu" } },
+          { name: "Suggestion", text: { allowMultipleLines: true, linesForEditing: 6 } },
+          { name: "SourceTask", text: {} },
+          { name: "Updater", text: {} },
+          { name: "Deleted", boolean: {} }
+        ]
+      } });
+      manualListId = made.id;
+      log("manual list created");
+    } catch (e) { log("manual list create failed: " + e.message); }
+  }
+  async function loadManuals() {
+    if (!manualListId) return;
+    try {
+      var res = await graph("/sites/" + siteId + "/lists/" + manualListId + "/items?expand=fields&$top=500");
+      window.__manuals = (res.value || []).filter(function (it) { return it.fields && !it.fields.Deleted; }).map(function (it) {
+        var f = it.fields;
+        return { id: it.id, title: f.Title || "", business: f.Business || "", category: f.Category || "", body: f.Body || "", state: f.State || "下書き", suggestion: f.Suggestion || "", sourceTask: f.SourceTask || "", webUrl: it.webUrl || "" };
+      });
+      if (window.__app && window.__app.applyAll) window.__app.applyAll();
+    } catch (e) { log("manuals load failed: " + e.message); }
+  }
+  function manualFor(business, category) {
+    return (window.__manuals || []).filter(function (m) { return m.business === business && m.category === category; })
+      .sort(function (a, b) { return (a.state === "正式" ? 0 : 1) - (b.state === "正式" ? 0 : 1); })[0] || null;
+  }
+  async function saveManual(id, fields) {
+    if (!manualListId) throw new Error("マニュアルのリストがありません");
+    if (id) await graph("/sites/" + siteId + "/lists/" + manualListId + "/items/" + id + "/fields", { method: "PATCH", body: fields });
+    else id = (await graph("/sites/" + siteId + "/lists/" + manualListId + "/items", { method: "POST", body: { fields: fields } })).id;
+    await loadManuals();
+    return id;
+  }
+  // 仕事が終わったとき（この画面で「完了」にしたときだけ。読み直しでは動かない）
+  var manualBusy = {};
+  async function manualOnComplete(card) {
+    var business = roleValS(card, "business") || "社内・共通", category = roleValS(card, "category");
+    var key = taskKeyOf(card);
+    if (MANUAL_SKIP.indexOf(category) !== -1 || /^(recur:|manual:)/.test(key) || !manualListId) return;
+    var mk = business + "|" + category;
+    if (manualBusy[mk]) return;
+    manualBusy[mk] = true;
+    try {
+      var existing = manualFor(business, category);
+      var hist = Array.prototype.slice.call(card.querySelectorAll("[data-history] .history-entry")).slice(0, 15).map(function (h) { return textOf(h).replace(/\s+/g, " ").replace(/×/g, "").trim(); });
+      var token = await getToken();
+      var res = await fetch(MANUAL_ENDPOINT, { method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify({
+        mode: existing ? "improve" : "draft", business: business, category: category,
+        task: { content: roleValS(card, "content"), handover: roleValS(card, "handover"), history: hist },
+        existing: existing ? existing.body : ""
+      }) });
+      if (!res.ok) { log("manual: " + res.status); return; }
+      var out = await res.json();
+      var src = "仕事 " + card.getAttribute("data-item-id") + "：" + roleValS(card, "content").split("\n")[0].slice(0, 60);
+      if (!existing && out.body) {
+        var id = await saveManual(null, { Title: business + "／" + category, Business: business, Category: category, Body: out.body, State: "下書き", SourceTask: src, Updater: "ビジラボのマネージャー" });
+        await createTaskOnce("manual:" + id, {
+          Title: ("マニュアルの下書きを確認：" + business + "／" + category).slice(0, 60),
+          Priority: "低", Owner: "坂中", Business: business, Category: "代表の確認", Requester: "ビジラボのマネージャー",
+          Content: "マニュアルの下書きを確認：" + business + "／" + category + "\n終わった仕事（" + src + "）から、ビジラボのマネージャーが下書きを作りました。下の「📘 マニュアルの下書き」を読み、よければ「正式にする」を押してください。直すときは SharePoint の「マニュアル」リストで直せます。"
+        }, "マニュアルの下書き", src);
+      } else if (existing && out.suggestion && !/^なし/.test(out.suggestion)) {
+        var stamp = new Date().toLocaleDateString("ja-JP");
+        await saveManual(existing.id, { Suggestion: ((existing.suggestion ? existing.suggestion + "\n" : "") + "・" + stamp + "（" + src + "）" + out.suggestion).slice(-4000) });
+      }
+    } catch (e) { log("manual on complete failed: " + e.message); }
+    finally { manualBusy[mk] = false; }
+  }
+  function roleValS(card, role) { var el = getRoleEl(card, role); return el ? (el.value !== undefined && el.tagName !== "DIV" ? el.value : textOf(el)) : ""; }
+
+  // 「AIに聞く」（ビジラボのマネージャー、chat.js）が使う操作。追加・保存は既存の仕組み（重複防止・やり取りログ）をそのまま通す
   window.__chatOps = {
     getToken: getToken,
     createTask: createTaskItem,
@@ -1947,8 +2039,21 @@
     scheduleSave: scheduleSave,
     writeField: writeField,
     fieldMap: FIELD_MAP,
-    textOf: textOf
+    textOf: textOf,
+    graph: function (p, o) { return graph(p, o); },
+    siteId: function () { return siteId; },
+    lists: function () {
+      var out = {};
+      for (var k in LIST_NAMES) if (listIds[k]) out[LIST_NAMES[k]] = listIds[k];
+      if (manualListId) out[MANUAL_LIST] = manualListId;
+      if (activityListId) out["やり取りログ"] = activityListId;
+      return out;
+    },
+    saveManual: saveManual,
+    reloadManuals: loadManuals
   };
+  // onComplete は「✅ 終わった」とチャットの「完了にする」から呼ぶ
+  window.__manualOps = { save: saveManual, manualFor: manualFor, onComplete: manualOnComplete };
 
   async function boot() {
     await msalApp.initialize();

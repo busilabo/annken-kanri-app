@@ -1,15 +1,17 @@
-// 「AIに聞く」チャット。画面の右下から開く。
+// 「ビジラボのマネージャー」（AI 社員）のチャット。画面の右下から開く（2026-10-18 「AIに聞く」から作り替え）。
 // Claude とのやり取りは Azure Functions の中継（BUSILABO-AI-Team/tools/work-chat-function）を通す。API キーはこのファイルには無い。
-// 道具（仕事を探す・追加する など）はこのブラウザで実行する。追加・更新・代表への質問は、必ず本人が「実行する」を押してから行う。
+// 道具（仕事・データベース・マニュアルを読む／書く）はこのブラウザで、話している人のサインインで実行する。
+// 書き込みは代表の方針（2026-10-18「全部任せる」）で確認なしに行い、何をしたかを会話に残す。削除はごみ箱に移すだけ（元に戻せる）
 (function () {
   "use strict";
 
-  // 中継の URL（Azure Functions を作ったら入れる）。試すときは localStorage の busilabo.chatEndpoint でも上書きできる
+  // 中継の URL。試すときは localStorage の busilabo.chatEndpoint でも上書きできる
   var CHAT_ENDPOINT = "https://busilabo-work-chat.azurewebsites.net/api/chat";
-  var MAX_ROUNDS = 8;
+  var AI_NAME = "ビジラボのマネージャー";
+  var MAX_ROUNDS = 10;
   var STORE_KEY = "busilabo.chat";
   var NAME_KEY = "busilabo.chatUser";
-  var WRITE_TOOLS = { add_task: true, update_task: true, ask_rep: true };
+  var WRITE_TOOLS = { add_task: true, update_task: true, ask_rep: true, db_add: true, db_update: true, db_delete: true, manual_save: true };
 
   function endpoint() {
     var override = "";
@@ -37,17 +39,17 @@
   var root = document.createElement("div");
   root.className = "chat-root";
   root.innerHTML =
-    '<button type="button" class="chat-fab" data-chat-open>💬 AIに聞く</button>' +
-    '<section class="chat-panel" data-chat-panel hidden aria-label="AIに聞く">' +
-    '<header class="chat-head"><b>AIに聞く</b>' +
+    '<button type="button" class="chat-fab" data-chat-open>💬 ' + AI_NAME + 'に聞く</button>' +
+    '<section class="chat-panel" data-chat-panel hidden aria-label="' + AI_NAME + '">' +
+    '<header class="chat-head"><b>' + AI_NAME + '</b>' +
     '<label class="chat-who">あなた<select data-chat-user></select></label>' +
     '<button type="button" class="chat-mini" data-chat-reset title="会話を消して新しく始める">やり直す</button>' +
     '<button type="button" class="chat-mini" data-chat-close aria-label="閉じる">✕</button></header>' +
     '<div class="chat-log" data-chat-log></div>' +
     '<form class="chat-form" data-chat-form>' +
-    '<textarea data-chat-input rows="2" placeholder="例：配送案のメールが来たら何をする？／今日急ぎの仕事は？"></textarea>' +
+    '<textarea data-chat-input rows="2" placeholder="例：配送案のメールが来たら何をする？／今日急ぎの仕事は？／東中様の電話番号を直して"></textarea>' +
     '<button type="submit" class="chat-send" data-chat-send>送る</button></form>' +
-    '<p class="chat-note">AI の答えは間違うことがあります。追加・変更は「実行する」を押すまで行いません。</p>' +
+    '<p class="chat-note">AI の答えは間違うことがあります。追加・変更・削除は頼まれたらすぐ行い、何をしたかをここに出します（削除はごみ箱へ。元に戻せます）。</p>' +
     '</section>';
   document.body.appendChild(root);
   var panel = root.querySelector("[data-chat-panel]");
@@ -92,14 +94,14 @@
   function render(extra) {
     var html = "";
     if (!state.messages.length) {
-      html += '<div class="chat-msg chat-ai">こんにちは。仕事のやり方・今の状況・仕事の追加や申し送りなど、何でも聞いてください。' +
+      html += '<div class="chat-msg chat-ai">' + AI_NAME + 'です。仕事のやり方（マニュアル）・今の状況・仕事の追加や申し送り・連絡先や顧客台帳の直しなど、何でも頼んでください。' +
         (endpoint() ? "" : '<br><br><b>（準備中）</b>まだ AI とつながっていません。代表が Azure の設定を終えると使えるようになります。') + "</div>";
     }
     state.messages.forEach(function (m) {
       var blocks = typeof m.content === "string" ? [{ type: "text", text: m.content }] : (m.content || []);
       blocks.forEach(function (b) {
         if (b.type === "text" && b.text) html += '<div class="chat-msg ' + (m.role === "user" ? "chat-me" : "chat-ai") + '">' + fmt(b.text) + "</div>";
-        else if (b.type === "tool_use") html += '<div class="chat-tool">🔎 ' + esc(TOOL_LABEL[b.name] || b.name) + "</div>";
+        else if (b.type === "tool_use") html += '<div class="chat-tool">' + (WRITE_TOOLS[b.name] ? "✏️ " : "🔎 ") + esc(TOOL_LABEL[b.name] || b.name) + (WRITE_TOOLS[b.name] ? "：" + esc(describeShort(b.name, b.input || {})) : "") + "</div>";
         else if (b.type === "tool_result" && b.is_error) html += '<div class="chat-tool">⚠ ' + esc(String(b.content).slice(0, 80)) + "</div>";
       });
     });
@@ -111,8 +113,21 @@
 
   var TOOL_LABEL = {
     list_tasks: "仕事一覧を確認", get_task: "仕事の中身を確認", get_today: "今日の出勤・予定・報告を確認",
-    get_contacts: "連絡先を確認", add_task: "仕事を追加", update_task: "仕事を更新", ask_rep: "代表に質問を回す"
+    get_contacts: "連絡先を確認", add_task: "仕事を追加", update_task: "仕事を更新", ask_rep: "代表に質問を回す",
+    db_lists: "データベースの表を確認", db_search: "データベースを探す", db_add: "データベースに追加", db_update: "データベースを直す", db_delete: "ごみ箱に移す",
+    manual_search: "マニュアルを探す", manual_save: "マニュアルを書く"
   };
+  // 書き込みの道具は、何をしたかを1行で会話に残す
+  function describeShort(name, a) {
+    if (name === "add_task") return a.title || "";
+    if (name === "update_task") return "id " + a.id + [a.status && "状態→" + a.status, a.owner && "バトン→" + a.owner, a.handover && "申し送り", a.note].filter(Boolean).join("・");
+    if (name === "ask_rep") return String(a.question || "").slice(0, 40);
+    if (name === "db_add") return (a.list || "") + "：" + JSON.stringify(a.fields || {}).slice(0, 80);
+    if (name === "db_update") return (a.list || "") + " id " + a.id + "：" + JSON.stringify(a.fields || {}).slice(0, 80);
+    if (name === "db_delete") return (a.list || "") + " id " + a.id;
+    if (name === "manual_save") return (a.business || "") + "／" + (a.category || "");
+    return "";
+  }
 
   async function send() {
     var text = input.value.trim();
@@ -220,33 +235,66 @@
       }).filter(function (x) {
         return (!a.business || x.business === a.business) && (!kw || JSON.stringify(x).indexOf(kw) !== -1);
       });
+    },
+    // データベース（SharePoint のリスト）。表の名前と列を見る
+    db_lists: async function () {
+      var lists = window.__chatOps.lists(), out = [];
+      for (var name in lists) out.push({ list: name, columns: await columnsOf(name) });
+      return out;
+    },
+    db_search: async function (a) {
+      var id = listId(a.list);
+      var res = await window.__chatOps.graph("/sites/" + window.__chatOps.siteId() + "/lists/" + id + "/items?expand=fields&$top=500");
+      var kw = String(a.keyword || "").trim();
+      var rows = (res.value || []).map(function (it) { return { id: it.id, fields: cleanFields(it.fields) }; }).filter(function (r) {
+        if (!a.include_deleted && r.fields.Deleted) return false;
+        return !kw || JSON.stringify(r.fields).indexOf(kw) !== -1;
+      });
+      return { count: rows.length, items: rows.slice(0, Math.min(+a.limit || 20, 50)) };
+    },
+    manual_search: function (a) {
+      var kw = String(a.keyword || "").trim();
+      var list = (window.__manuals || []).filter(function (m) {
+        if (a.business && m.business !== a.business) return false;
+        if (a.category && m.category !== a.category) return false;
+        return !kw || (m.title + " " + m.body).indexOf(kw) !== -1;
+      }).sort(function (x, y) { return (x.state === "正式" ? 0 : 1) - (y.state === "正式" ? 0 : 1); });
+      return { count: list.length, manuals: list.slice(0, 5).map(function (m) { return { id: m.id, title: m.title, business: m.business, category: m.category, state: m.state, body: m.body.slice(0, 6000), suggestion: m.suggestion.slice(0, 1000) }; }) };
     }
   };
 
-  function describeWrite(name, a) {
-    if (name === "add_task") return "仕事を追加します<br><b>" + esc(a.title) + "</b><br>事業：" + esc(a.business) + "／優先：" + esc(a.priority || "中") +
-      (a.due ? "／期限：" + esc(a.due) : "") + "／バトン：" + esc(a.owner || "未定（次の走者募集）") + '<div class="chat-preview">' + fmt(a.content || "") + "</div>";
-    if (name === "update_task") {
-      var c = taskById(a.id);
-      var t = c ? roleVal(c, "content").split("\n")[0] : "（id " + a.id + "）";
-      return "仕事を更新します<br><b>" + esc(t) + "</b>" +
-        (a.status ? "<br>状態 → " + esc(a.status) : "") + (a.owner ? "<br>バトン → " + esc(a.owner) : "") +
-        (a.handover ? '<br>申し送り：<div class="chat-preview">' + fmt(a.handover) + "</div>" : "") + (a.note ? "<br>メモ：" + esc(a.note) : "");
-    }
-    if (name === "ask_rep") return "代表（坂中）あての仕事として、次の質問を回します" + '<div class="chat-preview">' + fmt(a.question || "") + "</div>";
-    return esc(name);
+  // ---- データベースの手伝い ----
+  var colCache = {};
+  function listId(name) {
+    var id = window.__chatOps.lists()[name];
+    if (!id) throw new Error("「" + name + "」という表はありません。db_lists で名前を確かめてください");
+    return id;
   }
-
-  // 書き込む道具は、画面のボタンで本人が決めるまで待つ
-  function confirmWrite(name, a) {
-    return new Promise(function (resolve) {
-      render('<div class="chat-confirm">' + describeWrite(name, a) +
-        '<div class="chat-confirm-btns"><button type="button" class="chat-send" data-chat-yes>実行する</button>' +
-        '<button type="button" class="chat-mini" data-chat-no>やめる</button></div></div>');
-      log.querySelector("[data-chat-yes]").onclick = function () { resolve(true); };
-      log.querySelector("[data-chat-no]").onclick = function () { resolve(false); };
+  async function columnsOf(name) {
+    if (colCache[name]) return colCache[name];
+    var res = await window.__chatOps.graph("/sites/" + window.__chatOps.siteId() + "/lists/" + listId(name) + "/columns");
+    colCache[name] = (res.value || []).filter(function (c) { return !c.readOnly && !c.hidden && !/^(_|ContentType$|Attachments$|ComplianceAssetId$)/.test(c.name); }).map(function (c) {
+      var t = c.choice ? "選択（" + (c.choice.choices || []).join("・") + "）" : c.boolean ? "はい/いいえ" : c.dateTime ? "日付" : c.number ? "数" : c.text && c.text.allowMultipleLines ? "長い文" : "文";
+      return { name: c.name, label: c.displayName, type: t };
     });
+    return colCache[name];
   }
+  function cleanFields(f) {
+    var out = {};
+    for (var k in f || {}) {
+      if (/^(@odata|_|Edit|LinkTitle|ContentType|Attachments|AppAuthor|AppEditor|ItemChildCount|FolderChildCount|_UIVersion|_Complia|_ModerationStatus)/.test(k)) continue;
+      out[k] = typeof f[k] === "string" ? f[k].slice(0, 1500) : f[k];
+    }
+    return out;
+  }
+  // 書き込む前に、表に無い列や読み取り専用の列を外す（間違った列名で全体が失敗しないように）
+  async function onlyKnownFields(name, fields) {
+    var cols = await columnsOf(name), ok = {}, skipped = [];
+    var known = {}; cols.forEach(function (c) { known[c.name] = true; });
+    for (var k in fields || {}) { if (known[k]) ok[k] = fields[k]; else skipped.push(k); }
+    return { fields: ok, skipped: skipped };
+  }
+  function refreshSoon() { if (window.__chatOps.reloadManuals) setTimeout(function () { window.__chatOps.reloadManuals(); }, 500); }
 
   function stamp() {
     var d = new Date();
@@ -286,7 +334,40 @@
       }
       ops.addNote(c, "チャットで更新", (changes.join("・") + (a.note ? "：" + a.note : "")) || a.note || "");
       ops.scheduleSave(c);
+      if (a.status === "完了" && window.__manualOps && window.__manualOps.onComplete) window.__manualOps.onComplete(c);
       return { ok: true };
+    },
+    db_add: async function (a) {
+      var k = await onlyKnownFields(a.list, a.fields);
+      if (!Object.keys(k.fields).length) throw new Error("書ける列がありません（db_lists で列の名前を確かめてください）");
+      var res = await window.__chatOps.graph("/sites/" + window.__chatOps.siteId() + "/lists/" + listId(a.list) + "/items", { method: "POST", body: { fields: k.fields } });
+      if (a.list === "マニュアル") refreshSoon();
+      return { ok: true, id: res.id, skipped_columns: k.skipped };
+    },
+    db_update: async function (a) {
+      var k = await onlyKnownFields(a.list, a.fields);
+      if (!Object.keys(k.fields).length) throw new Error("書ける列がありません（db_lists で列の名前を確かめてください）");
+      await window.__chatOps.graph("/sites/" + window.__chatOps.siteId() + "/lists/" + listId(a.list) + "/items/" + encodeURIComponent(a.id) + "/fields", { method: "PATCH", body: k.fields });
+      if (a.list === "マニュアル") refreshSoon();
+      return { ok: true, skipped_columns: k.skipped, note: "画面には数秒で反映されます" };
+    },
+    // 削除はごみ箱へ（Deleted の印）。印の列が無い表は消さない
+    db_delete: async function (a) {
+      var cols = await columnsOf(a.list);
+      if (!cols.some(function (c) { return c.name === "Deleted"; })) throw new Error("この表にはごみ箱が無いので消せません。代表に頼んでください");
+      await window.__chatOps.graph("/sites/" + window.__chatOps.siteId() + "/lists/" + listId(a.list) + "/items/" + encodeURIComponent(a.id) + "/fields", { method: "PATCH", body: { Deleted: true } });
+      if (a.list === "マニュアル") refreshSoon();
+      return { ok: true, note: "ごみ箱に移しました（アプリのごみ箱から元に戻せます）" };
+    },
+    // マニュアルを書く。正式にできるのは代表（坂中）だけ。ほかの人・AI が書いたものは下書き
+    manual_save: async function (a) {
+      var who = userName();
+      var state = who === "坂中" && a.state === "正式" ? "正式" : "下書き";
+      var existing = a.id ? (window.__manuals || []).filter(function (m) { return m.id === String(a.id); })[0] : window.__manualOps.manualFor(a.business, a.category);
+      var fields = { Body: String(a.body || ""), State: state, Updater: who + "（" + AI_NAME + "）" };
+      if (!existing) { fields.Title = (a.business || "") + "／" + (a.category || ""); fields.Business = a.business || ""; fields.Category = a.category || ""; }
+      var id = await window.__manualOps.save(existing ? existing.id : null, fields);
+      return { ok: true, id: id, state: state, note: state === "下書き" ? "下書きとして保存しました。代表が確認して正式にします" : "正式にしました" };
     },
     ask_rep: async function (a) {
       var who = userName();
@@ -309,11 +390,9 @@
   async function runTool(use) {
     var a = use.input || {};
     try {
-      if (READ_TOOLS[use.name]) return { type: "tool_result", tool_use_id: use.id, content: JSON.stringify(READ_TOOLS[use.name](a)).slice(0, 30000) };
+      if (READ_TOOLS[use.name]) return { type: "tool_result", tool_use_id: use.id, content: JSON.stringify(await READ_TOOLS[use.name](a)).slice(0, 30000) };
+      // 書き込みは確認なしで行う（代表の方針 2026-10-18）。何をしたかは会話の「✏️」の行に残る
       if (WRITE_TOOLS[use.name]) {
-        var yes = await confirmWrite(use.name, a);
-        render();
-        if (!yes) return { type: "tool_result", tool_use_id: use.id, content: "本人が「やめる」を選びました。実行していません。" };
         var out = await WRITE_IMPL[use.name](a);
         return { type: "tool_result", tool_use_id: use.id, content: JSON.stringify(out) };
       }

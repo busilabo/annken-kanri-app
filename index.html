@@ -1401,6 +1401,9 @@
   .s-draft-warn { font-size: 13px; font-weight: 700; color: var(--danger, #b42318); }
   .s-draft-note { font-size: 13px; color: var(--text-muted); }
   .s-draft-hint { font-size: 12px; color: var(--text-muted); }
+  .s-manual { border: 1px solid var(--line, #d0d7e2); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+  details.s-manual summary { cursor: pointer; font-weight: 700; }
+  .s-manual a.s-btn { text-decoration: none; display: inline-flex; align-items: center; }
   .s-handover { font-size: 13.5px; line-height: 1.55; background: var(--warn-soft); border-radius: 8px; padding: 8px 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
   .s-handover b { display: block; font-size: 12px; margin-bottom: 2px; }
   .s-handover small { display: block; color: var(--text-muted); margin-top: 2px; }
@@ -4253,6 +4256,19 @@
         '<div class="s-draft-text">' + esc(draft) + '</div>' +
         '<small class="s-draft-hint">読んで、直すところがあれば直してから送ってください</small></div>';
     }
+    // マニュアル：確認の仕事なら下書きと「正式にする」、ふつうの仕事なら正式なマニュアルを開けるように
+    var mkey = roleVal(card, 'teamsMessageId');
+    var manuals = window.__manuals || [];
+    var mm = /^manual:(\d+)/.exec(mkey);
+    if (mm) {
+      var md = manuals.filter(function (x) { return x.id === mm[1]; })[0];
+      if (md) html += '<div class="s-manual"><b>📘 マニュアルの' + esc(md.state) + '：' + esc(md.title) + '</b><div class="s-draft-text">' + esc(md.body) + '</div>' +
+        '<div class="s-actions">' + (md.state !== '正式' && status !== '完了' ? '<button type="button" class="s-btn s-primary" data-s-manual-ok="' + esc(md.id) + '" data-s-manual-card="' + key + '">✅ 正式にする</button>' : '<span class="s-done-note">✅ 正式になっています</span>') +
+        (md.webUrl ? '<a class="s-btn" href="' + esc(md.webUrl) + '" target="_blank" rel="noopener">✏️ SharePoint で直す</a>' : '') + '</div></div>';
+    } else {
+      var mf = manuals.filter(function (x) { return x.state === '正式' && x.business === businessOf(card) && x.category === roleVal(card, 'category'); })[0];
+      if (mf) html += '<details class="s-manual"><summary>📘 この仕事のマニュアルを見る（' + esc(mf.title) + '）</summary><div class="s-draft-text">' + esc(mf.body) + '</div></details>';
+    }
     if (c.steps.length) {
       html += '<div class="s-steps-head">やること <span class="tab-count">' + doneCount + ' / ' + c.steps.length + '</span></div><ol class="s-steps">' +
         c.steps.map(function (s) {
@@ -4364,6 +4380,19 @@
     // 受け取る人を選んだら、選ぶ欄を閉じる（受け取りの処理そのものは今日のボードと同じ assignCard）
     var picked = e.target.closest && e.target.closest('[data-simple-panel] [data-assign-key]');
     if (picked) { var pc = picked.closest('.card'); setTimeout(function () { closeSimplePanel(pc); }, 0); return; }
+    var mok = e.target.closest && e.target.closest('[data-s-manual-ok]');
+    if (mok) {
+      var mCard = jumpRegistry[mok.getAttribute('data-s-manual-card')];
+      mok.disabled = true; mok.textContent = '正式にしています…';
+      window.__manualOps.save(mok.getAttribute('data-s-manual-ok'), { State: '正式', Updater: currentUser || '坂中' }).then(function () {
+        if (mCard) {
+          setTaskStatus(mCard, '完了');
+          addHistoryEntry(mCard, 'task', 'マニュアルを正式にした', '完了', null, (currentUser || '代表') + 'さんが確認');
+          applyAll();
+        }
+      }, function (err) { mok.disabled = false; mok.textContent = '✅ 正式にする（もう一度）'; alert('正式にできませんでした：' + (err.message || err)); });
+      return;
+    }
     var cp = e.target.closest && e.target.closest('[data-s-copy]');
     if (cp) {
       var cpCard = jumpRegistry[cp.getAttribute('data-s-copy')];
@@ -4390,6 +4419,8 @@
       addHistoryEntry(card, 'task', '完了にする', '完了', null, (who ? who + 'さんが完了' : '完了'));
       closeSimplePanel(card);
       applyAll();
+      // その種類のマニュアルが無ければ下書き、あれば直したほうがよい点を書き足す（裏で動く）
+      if (window.__manualOps && window.__manualOps.onComplete) window.__manualOps.onComplete(card);
       // 終わったら最初の画面（今日）に戻る
       activateTab('today');
       window.scrollTo(0, 0);
