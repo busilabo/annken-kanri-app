@@ -709,8 +709,8 @@
     ],
     amazonBuyer: [
       "セラーセントラルの「購入者とのメッセージ」を開く（メールへの返信では Amazon に返信済みと認識されないので、必ずセラーセントラルから返信する）",
-      "「ビジラボAmazonセラーAIチーム」に問い合わせの内容を貼って、返信文を作る",
-      "セラーセントラルから返信する（AI チームで作った文なら代表の確認はいりません）",
+      "上の「返信の下書き」を読む。事実と違うところ・足りないところがあれば直す（下書きがなければ「ビジラボAmazonセラーAIチーム」で作る）",
+      "セラーセントラルから返信する（AI チームで作った文なら代表の確認はいりません。下書きに「⚠️ 代表に確認」と出ていたら、送る前に代表に回す）",
       "初期不良のときは、Amazon の返品・返金を案内する（日立への連絡はいりません）",
       "返信したら「完了」にする（期限は届いてから24時間。土日祝に届いた分は次の出勤日）"
     ],
@@ -725,7 +725,7 @@
       "納期の確認 → 商品ページの納期の目安を確認する。お客様の指定日があれば、lilocle@lilocle.jp からメーカー様に確認する（件名に下の【L-番号】を入れると、返事がこの仕事に付きます）",
       "キャンセル → 発送前なら、lilocle@lilocle.jp からメーカー様に出荷停止を連絡（件名に【L-番号】）してから、Shopify でキャンセルする。発送後のキャンセルはお断りする",
       "領収書 → Claude の領収書スキルで作り、PDF を送る（雛形：リロクル資料／請求書・領収書(お客様)）",
-      "返信文は「LILOCLE運営AIチーム」で作り、contact@lilocle.jp から返信する（代表の確認はいりません）",
+      "上の「返信の下書き」を読んで直し、contact@lilocle.jp から返信する（下書きがなければ「LILOCLE運営AIチーム」で作る。代表の確認はいりません）",
       "対応が終わったら「完了」にする"
     ],
     liloSupplier: [
@@ -744,14 +744,14 @@
     ],
     snsLilo: [
       "Meta Business Suite（https://business.facebook.com）の LILOCLE の受信箱で、メッセージの全文を確認する",
-      "納期・キャンセル・商品の質問なら、お客様からのメールと同じやり方で「LILOCLE運営AIチーム」で返信文を作る（代表の確認はいりません）",
+      "納期・キャンセル・商品の質問なら、上の「返信の下書き」を読んで直す（下書きがなければ「LILOCLE運営AIチーム」で作る。代表の確認はいりません）",
       "価格・値引き・返品の可否など判断が要るものは、代表に回す（「AIに聞く」の「代表に質問を回す」でも可）",
       "Meta Business Suite の受信箱から返信する",
       "返信したら「完了」にする"
     ],
     lineLilo: [
       "LINE 公式アカウントのチャット（https://chat.line.biz）で、メッセージの全文を確認する",
-      "納期・キャンセル・商品の質問なら、お客様からのメールと同じやり方で「LILOCLE運営AIチーム」で返信文を作る（代表の確認はいりません）",
+      "納期・キャンセル・商品の質問なら、上の「返信の下書き」を読んで直す（下書きがなければ「LILOCLE運営AIチーム」で作る。代表の確認はいりません）",
       "価格・値引き・返品の可否など判断が要るものは、代表に回す",
       "LINE 公式アカウントのチャットから返信する",
       "返信したら「完了」にする"
@@ -807,6 +807,32 @@
       Requester: data.source === "資料DL" ? "資料ダウンロード" : "お問い合わせフォーム",
       Content: "問い合わせの確認と報告：" + who + "\n" + String(data.content || "").slice(0, 300) + stepsText(STEPS.inquiry)
     };
+  }
+
+  // ---- 返信の下書き ----
+  // Azure の口（tools/work-chat-function の draft）が、事業ごとの AI チームのスキルを読んで書く。届かなければ下書きなしで仕事にする
+  var DRAFT_ENDPOINT = "https://busilabo-work-chat.azurewebsites.net/api/draft";
+  async function requestDraft(req) {
+    try {
+      var token = await getToken();
+      var ctl = window.AbortController ? new AbortController() : null;
+      var timer = ctl ? setTimeout(function () { ctl.abort(); }, 60000) : null;
+      var res = await fetch(DRAFT_ENDPOINT, {
+        method: "POST",
+        headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+        body: JSON.stringify(req),
+        signal: ctl ? ctl.signal : undefined
+      });
+      if (timer) clearTimeout(timer);
+      if (!res.ok) { log("draft: " + res.status); return null; }
+      var d = await res.json();
+      return d && d.draft ? d : null;
+    } catch (e) { log("draft failed: " + e.message); return null; }
+  }
+  function draftText(d) {
+    if (!d || !d.draft) return "";
+    var note = (d.needsRep ? "⚠️代表に確認 " : "") + String(d.note || "").replace(/\n/g, " ");
+    return "\n\n【返信の下書き】\n" + String(d.draft).replace(/^【/gm, "［").trim() + "\n【下書きここまで】" + (note.trim() ? "\n【下書きのメモ】" + note : "");
   }
 
   function stepsText(steps) {
@@ -937,14 +963,14 @@
       return { title: "綿半様からのメール：" + subject, business: "家電の卸販売", category: "代表の確認", owner: "坂中", steps: STEPS.reply };
     }
     if (/marketplace\.amazon/i.test(from) || business === "Amazon販売") {
-      return { title: "Amazon購入者：" + subject, business: "Amazon販売", category: "お客様対応", priority: "高", due: nextWorkday(data.receivedAt), steps: STEPS.amazonBuyer };
+      return { title: "Amazon購入者：" + subject, business: "Amazon販売", category: "お客様対応", priority: "高", due: nextWorkday(data.receivedAt), steps: STEPS.amazonBuyer, draftKind: "amazon", channel: "Amazon" };
     }
     if (mailbox.indexOf("lilocle@") === 0) {
       if (PAYMENT_WORD.test(text)) return { title: "LILOCLE 請求・支払い：" + subject, business: "LILOCLE運営", category: "代表の確認", owner: "坂中", steps: STEPS.rep };
       return { title: "LILOCLEメーカー様：" + subject, business: "LILOCLE運営", category: "メーカー対応", steps: STEPS.liloSupplier };
     }
     if (mailbox.indexOf("contact@") === 0 || (business === "LILOCLE運営" && mailbox.indexOf("order@") !== 0)) {
-      return { title: "LILOCLEお客様：" + subject, business: "LILOCLE運営", category: "お客様対応", priority: "高", steps: STEPS.liloCustomer };
+      return { title: "LILOCLEお客様：" + subject, business: "LILOCLE運営", category: "お客様対応", priority: "高", steps: STEPS.liloCustomer, draftKind: "lilocle", channel: "メール" };
     }
     if (business === "業務改善・DX支援") {
       return { title: "お客様からのメール：" + subject, business: "業務改善・DX支援", category: "代表の確認", owner: "坂中", steps: STEPS.rep };
@@ -980,7 +1006,12 @@
     } else {
       var profile = mailProfile(data);
       if (profile) {
-        var content = profile.title + "\n" + preview + stepsText(profile.steps);
+        // お客様への返信は、下書きを付けて仕事にする（ルーティンが書いてきたものがあればそれを使い、なければ Azure で書く）
+        var draft = data.draft ? { draft: String(data.draft), needsRep: !!data.needsRep, note: String(data.draftNote || "") }
+          : (profile.draftKind ? await requestDraft({ kind: profile.draftKind, channel: profile.channel, subject: data.subject || "", sender: from, text: preview }) : null);
+        var content = profile.title + "\n" + preview + draftText(draft) + stepsText(profile.steps);
+        // 下書きを待つ間に、別の人の画面が同じメールを仕事にしていたら作らない
+        if (draft && await remoteTaskExists(key)) { await moveToProcessed(file, "mail task"); return; }
         var fields = {
           Title: profile.title.slice(0, 60),
           Priority: profile.priority || "中",
@@ -1213,6 +1244,11 @@
           var lilo = (it.business || "") === "LILOCLE運営";
           var title = src.label + "の問い合わせ：" + who + (it.accountName ? "（" + it.accountName + "）" : "");
           var steps = it.source === "line" ? (lilo ? STEPS.lineLilo : STEPS.lineDx) : (lilo ? STEPS.snsLilo : STEPS.snsDx);
+          var draft = await requestDraft({
+            kind: lilo ? "lilocle" : (it.source === "instagram" ? "busilabo-instagram" : it.source === "facebook" ? "busilabo-facebook" : "busilabo"),
+            channel: src.label, sender: it.senderName || "", text: String(it.text || "")
+          });
+          if (draft && await remoteTaskExists(key)) { done.push(it.id); continue; }   // 待つ間に別の画面が仕事にした
           var created = await createTaskItem({
             Title: title.slice(0, 60),
             Priority: "高",
@@ -1222,7 +1258,7 @@
             Requester: src.label + "のメッセージ",
             TeamsMessageId: key,
             TeamsLink: src.link,
-            Content: title + "\n" + String(it.text || "").slice(0, 600) + stepsText(steps)
+            Content: title + "\n" + String(it.text || "").slice(0, 600) + draftText(draft) + stepsText(steps)
           }, src.label + "でメッセージ", who + "：" + line);
           if (!created) continue;   // 入れられなかったら、次の受け取りでもう一度
         }

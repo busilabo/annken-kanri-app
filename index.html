@@ -1395,6 +1395,12 @@
   .s-steps li[data-done] label { background: var(--ok-soft); }
   .s-steps li[data-done] span { color: var(--text-muted); text-decoration: line-through; }
   .s-add { align-self: flex-start; appearance: none; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; padding: 4px 10px; border-radius: 8px; border: 1px dashed var(--accent); background: none; color: var(--accent); }
+  .s-draft { border: 1px solid var(--line, #d0d7e2); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+  .s-draft-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: 14px; }
+  .s-draft-text { font-size: 14px; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--surface-2, rgba(127,127,127,.08)); border-radius: 8px; padding: 8px 10px; }
+  .s-draft-warn { font-size: 13px; font-weight: 700; color: var(--danger, #b42318); }
+  .s-draft-note { font-size: 13px; color: var(--text-muted); }
+  .s-draft-hint { font-size: 12px; color: var(--text-muted); }
   .s-handover { font-size: 13.5px; line-height: 1.55; background: var(--warn-soft); border-radius: 8px; padding: 8px 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
   .s-handover b { display: block; font-size: 12px; margin-bottom: 2px; }
   .s-handover small { display: block; color: var(--text-muted); margin-top: 2px; }
@@ -4200,10 +4206,16 @@
 
   function parseTaskContent(card) {
     var lines = roleVal(card, 'content').split('\n');
-    var out = { title: (lines[0] || '').trim(), desc: [], steps: [] };
-    var inSteps = false;
+    var out = { title: (lines[0] || '').trim(), desc: [], steps: [], draft: [], draftNote: '', needsRep: false };
+    var inSteps = false, inDraft = false;
     for (var i = 1; i < lines.length; i++) {
       var line = lines[i];
+      // 【返信の下書き】〜【下書きここまで】は、コピーできる下書きとして別に出す
+      if (/^【返信の下書き】/.test(line.trim())) { inDraft = true; continue; }
+      if (/^【下書きここまで】/.test(line.trim())) { inDraft = false; continue; }
+      if (inDraft) { out.draft.push(line); continue; }
+      var dm = /^【下書きのメモ】\s*(⚠️代表に確認)?\s*(.*)$/.exec(line.trim());
+      if (dm) { out.needsRep = !!dm[1]; out.draftNote = dm[2]; continue; }
       if (/^【手順】/.test(line.trim())) { inSteps = true; continue; }
       var m = inSteps && STEP_LINE.exec(line.trim());
       if (m) out.steps.push({ line: i, done: !!m[1], no: m[2], text: m[3] });
@@ -4229,6 +4241,14 @@
       '<span class="s-owner">' + (owner === UNASSIGNED ? '次の走者募集' : avatarHtml(owner) + ' ' + esc(owner) + 'さんが担当') + '</span></div>';
     if (origin) html += '<div class="s-origin">' + origin + '</div>';
     if (c.desc.length) html += '<div class="s-desc">' + linkify(c.desc.join('\n')) + '</div>';
+    var draft = c.draft.join('\n').trim();
+    if (draft) {
+      html += '<div class="s-draft"><div class="s-draft-head"><b>✉️ 返信の下書き（AI チームのスキルで作成）</b>' +
+        '<button type="button" class="s-btn s-copy" data-s-copy="' + key + '">📋 コピー</button></div>' +
+        (c.needsRep ? '<div class="s-draft-warn">⚠️ 代表に確認してから送る：' + esc(c.draftNote) + '</div>' : (c.draftNote ? '<div class="s-draft-note">' + esc(c.draftNote) + '</div>' : '')) +
+        '<div class="s-draft-text">' + esc(draft) + '</div>' +
+        '<small class="s-draft-hint">読んで、直すところがあれば直してから送ってください</small></div>';
+    }
     if (c.steps.length) {
       html += '<div class="s-steps-head">やること <span class="tab-count">' + doneCount + ' / ' + c.steps.length + '</span></div><ol class="s-steps">' +
         c.steps.map(function (s) {
@@ -4340,6 +4360,21 @@
     // 受け取る人を選んだら、選ぶ欄を閉じる（受け取りの処理そのものは今日のボードと同じ assignCard）
     var picked = e.target.closest && e.target.closest('[data-simple-panel] [data-assign-key]');
     if (picked) { var pc = picked.closest('.card'); setTimeout(function () { closeSimplePanel(pc); }, 0); return; }
+    var cp = e.target.closest && e.target.closest('[data-s-copy]');
+    if (cp) {
+      var cpCard = jumpRegistry[cp.getAttribute('data-s-copy')];
+      var text = cpCard ? parseTaskContent(cpCard).draft.join('\n').trim() : '';
+      var shown = function (ok) { cp.textContent = ok ? '✅ コピーしました' : 'コピーできませんでした'; setTimeout(function () { cp.textContent = '📋 コピー'; }, 2000); };
+      var fallback = function () {
+        var ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        var ok = false; try { ok = document.execCommand('copy'); } catch (err) { ok = false; }
+        document.body.removeChild(ta); shown(ok);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function () { shown(true); }, fallback);
+      else fallback();
+      return;
+    }
     var t = e.target.closest && e.target.closest('[data-s-done],[data-s-pass],[data-s-ask],[data-s-claim],[data-s-reopen],[data-s-ask-send],[data-s-addstep],[data-s-addstep-save]');
     if (!t) return;
     var key = t.getAttribute('data-s-done') || t.getAttribute('data-s-pass') || t.getAttribute('data-s-ask') || t.getAttribute('data-s-claim') || t.getAttribute('data-s-reopen') || t.getAttribute('data-s-ask-send') || t.getAttribute('data-s-addstep') || t.getAttribute('data-s-addstep-save');
