@@ -535,12 +535,7 @@
     } else {
       log("verify result: card not found for itemId " + itemId);
     }
-    try {
-      await graph("/drives/" + QUEUE_DRIVE_ID + "/items/" + file.id, {
-        method: "PATCH",
-        body: { parentReference: { path: "/drives/" + QUEUE_DRIVE_ID + "/root:/" + QUEUE_PROCESSED_FOLDER } }
-      });
-    } catch (e) { log("verify result queue move failed (" + file.name + "): " + e.message); }
+    await moveToProcessed(file, "verify result");
   }
 
   async function drainOne(file) {
@@ -610,12 +605,7 @@
       // 問い合わせが来たら、スタッフが内容を確かめて代表に報告する仕事も入れる
       await createTaskOnce("inquiry:" + srcId, inquiryTaskFields(data), "問い合わせが届いた", "");
     }
-    try {
-      await graph("/drives/" + QUEUE_DRIVE_ID + "/items/" + file.id, {
-        method: "PATCH",
-        body: { parentReference: { path: "/drives/" + QUEUE_DRIVE_ID + "/root:/" + QUEUE_PROCESSED_FOLDER } }
-      });
-    } catch (e) { log("queue move failed (" + file.name + "): " + e.message); }
+    await moveToProcessed(file, "queue");
   }
 
   // ---- Teams からの依頼（「ビジラボ」チームの「一般」チャネル）----
@@ -701,12 +691,7 @@
       applying = false;
       window.__app.applyAll();
     }
-    try {
-      await graph("/drives/" + QUEUE_DRIVE_ID + "/items/" + file.id, {
-        method: "PATCH",
-        body: { parentReference: { path: "/drives/" + QUEUE_DRIVE_ID + "/root:/" + QUEUE_PROCESSED_FOLDER } }
-      });
-    } catch (e) { log("teams task move failed (" + file.name + "): " + e.message); }
+    await moveToProcessed(file, "teams task");
   }
 
   // ---- 自動で入る仕事の共通部分 ----
@@ -893,13 +878,23 @@
   }
 
   async function moveToProcessed(file, label) {
+    var dest = { path: "/drives/" + QUEUE_DRIVE_ID + "/root:/" + QUEUE_PROCESSED_FOLDER };
     try {
-      await graph("/drives/" + QUEUE_DRIVE_ID + "/items/" + file.id, {
-        method: "PATCH",
-        body: { parentReference: { path: "/drives/" + QUEUE_DRIVE_ID + "/root:/" + QUEUE_PROCESSED_FOLDER } }
-      });
+      await graph("/drives/" + QUEUE_DRIVE_ID + "/items/" + file.id, { method: "PATCH", body: { parentReference: dest } });
       return true;
-    } catch (e) { log(label + " move failed (" + file.name + "): " + e.message); return false; }
+    } catch (e) {
+      // 処理済みに同じ名前のファイルがあると移せず、取り込み口に残って何度も取り込まれる（2026-10-19：確認結果が1分ごとに書き込まれ続けた）。
+      // そのときは名前の後ろに日時を付けて移す
+      if (/-> 409 |nameAlreadyExists/i.test(e.message || "")) {
+        try {
+          var stamped = String(file.name).replace(/(\.json)?$/, "-" + Date.now() + "$1");
+          await graph("/drives/" + QUEUE_DRIVE_ID + "/items/" + file.id, { method: "PATCH", body: { parentReference: dest, name: stamped } });
+          return true;
+        } catch (e2) { log(label + " move failed (" + file.name + "): " + e2.message); return false; }
+      }
+      log(label + " move failed (" + file.name + "): " + e.message);
+      return false;
+    }
   }
 
   function taskCards() { return Array.prototype.slice.call(document.querySelectorAll('.card[data-kind="task"]')); }
