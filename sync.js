@@ -1981,9 +1981,41 @@
     loadReports();
     setInterval(loadReports, REPORT_REFRESH_MS);
     try { await ensureManualList(); await loadManuals(); } catch (e) { log("manuals failed: " + e.message); }
+    watchNewVersion();
     setInterval(loadManuals, 10 * 60 * 1000);
     await drainQueue();
     setInterval(drainQueue, QUEUE_DRAIN_MS);
+  }
+
+  // ---- 新しい版に自動で切り替える（2026-10-19）----
+  // アプリを直して公開しても、開いたままの画面は古い版で動き続ける（古い版の不具合が続く・新しい表示が出ない）。
+  // 5分ごとに公開中のファイルを確かめ、変わっていたら、入力中・保存待ちでないときに読み込み直す
+  var VERSION_FILES = ["index.html", "sync.js", "chat.js"];
+  var versionBase = null;
+  async function versionStamp() {
+    var parts = [];
+    for (var i = 0; i < VERSION_FILES.length; i++) {
+      var res = await fetch(VERSION_FILES[i] + "?v=" + Date.now(), { cache: "no-store" });
+      if (!res.ok) return null;
+      var t = await res.text();
+      parts.push(t.length + ":" + t.slice(-200));
+    }
+    return parts.join("|");
+  }
+  function watchNewVersion() {
+    if (location.protocol === "file:") return;   // 手元の試験画面では動かさない
+    versionStamp().then(function (s) { versionBase = s; }, function () {});
+    setInterval(async function () {
+      try {
+        var now = await versionStamp();
+        if (!now || !versionBase || now === versionBase) return;
+        var busy = Object.keys(pendingSave).length || (document.activeElement && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) ||
+          (document.activeElement && document.activeElement.isContentEditable);
+        if (busy) return;   // 入力中・保存待ちなら次の確認まで待つ
+        log("new version found, reloading");
+        location.reload();
+      } catch (e) { /* ネットが切れているときなどは次の確認で */ }
+    }, 5 * 60 * 1000);
   }
 
   // ---- マニュアル（2026-10-18）----
