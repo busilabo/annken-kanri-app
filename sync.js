@@ -680,6 +680,7 @@
         Priority: "中",
         Owner: "未定",
         Category: "未分類",
+        Business: "社内・共通",   // Teams の依頼は事業が分からないので、まず社内・共通（受け取った人が直す）
         Content: content,
         Requester: from,
         TeamsMessageId: threadId,
