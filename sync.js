@@ -656,11 +656,22 @@
     return fields;
   }
 
+  // 1つの投稿に空行で区切って複数の仕事を書いたら、まとまりごとに別の仕事にする（2026-10-19 代表の指定）。
+  // 目印は1つ目が投稿の ID、2つ目からは「ID#2」「ID#3」…（Teams への返事は # の前の ID のスレッドに返す）
   async function drainTeamsTask(file, data) {
     var threadId = data.threadId || data.messageId || "";
+    var whole = teamsText(data.text).replace(TEAMS_KEYWORD, "").trim() || "（内容なし）";
+    var blocks = whole.split(/\n\s*\n/).map(function (b) { return b.trim(); }).filter(Boolean);
+    if (!blocks.length) blocks = [whole];
+    for (var bi = 0; bi < blocks.length; bi++) {
+      var key = bi === 0 ? threadId : threadId + "#" + (bi + 1);
+      if (!(await createTeamsTask(file, data, key, blocks[bi]))) return;   // 入れられなかったら、次の取り込みでもう一度
+    }
+    await moveToProcessed(file, "teams task");
+  }
+  async function createTeamsTask(file, data, threadId, content) {
     var exists = threadId && Array.prototype.some.call(document.querySelectorAll('.card[data-kind="task"] [data-role="teamsMessageId"]'), function (el) { return el.value === threadId; });
     if (!exists && listIds.task) {
-      var content = teamsText(data.text).replace(TEAMS_KEYWORD, "").trim() || "（内容なし）";
       var from = (data.from || "").replace(/\s+/g, "");
       var now = new Date();
       var stamp = (now.getMonth() + 1) + "/" + String(now.getDate()).padStart(2, "0") + " " + String(now.getHours()).padStart(2, "0") + ":" + String(now.getMinutes()).padStart(2, "0");
@@ -683,7 +694,7 @@
       var created;
       try {
         created = await graph("/sites/" + siteId + "/lists/" + listIds.task + "/items", { method: "POST", body: { fields: fields } });
-      } catch (e) { log("teams task create failed (" + file.name + "): " + e.message); return; }
+      } catch (e) { log("teams task create failed (" + file.name + "): " + e.message); return false; }
       applying = true;
       var card = buildCardFromItem("task", { id: created.id, fields: fields });
       var list = document.querySelector('[data-list="task"]');
@@ -691,7 +702,7 @@
       applying = false;
       window.__app.applyAll();
     }
-    await moveToProcessed(file, "teams task");
+    return true;
   }
 
   // ---- 自動で入る仕事の共通部分 ----
@@ -1461,7 +1472,7 @@
   async function postTeamsReply(card, text) {
     var threadEl = getRoleEl(card, "teamsMessageId");
     var linkEl = getRoleEl(card, "teamsLink");
-    var payload = { type: "teamsReply", threadId: threadEl ? threadEl.value : "", link: linkEl ? linkEl.value : "", text: text };
+    var payload = { type: "teamsReply", threadId: threadEl ? threadEl.value.split("#")[0] : "", link: linkEl ? linkEl.value : "", text: text };   // 「ID#2」は同じ投稿のスレッドへ
     var filename = "reply-" + (card.getAttribute("data-item-id") || "x") + "-" + Date.now() + ".json";
     try {
       await graph("/drives/" + QUEUE_DRIVE_ID + "/root:/" + encodeURIComponent(OUTBOX_FOLDER) + "/" + encodeURIComponent(filename) + ":/content", { method: "PUT", body: payload });
