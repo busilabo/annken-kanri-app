@@ -4580,6 +4580,20 @@
     });
     return latest;
   }
+  // 新しく入った仕事（いちばん古い履歴が今日か昨日）。閉じた段に入っても気づけるように「🆕 新着」を付ける（2026-10-19）
+  function isNewCard(card) {
+    var first = null;
+    card.querySelectorAll('[data-history] .history-entry .history-time').forEach(function (t) {
+      var m = /(\d{1,2})\/(\d{1,2})/.exec(t.textContent || "");
+      if (!m) return;
+      var now = new Date(todayStr + "T00:00:00");
+      var d = new Date(now.getFullYear(), +m[1] - 1, +m[2]);
+      if (d > now) d.setFullYear(d.getFullYear() - 1);
+      if (!first || d < first) first = d;
+    });
+    var n = daysSince(first);
+    return n !== null && n <= 1;
+  }
   function daysSince(d) { return d ? Math.floor((new Date(todayStr + "T00:00:00") - d) / 86400000) : null; }
   function checkupItems() {
     var open = liveCards('task').filter(function (c) { return statusOf(c) !== '完了' && !recurOf(c); });
@@ -5093,7 +5107,7 @@
     var baseBadges = function (c) {
       var due = dueBadge(c);
       var urgentOnly = c.getAttribute('data-local-urgent') === 'true' && !(due && due.tone === 'crit');
-      return [urgentOnly ? { text: "要対応", tone: "crit" } : null, due];
+      return [isNewCard(c) ? { text: "🆕 新着", tone: "accent" } : null, urgentOnly ? { text: "要対応", tone: "crit" } : null, due];
     };
     var urgency = function (c) { return isUrgent(c) ? 0 : isSoon(c) ? 1 : 2; };
     var byUrgency = function (a, b) { return urgency(a.card) - urgency(b.card) || byDue(a, b); };
@@ -5191,7 +5205,7 @@
       { key: "urgent", title: "🔥 急ぎ", hint: "期限切れ・今日明日・優先「高」", items: buckets.urgent },
       { key: "week", title: "📅 今週", hint: "〜" + md(weekEnd), items: buckets.week },
       { key: "next", title: "🗓 来週", hint: md(nextStart) + "〜" + md(nextWeekEnd), items: buckets.next },
-      { key: "later", title: "そのほか", hint: "期限なし・再来週以降", items: buckets.later, closed: true }
+      { key: "later", title: "そのほか", hint: "期限なし・再来週以降", items: buckets.later }
     ];
     // 段を「急ぎ・今週・来週・そのほか」の行にそろえ、次の走者募集と走行中の同じ段が左右に並ぶようにする（2026-10-19 代表の指定）
     var COLS = [
