@@ -2575,11 +2575,12 @@
       { key: "停滞", label: "停滞", tone: "crit" }
     ],
     task: [
-      { key: "all", label: "全件", tone: "" },
+      { key: "all", label: "終わっていない仕事", tone: "" },
       { key: "urgent", label: "要対応", tone: "crit" },
       { key: "未着手", label: "未着手", tone: "neutral" },
       { key: "進行中", label: "進行中", tone: "warn" },
-      { key: "overdue", label: "期限超過", tone: "crit" }
+      { key: "overdue", label: "期限超過", tone: "crit" },
+      { key: "完了", label: "終わった仕事", tone: "ok" }
     ],
     wontask: [
       { key: "all", label: "全件", tone: "" },
@@ -3649,7 +3650,7 @@
     var query = searchInput ? searchInput.value : "";
     var activeFilter = filters[kind];
 
-    var counts = { all: cards.length, overdue: 0, meetingToday: 0, urgent: 0, download: 0 };
+    var counts = { all: kind === 'task' ? cards.filter(function (c) { return statusOf(c) !== '完了'; }).length : cards.length, overdue: 0, meetingToday: 0, urgent: 0, download: 0 };
     cards.forEach(function (card) {
       updateContactLinks(card);
       updateMeetingBadge(card);
@@ -3683,6 +3684,8 @@
       else if (activeFilter === "meetingToday") matchesFilter = isMeetingToday(card);
       else if (activeFilter === "download") matchesFilter = isDownloadLead(card);
       else if (activeFilter) matchesFilter = label === activeFilter;
+      // 仕事一覧：終わった仕事はふだん隠す（「終わった仕事」を押したときだけ出す。2026-10-19 代表の指定）
+      if (kind === 'task' && label === '完了' && activeFilter !== '完了') matchesFilter = false;
       var matchesSearch = cardMatchesSearch(card, query);
       var matchesCategory = kind !== 'task' || !categoryFilter || roleVal(card, 'category') === categoryFilter;
       var show = matchesFilter && matchesSearch && matchesOwnerFilter(card, kind) && matchesCategory;
@@ -3713,7 +3716,7 @@
     }
 
     var tabCount = document.querySelector('[data-local-count="' + kind + '"]');
-    if (tabCount) tabCount.textContent = cards.length;
+    if (tabCount) tabCount.textContent = counts.all;   // 仕事一覧は終わっていない仕事の数
 
     if (kind === 'inquiry') {
       var todayNav = document.querySelector('[data-role="meetingTodayNav"]');
