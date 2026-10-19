@@ -1271,9 +1271,9 @@
   .band-title { font-size: 15px; font-weight: 700; }
   .band-hint { font-size: 12px; color: var(--text-muted); }
   .band-col { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-  /* 段を行にそろえる：1行目＝列の見出し、2〜5行目＝急ぎ・今週・来週・そのほか。ゴールは右の列を縦に通す（2026-10-19 代表の指定） */
+  /* 段を行にそろえる：1行目＝列の見出し、2〜4行目＝急ぎ・今週・来週以降。ゴールは右の列を縦に通す（2026-10-19 代表の指定） */
   .relay-rows { row-gap: 10px; align-items: stretch; }
-  .relay-rows > .kb-col[data-col="goal"] { grid-column: 3; grid-row: 1 / span 5; align-self: start; }
+  .relay-rows > .kb-col[data-col="goal"] { grid-column: 3; grid-row: 1 / span 4; align-self: start; }
   .relay-rows > .kb-colhead { padding-bottom: 6px; }
   .relay-rows > .band[data-col="recruit"] { outline: 2px solid var(--accent-soft); }
   @media (max-width: 900px) { .relay-rows > .kb-col[data-col="goal"] { grid-column: auto; grid-row: auto; } }
@@ -5204,8 +5204,8 @@
     var BANDS = [
       { key: "urgent", title: "🔥 急ぎ", hint: "期限切れ・今日明日・優先「高」", items: buckets.urgent },
       { key: "week", title: "📅 今週", hint: "〜" + md(weekEnd), items: buckets.week },
-      { key: "next", title: "🗓 来週", hint: md(nextStart) + "〜" + md(nextWeekEnd), items: buckets.next },
-      { key: "later", title: "そのほか", hint: "期限なし・再来週以降", items: buckets.later }
+      // 「来週」と「そのほか」は「来週以降」にまとめる（2026-10-19 代表の指定）。期限のあるものが先、期限なしは最後
+      { key: "next", title: "🗓 来週以降", hint: md(nextStart) + "〜・期限なし", items: buckets.next.concat(buckets.later) }
     ];
     // 段を「急ぎ・今週・来週・そのほか」の行にそろえ、次の走者募集と走行中の同じ段が左右に並ぶようにする（2026-10-19 代表の指定）
     var COLS = [
