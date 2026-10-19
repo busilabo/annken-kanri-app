@@ -1474,7 +1474,9 @@
   .report-actions { margin: 6px 0; padding-left: 20px; font-size: 13px; color: var(--crit); }
   .report-body { margin: 6px 0 0; padding: 8px 10px; background: var(--surface); border-radius: 8px; font-size: 12.5px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 320px; overflow-y: auto; }
   .report-body a { color: var(--accent); }
-  .rep-days { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(150px, 100%), 1fr)); gap: 8px; }
+  /* 1段7日×2段＝2週間（2026-10-19 代表の指定）。狭い画面では折り返す */
+  .rep-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; }
+  @media (max-width: 1000px) { .rep-days { grid-template-columns: repeat(auto-fill, minmax(min(150px, 100%), 1fr)); } }
   .rep-day { background: var(--surface-2); border-radius: 10px; padding: 8px 10px; min-width: 0; }
   .rep-day[data-today] { background: var(--accent-soft); outline: 2px solid var(--accent); }
   .rep-staff { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--line, #d0d7e2); font-size: 12px; }
@@ -1584,7 +1586,7 @@
     <!-- 代表の予定。今日の報告はページのいちばん下（2026-10-18 代表の指定） -->
     <div class="top-info">
       <section class="info-block" aria-label="代表の予定">
-        <div class="info-head"><b>代表（坂中）の予定</b><span>今日から7日分。私用の予定は「予定あり」と出ます</span></div>
+        <div class="info-head"><b>代表（坂中）の予定</b><span>今日から2週間分。私用の予定は「予定あり」と出ます。下の顔マークはその日に出勤するスタッフ</span></div>
         <div data-rep-schedule></div>
       </section>
     </div>
@@ -4629,13 +4631,16 @@
   }
 
   // ---- 代表の予定 ----
-  // sync.js が busilabo@ の予定表から今日から7日分を読み、setRepSchedule で渡してくる（私用は「予定あり」に置き換え済み）
+  // sync.js が busilabo@ の予定表から今日から2週間分を読み、setRepSchedule で渡してくる（私用は「予定あり」に置き換え済み）
   var repSchedState = { loaded: false, events: [] };
   function setRepSchedule(state) { repSchedState = state || { loaded: false, events: [] }; renderTopInfo(); }
 
   // その日にビジラボに出勤するスタッフ（代表の予定の下に顔マークで出す。2026-10-19 代表の指定）
   function repStaffHtml(ds) {
     if (!shiftState || !shiftState.events) return '';
+    // 出勤予定がまだ入っていない先の日は「なし」と言い切らない
+    var lastShift = shiftState.events.reduce(function (m, e) { return e.date > m ? e.date : m; }, '');
+    if (!lastShift || ds > lastShift) return '';
     // 出勤時間が早い人から上に（2026-10-19 代表の指定）
     var mins = function (t) { var m = /(\d{1,2}):(\d{2})/.exec(t || ''); return m ? +m[1] * 60 + +m[2] : 9999; };
     var who = shiftNames().filter(function (n) { return n !== '坂中' && bizShiftsOf(n, ds).length; })
@@ -4657,7 +4662,7 @@
     }
     var html = '<div class="rep-days">';
     var d = new Date(todayStr + "T00:00:00");
-    for (var i = 0; i < 7; i++, d.setDate(d.getDate() + 1)) {
+    for (var i = 0; i < 14; i++, d.setDate(d.getDate() + 1)) {
       var ds = fmtDate(d);
       var evs = repSchedState.events.filter(function (e) { return e.date === ds; });
       html += '<div class="rep-day"' + (i === 0 ? ' data-today' : '') + '>' +

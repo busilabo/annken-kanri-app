@@ -1791,13 +1791,13 @@
   var SHIFT_STALE_MIN = 60;
 
   function shiftRange() {
-    // 今週の月曜から2週間
+    // 今週の月曜から3週間（出勤予定タブは2週間分、代表の予定は今日から2週間分を使う）
     var from = new Date();
     from.setHours(0, 0, 0, 0);
     var dow = from.getDay();
     from.setDate(from.getDate() - (dow === 0 ? 6 : dow - 1));
     var to = new Date(from);
-    to.setDate(to.getDate() + 14);
+    to.setDate(to.getDate() + 21);
     return { from: from, to: to };
   }
 
@@ -1851,7 +1851,7 @@
   // 私用の判断は Outlook の「非公開」と、件名の言葉（Excel のスケジュールに反映するルーティンと同じ基準）
   var PRIVATE_WORD = /バンド|練習|誕生|ライブ|ヴァイオリン|バイオリン|家族|趣味|私用|プライベート|通院|病院|歯医者/;
   var PRIVATE_CATEGORY = /個人|私用|プライベート|personal|private/i;
-  var REP_DAYS = 7;
+  var REP_DAYS = 14;   // 代表の予定は2週間分（2026-10-19 代表の指定）
 
   function isPrivateEvent(ev) {
     if (/^(private|personal|confidential)$/i.test(ev.sensitivity || "")) return true;
