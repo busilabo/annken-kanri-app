@@ -558,7 +558,24 @@
     if (data.type) { log("unknown queue type, skipped: " + data.type + " (" + file.name + ")"); return; }
     var srcId = data.srcId || "";
     var already = srcId && document.querySelector('.card[data-src-id="' + srcId + '"]');
-    if (!already) {
+    // 案件管理は「できるAIチーム＋」のお客様になりうる問い合わせだけ（2026-10-19 代表の指定）
+    var route = already ? "skip" : await inquiryRoute(data);
+    if (route === "task") {
+      // Instagram・Facebook の DM は案件管理に入れず、仕事だけ作る
+      await createTaskOnce("inquiry:" + srcId, inquiryTaskFields(data), "メッセージが届いた", "");
+    } else if (route === "other") {
+      // 売り込み・営業などは、案件管理にも仕事にも入れない（やり取りの記録にだけ残す）
+      postActivity({
+        Title: "問い合わせ（案件管理の対象外）：" + (data.company || data.contactName || "名前なし"),
+        OccurredAt: data.receivedAt ? new Date(data.receivedAt).toISOString() : new Date().toISOString(),
+        Channel: "問い合わせ（対象外）", Business: "業務改善・DX支援", Direction: "受信",
+        Customer: data.company || "", CustomerId: "", Staff: "",
+        Subject: String(data.content || "").split("\n")[0].slice(0, 200),
+        Summary: (data._reason ? "対象外とした理由：" + data._reason + "\n\n" : "") + String(data.content || "").slice(0, 2000),
+        SourceLink: "", SourceId: "inquiry-other:" + srcId
+      });
+    }
+    if (route === "case") {
       var fields = {
         Title: data.company || "無題",
         SrcId: srcId,
@@ -788,6 +805,23 @@
       "メールを読んで、必要なら返信する"
     ]
   };
+
+  // 問い合わせの行き先：case＝案件管理（＋確認の仕事）／task＝仕事だけ（SNS の DM）／other＝どちらにも入れない
+  var CLASSIFY_ENDPOINT = "https://busilabo-work-chat.azurewebsites.net/api/classify";
+  async function inquiryRoute(data) {
+    var memo = String(data.memo || "");
+    if (/Instagram|Facebook|Messenger|Meta/i.test(memo)) return "task";
+    if (data.source === "資料DL") return "case";   // できるAIチーム＋の資料請求
+    try {
+      var token = await getToken();
+      var res = await fetch(CLASSIFY_ENDPOINT, { method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+        body: JSON.stringify({ company: data.company || "", contactName: data.contactName || "", memo: memo, content: data.content || "" }) });
+      if (!res.ok) return "case";   // 仕分けできないときは取りこぼさないよう案件管理へ
+      var j = await res.json();
+      if (j.target === false) { data._reason = j.reason || ""; return "other"; }
+      return "case";
+    } catch (e) { log("classify failed: " + e.message); return "case"; }
+  }
 
   // 問い合わせから入れる仕事。Instagram・Facebook の DM（問い合わせチェックのルーティンが Meta の通知メールから拾ったもの。
   // memo が「[自動反映: Instagram DM…]」「[自動反映: Facebook Messenger…]」）は、事業に合わせた手順にする（代表の指定 2026-10-15）
