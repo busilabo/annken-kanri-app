@@ -1271,9 +1271,12 @@
   .band-title { font-size: 15px; font-weight: 700; }
   .band-hint { font-size: 12px; color: var(--text-muted); }
   .band-col { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-  /* 「今週」と「来週」の段は左右に並べる（2026-10-19 代表の指定） */
-  .band-pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; align-items: start; }
-  @media (max-width: 1200px) { .band-pair { grid-template-columns: 1fr; } }
+  /* 段を行にそろえる：1行目＝列の見出し、2〜5行目＝急ぎ・今週・来週・そのほか。ゴールは右の列を縦に通す（2026-10-19 代表の指定） */
+  .relay-rows { row-gap: 10px; align-items: stretch; }
+  .relay-rows > .kb-col[data-col="goal"] { grid-column: 3; grid-row: 1 / span 5; align-self: start; }
+  .relay-rows > .kb-colhead { padding-bottom: 6px; }
+  .relay-rows > .band[data-col="recruit"] { outline: 2px solid var(--accent-soft); }
+  @media (max-width: 900px) { .relay-rows > .kb-col[data-col="goal"] { grid-column: auto; grid-row: auto; } }
   @media (max-width: 900px) { .relay { grid-template-columns: 1fr; } }
   .kb-add { appearance: none; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; margin-top: 8px; padding: 6px 12px; border-radius: 8px; border: 1px dashed var(--accent); background: var(--surface); color: var(--accent); }
   .kb-more > summary { cursor: pointer; font-size: 13px; font-weight: 700; color: var(--text-muted); padding: 4px 0; }
@@ -5159,28 +5162,30 @@
       { key: "next", title: "🗓 来週", hint: md(nextStart) + "〜" + md(nextWeekEnd), items: buckets.next },
       { key: "later", title: "そのほか", hint: "期限なし・再来週以降", items: buckets.later, closed: true }
     ];
-    var relayCol = function (col, title, hint, pick) {
-      var total = 0;
-      var html = {};
-      BANDS.forEach(function (b) {
-        var list = b.items.filter(pick);
-        total += list.length;
-        var head = '<span class="band-title">' + b.title + '</span><span class="band-hint">' + b.hint + '</span><span class="kb-count tabular">' + list.length + '</span>';
-        var inner = '<div class="band-col">' + (list.length ? list.map(tileHtml).join('') : '<p class="kb-empty">なし</p>') + '</div>';
-        html[b.key] = b.closed
-          ? '<details class="band" data-band="' + b.key + '"><summary class="band-head">' + head + '</summary>' + inner + '</details>'
-          : '<div class="band" data-band="' + b.key + '"><div class="band-head">' + head + '</div>' + inner + '</div>';
-      });
-      // 「今週」と「来週」は左右に並べる（2026-10-19 代表の指定）。急ぎ・そのほかは横いっぱい
-      var bands = html.urgent + '<div class="band-pair">' + html.week + html.next + '</div>' + html.later;
-      return '<div class="kb-col" data-col="' + col + '"><div class="kb-head"><span class="kb-title">' + title + '</span><span class="kb-count tabular">' + total + '</span></div>' +
-        '<p class="kb-hint">' + hint + '</p><div class="relay-bands">' + bands + '</div></div>';
+    // 段を「急ぎ・今週・来週・そのほか」の行にそろえ、次の走者募集と走行中の同じ段が左右に並ぶようにする（2026-10-19 代表の指定）
+    var COLS = [
+      { key: "recruit", title: "🏃 次の走者募集", hint: "手が空いた人がバトンを受け取ってください", pick: function (it) { return it.claim; } },
+      { key: "running", title: "→ 走行中", hint: "右下の顔が、いまバトンを持っている人です", pick: function (it) { return !it.claim; } }
+    ];
+    var bandCell = function (b, col) {
+      var list = b.items.filter(col.pick);
+      var head = '<span class="band-title">' + b.title + '</span><span class="band-hint">' + b.hint + '</span><span class="kb-count tabular">' + list.length + '</span>';
+      var inner = '<div class="band-col">' + (list.length ? list.map(tileHtml).join('') : '<p class="kb-empty">なし</p>') + '</div>';
+      return b.closed
+        ? '<details class="band" data-band="' + b.key + '" data-col="' + col.key + '"><summary class="band-head">' + head + '</summary>' + inner + '</details>'
+        : '<div class="band" data-band="' + b.key + '" data-col="' + col.key + '"><div class="band-head">' + head + '</div>' + inner + '</div>';
     };
+    var relayHtml = '<div class="relay relay-rows">' +
+      COLS.map(function (col) {
+        var total = BANDS.reduce(function (n, b) { return n + b.items.filter(col.pick).length; }, 0);
+        return '<div class="kb-col kb-colhead" data-col="' + col.key + '"><div class="kb-head"><span class="kb-title">' + col.title + '</span><span class="kb-count tabular">' + total + '</span></div>' +
+          '<p class="kb-hint">' + col.hint + '</p></div>';
+      }).join('') +
+      column("goal", "→ 🏁 今週のゴール", "今週終わった仕事", goals, "今週はまだありません") +
+      BANDS.map(function (b) { return COLS.map(function (col) { return bandCell(b, col); }).join(''); }).join('') +
+      '</div>';
     setHtml(document.querySelector('[data-kanban]'),
-      '<div class="relay">' +
-      relayCol("recruit", "🏃 次の走者募集", "手が空いた人がバトンを受け取ってください", function (it) { return it.claim; }) +
-      relayCol("running", "→ 走行中", "右下の顔が、いまバトンを持っている人です", function (it) { return !it.claim; }) +
-      column("goal", "→ 🏁 今週のゴール", "今週終わった仕事", goals, "今週はまだありません") + '</div>' +
+      relayHtml +
       '<div class="kanban-row kanban-row2">' +
       column("weekly", "🔁 毎週の仕事", "その週の分が自動で「今週」に入ります", weekly, "まだありません",
         '<button type="button" class="kb-add" data-add="task" data-add-recur="weekly">＋ 毎週の仕事を追加</button>') +
