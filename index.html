@@ -4348,6 +4348,8 @@
     if (!el) return;
     el.textContent = label;
     el.setAttribute('data-tone', toneForStatus('task', label));
+    // 保存を頼む（2026-10-19：押したボタンは描き直しで画面から外れるので、ボタンのクリックからでは保存先のカードが分からなかった）
+    el.dispatchEvent(new Event('change', { bubbles: true }));
   }
 
   // かんたん表示の下に出す入力欄（申し送り・代表への質問・受け取る人）。5秒ごとの描き直しで消えないよう、別の箱に出す

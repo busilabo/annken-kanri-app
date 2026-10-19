@@ -429,7 +429,9 @@
   }
 
   async function saveCard(card) {
-    if (applying) return;
+    // 読み直しの最中なら、終わるのを待ってから保存する（2026-10-19：以前はここで黙って捨てていたため、
+    // 「終わった」などを押しても保存されず、次の読み直しで元に戻ることがあった）
+    for (var wait = 0; applying && wait < 60; wait++) await new Promise(function (r) { setTimeout(r, 250); });
     var kind = card.getAttribute("data-kind");
     var itemId = card.getAttribute("data-item-id");
     if (!itemId) return;
