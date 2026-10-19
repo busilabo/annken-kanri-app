@@ -1477,6 +1477,11 @@
   .rep-days { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(150px, 100%), 1fr)); gap: 8px; }
   .rep-day { background: var(--surface-2); border-radius: 10px; padding: 8px 10px; min-width: 0; }
   .rep-day[data-today] { background: var(--accent-soft); outline: 2px solid var(--accent); }
+  .rep-staff { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--line, #d0d7e2); font-size: 12px; }
+  .rep-staff-label { font-weight: 700; color: var(--text-muted); }
+  .rep-staff-one { display: inline-flex; align-items: center; gap: 3px; }
+  .rep-staff-one .avatar { width: 20px; height: 20px; font-size: 11px; }
+  .rep-staff-one small { font-size: 11.5px; color: var(--text-muted); }
   .rep-date { font-weight: 700; font-size: 13px; margin-bottom: 4px; }
   .rep-date small { font-weight: 400; color: var(--text-muted); margin-left: 4px; }
   .rep-day ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
@@ -4628,6 +4633,18 @@
   var repSchedState = { loaded: false, events: [] };
   function setRepSchedule(state) { repSchedState = state || { loaded: false, events: [] }; renderTopInfo(); }
 
+  // その日にビジラボに出勤するスタッフ（代表の予定の下に顔マークで出す。2026-10-19 代表の指定）
+  function repStaffHtml(ds) {
+    if (!shiftState || !shiftState.events) return '';
+    var who = shiftNames().filter(function (n) { return n !== '坂中' && bizShiftsOf(n, ds).length; });
+    if (!who.length) return '<div class="rep-staff"><span class="rep-staff-label">出勤</span><span class="rep-none">なし</span></div>';
+    return '<div class="rep-staff"><span class="rep-staff-label">出勤</span>' + who.map(function (n) {
+      var s = bizShiftsOf(n, ds)[0] || {};
+      var time = s.start ? s.start + (s.end ? '〜' + s.end : '') : '';
+      return '<span class="rep-staff-one" title="' + esc(n + ' ' + time) + '">' + avatarHtml(n) + '<small>' + esc(n) + (time ? ' ' + esc(time) : '') + '</small></span>';
+    }).join('') + '</div>';
+  }
+
   function renderRepSchedule() {
     var box = document.querySelector('[data-rep-schedule]');
     if (!box) return;
@@ -4647,6 +4664,7 @@
           return '<li' + (e.private ? ' data-private' : '') + '><span class="rep-time">' + esc(time) + '</span><span class="rep-title">' + esc(e.title) + '</span>' +
             (e.place ? '<span class="rep-place">📍 ' + esc(e.place) + '</span>' : '') + '</li>';
         }).join('') + '</ul>' : '<span class="rep-none">予定なし</span>') +
+        repStaffHtml(ds) +
         '</div>';
     }
     setHtml(box, html + '</div>');
