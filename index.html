@@ -1477,7 +1477,7 @@
   .rep-days { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(150px, 100%), 1fr)); gap: 8px; }
   .rep-day { background: var(--surface-2); border-radius: 10px; padding: 8px 10px; min-width: 0; }
   .rep-day[data-today] { background: var(--accent-soft); outline: 2px solid var(--accent); }
-  .rep-staff { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--line, #d0d7e2); font-size: 12px; }
+  .rep-staff { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--line, #d0d7e2); font-size: 12px; }
   .rep-staff-label { font-weight: 700; color: var(--text-muted); }
   .rep-staff-one { display: inline-flex; align-items: center; gap: 3px; }
   .rep-staff-one .avatar { width: 20px; height: 20px; font-size: 11px; }
@@ -4636,7 +4636,10 @@
   // その日にビジラボに出勤するスタッフ（代表の予定の下に顔マークで出す。2026-10-19 代表の指定）
   function repStaffHtml(ds) {
     if (!shiftState || !shiftState.events) return '';
-    var who = shiftNames().filter(function (n) { return n !== '坂中' && bizShiftsOf(n, ds).length; });
+    // 出勤時間が早い人から上に（2026-10-19 代表の指定）
+    var mins = function (t) { var m = /(\d{1,2}):(\d{2})/.exec(t || ''); return m ? +m[1] * 60 + +m[2] : 9999; };
+    var who = shiftNames().filter(function (n) { return n !== '坂中' && bizShiftsOf(n, ds).length; })
+      .sort(function (a, b) { return mins((bizShiftsOf(a, ds)[0] || {}).start) - mins((bizShiftsOf(b, ds)[0] || {}).start); });
     if (!who.length) return '<div class="rep-staff"><span class="rep-staff-label">出勤</span><span class="rep-none">なし</span></div>';
     return '<div class="rep-staff"><span class="rep-staff-label">出勤</span>' + who.map(function (n) {
       var s = bizShiftsOf(n, ds)[0] || {};
