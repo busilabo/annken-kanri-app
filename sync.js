@@ -445,8 +445,8 @@
   // 保存待ちのカード。保存が終わるまでは、5秒ごとの読み直しで SharePoint の古い値に戻さない
   var pendingSave = {};
   function scheduleSave(card) {
-    var key = card.getAttribute("data-item-id");
-    if (!key) return;
+    if (!card.getAttribute("data-item-id")) return;
+    var key = card.getAttribute("data-kind") + ":" + card.getAttribute("data-item-id");
     pendingSave[key] = true;
     clearTimeout(saveTimers[key]);
     saveTimers[key] = setTimeout(function () {
@@ -1591,9 +1591,10 @@
         var seenIds = {};
         res.value.forEach(function (item) {
           seenIds[item.id] = true;
-          var existing = document.querySelector('.card[data-item-id="' + item.id + '"]');
+          // 行の番号は表ごとに 1 から振られるので、表の種類（kind）も合わせて探す（2026-10-19 番号が重なって別の表の中身が入る不具合を直した）
+          var existing = document.querySelector('.card[data-kind="' + kind + '"][data-item-id="' + item.id + '"]');
           if (existing) {
-            if (!cardHasFocus(existing) && !pendingSave[item.id]) {
+            if (!cardHasFocus(existing) && !pendingSave[kind + ":" + item.id]) {
               applyItemFields(existing, kind, item.fields);
               renderHistory(existing, item.fields.History);
               var deleted = !!item.fields.Deleted;
