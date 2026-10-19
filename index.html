@@ -1270,9 +1270,10 @@
   details.band[open] > summary.band-head { margin-bottom: 8px; }
   .band-title { font-size: 15px; font-weight: 700; }
   .band-hint { font-size: 12px; color: var(--text-muted); }
-  /* 段の中の仕事は横に並べる（2026-10-19 代表の指定）。幅が足りなければ次の行へ */
-  .band-col { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; min-width: 0; align-items: start; }
-  .band-col > .kb-empty { grid-column: 1 / -1; }
+  .band-col { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  /* 「今週」と「来週」の段は左右に並べる（2026-10-19 代表の指定） */
+  .band-pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; align-items: start; }
+  @media (max-width: 1200px) { .band-pair { grid-template-columns: 1fr; } }
   @media (max-width: 900px) { .relay { grid-template-columns: 1fr; } }
   .kb-add { appearance: none; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; margin-top: 8px; padding: 6px 12px; border-radius: 8px; border: 1px dashed var(--accent); background: var(--surface); color: var(--accent); }
   .kb-more > summary { cursor: pointer; font-size: 13px; font-weight: 700; color: var(--text-muted); padding: 4px 0; }
@@ -5160,15 +5161,18 @@
     ];
     var relayCol = function (col, title, hint, pick) {
       var total = 0;
-      var bands = BANDS.map(function (b) {
+      var html = {};
+      BANDS.forEach(function (b) {
         var list = b.items.filter(pick);
         total += list.length;
         var head = '<span class="band-title">' + b.title + '</span><span class="band-hint">' + b.hint + '</span><span class="kb-count tabular">' + list.length + '</span>';
         var inner = '<div class="band-col">' + (list.length ? list.map(tileHtml).join('') : '<p class="kb-empty">なし</p>') + '</div>';
-        return b.closed
+        html[b.key] = b.closed
           ? '<details class="band" data-band="' + b.key + '"><summary class="band-head">' + head + '</summary>' + inner + '</details>'
           : '<div class="band" data-band="' + b.key + '"><div class="band-head">' + head + '</div>' + inner + '</div>';
-      }).join('');
+      });
+      // 「今週」と「来週」は左右に並べる（2026-10-19 代表の指定）。急ぎ・そのほかは横いっぱい
+      var bands = html.urgent + '<div class="band-pair">' + html.week + html.next + '</div>' + html.later;
       return '<div class="kb-col" data-col="' + col + '"><div class="kb-head"><span class="kb-title">' + title + '</span><span class="kb-count tabular">' + total + '</span></div>' +
         '<p class="kb-hint">' + hint + '</p><div class="relay-bands">' + bands + '</div></div>';
     };
