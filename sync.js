@@ -612,7 +612,13 @@
     return (div.textContent || "").replace(/ /g, " ").replace(/\n{3,}/g, "\n\n").trim();
   }
 
-  // 本文の「10/15まで」「10月15日」「明日まで」などから期限を読む。読めなければ空（受け取った人が決める）
+  // その週（月曜はじまり）の金曜。weeks＝1 なら次の週
+  function fridayOf(base, weeks) {
+    var d = new Date(base);
+    d.setDate(d.getDate() - ((d.getDay() + 6) % 7) + 4 + 7 * weeks);
+    return d;
+  }
+  // 本文の「10/15まで」「10月15日」「明日まで」「今週中」などから期限を読む。読めなければ空（受け取った人が決める）
   function parseDue(text, postedAt) {
     var base = postedAt ? new Date(postedAt) : new Date();
     if (isNaN(base.getTime())) base = new Date();
@@ -625,6 +631,10 @@
     } else if (/明後日/.test(text)) { d = new Date(base); d.setDate(d.getDate() + 2); }
     else if (/明日/.test(text)) { d = new Date(base); d.setDate(d.getDate() + 1); }
     else if (/今日中|本日中|今日まで/.test(text)) { d = new Date(base); }
+    // 「今週中」→ その週の金曜、「来週中」→ 次の週の金曜、「今月中」→ その月の末日（2026-10-19 追加）
+    else if (/今週中|今週まで|今週いっぱい/.test(text)) { d = fridayOf(base, 0); if (d < base) d = new Date(base); }
+    else if (/来週中|来週まで|来週いっぱい/.test(text)) { d = fridayOf(base, 1); }
+    else if (/今月中|今月まで|今月いっぱい/.test(text)) { d = new Date(base.getFullYear(), base.getMonth() + 1, 0); }
     if (!d || isNaN(d.getTime())) return null;
     return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0") + "T00:00:00.000Z";
   }
