@@ -1270,7 +1270,9 @@
   details.band[open] > summary.band-head { margin-bottom: 8px; }
   .band-title { font-size: 15px; font-weight: 700; }
   .band-hint { font-size: 12px; color: var(--text-muted); }
-  .band-col { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  /* 段の中の仕事は横に並べる（2026-10-19 代表の指定）。幅が足りなければ次の行へ */
+  .band-col { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; min-width: 0; align-items: start; }
+  .band-col > .kb-empty { grid-column: 1 / -1; }
   @media (max-width: 900px) { .relay { grid-template-columns: 1fr; } }
   .kb-add { appearance: none; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; margin-top: 8px; padding: 6px 12px; border-radius: 8px; border: 1px dashed var(--accent); background: var(--surface); color: var(--accent); }
   .kb-more > summary { cursor: pointer; font-size: 13px; font-weight: 700; color: var(--text-muted); padding: 4px 0; }
