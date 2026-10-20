@@ -976,7 +976,6 @@
   }
 
   function mailThreadKey(data) {
-    if (data.threadKey) return data.threadKey;
     var subject = String(data.subject || "").replace(/^\s*((re|fw|fwd|返信|転送)\s*[:：]\s*)+/i, "").trim();
     var domain = String(data.fromAddress || "").split("@")[1] || "";
     return "mail:" + domain.toLowerCase() + ":" + subject;
@@ -1042,45 +1041,7 @@
   // LILOCLE の仕事の目印。メーカー様へのメールの件名に入れてもらい、返事を元の仕事に付ける
   var TASK_TAG = /【L-(\d+)】/;
 
-  // LILOCLE のホームページ（Shopify）のお問い合わせフォーム。通知は no-reply@shopify.com から、いつも同じ件名で contact@lilocle.jp に届く。
-  // そのままだと差出人も件名も全件同じになり、2件目からが1件目の履歴に入ってしまうので、本文からお客様の名前・メール・内容を読み、
-  // お客様のメールごとに1つの仕事にする（2026-10-20）
-  var SHOPIFY_FORM_SUBJECT = /フォームに新しい送信がありました/;
-  var SHOPIFY_FORM_LABEL = /^(名|姓|お名前|メールアドレス|電話番号|オーダー番号.*|お問い合わせ|件名|内容|本文|メッセージ)$/;
-  var SHOPIFY_FORM_END = /^(送信内容を表示|フォーム通知を管理|©)/;
-  function shopifyFormMail(data) {
-    if (!/@shopify\.com$/i.test(String(data.fromAddress || "").trim()) || !SHOPIFY_FORM_SUBJECT.test(String(data.subject || ""))) return data;
-    var raw = String(data.preview || "");
-    var lines = raw.split(/\r?\n/).map(function (s) { return s.trim(); }).filter(Boolean);
-    var f = {}, label = "";
-    for (var i = 0; i < lines.length; i++) {
-      if (SHOPIFY_FORM_END.test(lines[i])) break;
-      if (SHOPIFY_FORM_SUBJECT.test(lines[i])) continue;
-      if (SHOPIFY_FORM_LABEL.test(lines[i])) { label = lines[i].replace(/※.*$/, ""); f[label] = ""; continue; }
-      if (label) f[label] = f[label] ? f[label] + "\n" + lines[i] : lines[i];
-    }
-    var mail = /[\w.+-]+@[\w-]+(\.[\w-]+)+/.exec(f["メールアドレス"] || raw.replace(/\S+@shopify\.com/gi, ""));
-    var email = mail ? mail[0].toLowerCase() : "";
-    var name = [f["姓"], f["名"]].filter(Boolean).join(" ") || f["お名前"] || "";
-    var kind = f["お問い合わせ"] || f["件名"] || "";
-    var body = [
-      kind ? "お問い合わせの種類：" + kind : "",
-      f["オーダー番号"] ? "注文番号：" + f["オーダー番号"] : "",
-      f["電話番号"] ? "電話番号：" + f["電話番号"] : "",
-      email ? "メールアドレス：" + email : "",
-      "内容：" + (f["内容"] || f["本文"] || f["メッセージ"] || "（通知メールに入りきらなかったので、Shopify の管理画面「フォーム」で確認してください）")
-    ].filter(Boolean).join("\n");
-    return Object.assign({}, data, {
-      fromName: name ? name + "様" : (email || "お客様"),
-      fromAddress: email || data.fromAddress,
-      subject: "ホームページのお問い合わせ" + (kind ? "（" + kind + "）" : ""),
-      preview: body,
-      threadKey: "mail:shopify-form:" + (email || String(data.receivedAt || Date.now()))
-    });
-  }
-
   async function drainMailTask(file, data) {
-    data = shopifyFormMail(data);
     // 「東中 様」→「東中様」。英字の名前（LA PORTE BLEUE）の空白は残す
     var from = (data.fromName || data.fromAddress || "").trim().replace(/([^\x00-\x7F])\s+(?=[^\x00-\x7F])/g, "$1");
     var preview = teamsText(data.preview || "").slice(0, 400);
