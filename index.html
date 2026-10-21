@@ -1273,10 +1273,11 @@
   .band-col { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
   /* 段を行にそろえる：1行目＝列の見出し、2〜4行目＝急ぎ・今週・来週以降。ゴールは右の列を縦に通す（2026-10-19 代表の指定） */
   .relay-rows { row-gap: 10px; align-items: stretch; }
-  .relay-rows > .kb-col[data-col="goal"] { grid-column: 3; grid-row: 1 / span 4; align-self: start; }
+  /* ゴールは長くなりやすいので、左2列の高さに合わせて中でスクロールさせる。ゴールの長さで左の見出し・段が間延びしないように（2026-10-21 代表の指定） */
+  .relay-rows > .kb-col[data-col="goal"] { grid-column: 3; grid-row: 1 / span 4; align-self: stretch; contain: size; min-height: 420px; overflow-y: auto; }
   .relay-rows > .kb-colhead { padding-bottom: 6px; }
   .relay-rows > .band[data-col="recruit"] { outline: 2px solid var(--accent-soft); }
-  @media (max-width: 900px) { .relay-rows > .kb-col[data-col="goal"] { grid-column: auto; grid-row: auto; } }
+  @media (max-width: 900px) { .relay-rows > .kb-col[data-col="goal"] { grid-column: auto; grid-row: auto; contain: none; min-height: 0; overflow-y: visible; } }
   @media (max-width: 900px) { .relay { grid-template-columns: 1fr; } }
   .kb-add { appearance: none; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; margin-top: 8px; padding: 6px 12px; border-radius: 8px; border: 1px dashed var(--accent); background: var(--surface); color: var(--accent); }
   .kb-more > summary { cursor: pointer; font-size: 13px; font-weight: 700; color: var(--text-muted); padding: 4px 0; }
