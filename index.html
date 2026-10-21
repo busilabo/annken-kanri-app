@@ -1292,7 +1292,7 @@
   }
   .kb-col[data-col="recruit"] { background: var(--accent-soft); }
   .kb-col[data-col="goal"] { background: var(--ok-soft); }
-  /* 毎月の仕事の下に、迷惑メール振分け分を重ねる */
+  /* 毎週の仕事の下に、迷惑メール振分け分を重ねる */
   .kb-stack { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
   .tile-spam-btns { display: flex; gap: 6px; }
   .tile-spam-move { font-size: 11.5px; color: var(--text-muted); }
@@ -5030,7 +5030,7 @@
   var focusRunner = "";
 
   // ---- 迷惑メール・営業メールの振分け（2026-10-21 代表の指定）----
-  // メールから入った仕事のうち、営業・迷惑メールらしいものは「急ぎ」などのボードに出さず、「毎月の仕事」の下の「迷惑メール振分け分」に集める。
+  // メールから入った仕事のうち、営業・迷惑メールらしいものは「急ぎ」などのボードに出さず、「毎週の仕事」の下の「迷惑メール振分け分」に集める。
   // スタッフが「仕事にする」（ボードに戻す）か「不要」（完了にして片付ける）を押して決める。決めた記録は履歴に残る。
   // キーワードで決めるので、誤判定の指摘があれば SPAM_STRONG・SPAM_WEAK を直す。sync.js も取り込むときにこれで見て、返信の下書きを作らない
   // 1つでも入っていれば営業・迷惑メールとみなす言葉
@@ -5375,13 +5375,15 @@
     setHtml(document.querySelector('[data-kanban]'),
       relayHtml +
       '<div class="kanban-row kanban-row2">' +
+      // 毎週の仕事の下に迷惑メール振分け分（2026-10-21 代表の指定）
+      '<div class="kb-stack">' +
       column("weekly", "🔁 毎週の仕事", "その週の分が自動で「今週」に入ります", weekly, "まだありません",
         '<button type="button" class="kb-add" data-add="task" data-add-recur="weekly">＋ 毎週の仕事を追加</button>') +
-      '<div class="kb-stack">' +
+      column("spam", "📭 迷惑メール振分け分", "営業・迷惑メールらしいものです。題名を押すと中身が見られます。要るものは「仕事にする」、要らないものは「不要」", spams, "ありません") +
+      '</div>' +
       column("monthly", "📆 毎月の仕事", "その日の1週間前に自動で「今週」「来週」に入ります", monthly, "まだありません",
         '<button type="button" class="kb-add" data-add="task" data-add-recur="monthly">＋ 毎月の仕事を追加</button>') +
-      column("spam", "📭 迷惑メール振分け分", "営業・迷惑メールらしいものです。題名を押すと中身が見られます。要るものは「仕事にする」、要らないものは「不要」", spams, "ありません") +
-      '</div></div>');
+      '</div>');
 
     // みんなの申し送り（折りたたみ）。新しく書かれたものから
     var handovers = open.filter(hasHandover).map(function (c) {
