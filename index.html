@@ -4344,7 +4344,14 @@
     Array.prototype.splice.apply(lines, [insertAt, 0].concat(newLines));
     el.textContent = lines.join('\n');
     addHistoryEntry(card, 'task', '手順を足す', statusOf(card), null, (who ? who + 'さん：' : '') + texts.join('／'));
-    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(userEvent('input'));
+  }
+
+  // 人の操作から出す保存の合図。読み直しの最中でも sync.js が捨てずに保存する（2026-10-22）
+  function userEvent(type) {
+    var ev = new Event(type, { bubbles: true });
+    ev.byUser = true;
+    return ev;
   }
 
   function setTaskStatus(card, label) {
@@ -4353,7 +4360,7 @@
     el.textContent = label;
     el.setAttribute('data-tone', toneForStatus(card.getAttribute('data-kind') || 'task', label));
     // 保存を頼む（2026-10-19：押したボタンは描き直しで画面から外れるので、ボタンのクリックからでは保存先のカードが分からなかった）
-    el.dispatchEvent(new Event('change', { bubbles: true }));
+    el.dispatchEvent(userEvent('change'));
   }
 
   // かんたん表示の下に出す入力欄（申し送り・代表への質問・受け取る人）。5秒ごとの描き直しで消えないよう、別の箱に出す
@@ -4394,7 +4401,7 @@
       setTaskStatus(card, '進行中');
       addHistoryEntry(card, 'task', '着手する', '進行中', null, '手順' + m[2] + 'を済ませた');
     }
-    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(userEvent('input'));
     renderSimpleTasks();
   });
 
@@ -4497,7 +4504,7 @@
       }, '代表に質問', (who || '') + 'さんから').then(function (created) {
         if (!created) { t.disabled = false; box.querySelector('[data-ask-hint]').textContent = '送れませんでした。もう一度押してください'; return; }
         addHistoryEntry(card, 'task', '代表に質問', statusOf(card), null, q);
-        card.querySelector('[data-role="content"]').dispatchEvent(new Event('input', { bubbles: true }));
+        card.querySelector('[data-role="content"]').dispatchEvent(userEvent('input'));
         closeSimplePanel(card);
         applyAll();
       });
@@ -5511,7 +5518,7 @@
     var handover = card.querySelector('[data-role="handover"]');
     if (handover) {
       handover.textContent = text;
-      handover.dispatchEvent(new Event('input', { bubbles: true }));
+      handover.dispatchEvent(userEvent('input'));
     }
     addHistoryEntry(card, card.getAttribute('data-kind'), 'バトンを渡す', statusOf(card), null, from + ' → ' + (to === UNASSIGNED ? '次の走者募集' : to) + '：' + text);
     closeInlinePanels();
@@ -5532,7 +5539,7 @@
       addHistoryEntry(card, card.getAttribute('data-kind'), how === 'claim' ? "バトンを受け取る" : "バトンを頼む", statusOf(card), null, memo);
     }
     setRoleValue(card, 'owner', name);
-    sel.dispatchEvent(new Event('change', { bubbles: true }));
+    sel.dispatchEvent(userEvent('change'));
     renderSkills();
     renderSimpleTasks();
     renderToday();

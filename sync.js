@@ -439,6 +439,7 @@
     var notice = kind === "task" ? teamsNotice(card, fields) : null;
     try {
       await graph("/sites/" + siteId + "/lists/" + listIds[kind] + "/items/" + itemId + "/fields", { method: "PATCH", body: fields });
+      savedAt[kind + ":" + itemId] = Date.now();
       if (notice) postTeamsReply(card, notice);
       logActivity(card, kind, fields);
     } catch (e) { log("save failed: " + e.message); }
@@ -446,6 +447,8 @@
 
   // 保存待ちのカード。保存が終わるまでは、5秒ごとの読み直しで SharePoint の古い値に戻さない
   var pendingSave = {};
+  // 保存が終わった時刻。保存より前に読み始めた読み直しの古い値で、保存した中身を上書きしないために使う（2026-10-22）
+  var savedAt = {};
   function scheduleSave(card) {
     if (!card.getAttribute("data-item-id")) return;
     var key = card.getAttribute("data-kind") + ":" + card.getAttribute("data-item-id");
@@ -1679,6 +1682,7 @@
       applying = true;
       for (var kind in LIST_NAMES) {
         if (!listIds[kind]) continue;
+        var fetchedAt = Date.now();
         var res = await graph("/sites/" + siteId + "/lists/" + listIds[kind] + "/items?expand=fields&$top=500");
         var seenIds = {};
         res.value.forEach(function (item) {
@@ -1686,7 +1690,8 @@
           // 行の番号は表ごとに 1 から振られるので、表の種類（kind）も合わせて探す（2026-10-19 番号が重なって別の表の中身が入る不具合を直した）
           var existing = document.querySelector('.card[data-kind="' + kind + '"][data-item-id="' + item.id + '"]');
           if (existing) {
-            if (!cardHasFocus(existing) && !pendingSave[kind + ":" + item.id]) {
+            // 読み始めたあとに保存したカードは、読んだ値が古いので当てはめない（2026-10-22「終わった」を2回押さないと終わらない不具合）
+            if (!cardHasFocus(existing) && !pendingSave[kind + ":" + item.id] && !((savedAt[kind + ":" + item.id] || 0) >= fetchedAt)) {
               applyItemFields(existing, kind, item.fields);
               renderHistory(existing, item.fields.History);
               var deleted = !!item.fields.Deleted;
@@ -1742,24 +1747,27 @@
     document.querySelectorAll("[data-list]").forEach(function (list) { mo.observe(list, { childList: true }); });
   }
 
+  // 人の操作か。読み直しの最中でも、人の操作（と、ボタンの処理が人の代わりに出す保存の合図）は捨てない。
+  // 2026-10-22：5秒ごとの読み直しの最中に押した「終わった」が捨てられ、古い状態に戻っていた（2回押さないと終わらない）
+  function byUser(e) { return e.isTrusted || e.byUser; }
   function watchInteractions() {
     document.body.addEventListener("click", function (e) {
-      if (applying) return;
+      if (applying && !byUser(e)) return;
       var card = e.target.closest(".card");
       if (card) scheduleSave(card);
     });
     document.body.addEventListener("input", function (e) {
-      if (applying) return;
+      if (applying && !byUser(e)) return;
       var card = e.target.closest(".card");
       if (card) scheduleSave(card);
     });
     document.body.addEventListener("change", function (e) {
-      if (applying) return;
+      if (applying && !byUser(e)) return;
       var card = e.target.closest(".card");
       if (card) scheduleSave(card);
     });
     document.body.addEventListener("keydown", function (e) {
-      if (applying || e.key !== "Enter") return;
+      if ((applying && !byUser(e)) || e.key !== "Enter") return;
       var card = e.target.closest(".card");
       if (card) setTimeout(function () { scheduleSave(card); }, 0);
     });
