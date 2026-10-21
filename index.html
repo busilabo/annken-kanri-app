@@ -4350,7 +4350,7 @@
     var el = card.querySelector('[data-role="status"]');
     if (!el) return;
     el.textContent = label;
-    el.setAttribute('data-tone', toneForStatus('task', label));
+    el.setAttribute('data-tone', toneForStatus(card.getAttribute('data-kind') || 'task', label));
     // 保存を頼む（2026-10-19：押したボタンは描き直しで画面から外れるので、ボタンのクリックからでは保存先のカードが分からなかった）
     el.dispatchEvent(new Event('change', { bubbles: true }));
   }
@@ -5040,8 +5040,9 @@
   var SPAM_SAFE_FROM = /(^|\.)(watahan\.co\.jp|kaitorikensakukun\.com|hitachi\.co\.jp|amazon\.co\.jp|amazon\.com|marketplace\.amazon\.co\.jp)$/i;
   var SPAM_KEEP = "迷惑メールではないので仕事にする";
   var SPAM_DROP = "迷惑メールとして片付ける";
-  // 営業・迷惑メールらしければ理由（当たった言葉）を返す。from はドメインかメールアドレス
-  function spamReason(from, text) {
+  // 営業・迷惑メールらしければ理由（当たった言葉）を返す。from はドメインかメールアドレス。
+  // noWeak：お問い合わせフォームは Azure で仕分け済みで、見込みのお客様も「ご提案」「無料」などを書くので、SPAM_WEAK では見ない
+  function spamReason(from, text, noWeak) {
     from = String(from || "").toLowerCase();
     if (SPAM_SAFE_FROM.test(from.split("@").pop())) return "";
     var t = String(text || "").toLowerCase();
@@ -5049,22 +5050,48 @@
     if (sender.length) return "営業メールの相手（" + sender[0] + "）";
     var strong =SPAM_STRONG.filter(function (w) { return t.indexOf(w) !== -1; });
     if (strong.length) return "「" + strong.slice(0, 3).join("」「") + "」";
+    if (noWeak) return "";
     var weak = SPAM_WEAK.filter(function (w) { return t.indexOf(w.toLowerCase()) !== -1; });
     return weak.length >= 2 ? "「" + weak.slice(0, 3).join("」「") + "」" : "";
+  }
+  // お問い合わせフォームから入ると、案件管理の問い合わせと「問い合わせの確認と報告」の仕事の2枚ができる（目印 inquiry:<SrcId>）。片方を決めたらもう片方も同じにする
+  function spamPartner(card) {
+    if (card.getAttribute('data-kind') === 'inquiry') {
+      var src = card.getAttribute('data-src-id');
+      return src ? liveCards('task').filter(function (c) { return roleVal(c, 'teamsMessageId') === 'inquiry:' + src; })[0] || null : null;
+    }
+    var key = roleVal(card, 'teamsMessageId');
+    if (key.indexOf('inquiry:') !== 0) return null;
+    var srcId = key.slice(8);
+    return liveCards('inquiry').filter(function (c) { return c.getAttribute('data-src-id') === srcId; })[0] || null;
   }
   function historyHas(card, action) {
     return Array.prototype.some.call(card.querySelectorAll('[data-history] .history-action'), function (a) { return a.textContent.trim() === action; });
   }
-  // 振分けに入れる仕事なら理由を返す。メールから入って、まだだれも受け取らず手も付けていない仕事だけ（受け取った仕事は、受け取った人が決めたものとする）
+  // 振分けに入れるなら理由を返す。メール・お問い合わせフォームから入って、まだだれも受け取らず手も付けていないものだけ（受け取った仕事は、受け取った人が決めたものとする）
   function spamSuspect(card) {
-    if (card.getAttribute('data-kind') !== 'task' || isDone(card)) return "";
+    var kind = card.getAttribute('data-kind');
+    if (isDone(card) || historyHas(card, SPAM_KEEP)) return "";
+    // 案件管理の問い合わせ（お問い合わせフォーム）
+    if (kind === 'inquiry') {
+      if (statusOf(card) !== '未対応') return "";
+      var partner = spamPartner(card);
+      if (partner && historyHas(partner, SPAM_KEEP)) return "";
+      return spamReason(roleVal(card, 'contact'), [roleVal(card, 'company'), roleVal(card, 'contactName'), roleVal(card, 'website'), roleVal(card, 'content')].join(" "), true);
+    }
+    if (kind !== 'task') return "";
     var key = roleVal(card, 'teamsMessageId');
-    if (key.indexOf('mail:') !== 0) return "";
+    var isMail = key.indexOf('mail:') === 0, isInquiry = key.indexOf('inquiry:') === 0;
+    if (!isMail && !isInquiry) return "";
     if (ownerOf(card) !== UNASSIGNED || (statusOf(card) || '未着手') !== '未着手') return "";
-    if (roleVal(card, 'related')) return "";   // 連絡先・顧客台帳に登録した相手
-    if (historyHas(card, SPAM_KEEP)) return "";
-    // 見るのはメールの部分だけ（アプリが付けた手順・下書きは見ない）
+    // 見るのはメール・問い合わせの部分だけ（アプリが付けた手順・下書きは見ない）
     var body = roleVal(card, 'content').split(/\n【(手順|返信の下書き)】/)[0];
+    if (isInquiry) {
+      var inq = spamPartner(card);
+      if (inq && historyHas(inq, SPAM_KEEP)) return "";
+      return spamReason("", body + " " + roleVal(card, 'related') + " " + roleVal(card, 'requester'), true);
+    }
+    if (roleVal(card, 'related')) return "";   // 連絡先・顧客台帳に登録した相手
     return spamReason(key.split(':')[1] || "", body + " " + roleVal(card, 'requester'));
   }
 
@@ -5212,7 +5239,11 @@
       if (!needsMove(c)) return;
       var spamWhy = spamSuspect(c);
       if (spamWhy) {
-        var body = roleVal(c, 'content').split(/\n【(?:手順|返信の下書き)】/)[0].split('\n').slice(1).join(' ').replace(/\s+/g, ' ');
+        // 問い合わせと「確認と報告」の仕事が両方あるときは、仕事のほうだけ出す（ボタンを押すと両方が決まる）
+        var isInq = c.getAttribute('data-kind') === 'inquiry', pair = isInq && spamPartner(c);
+        if (pair && !isDone(pair) && spamSuspect(pair)) return;
+        var lines = roleVal(c, 'content').split(/\n【(?:手順|返信の下書き)】/)[0].split('\n');
+        var body = (isInq ? lines : lines.slice(1)).join(' ').replace(/\s+/g, ' ');
         spams.push({ card: c, avatar: false, spam: true, tone: 'neutral', meta: [roleVal(c, 'requester'), kindMeta(c)].filter(Boolean).join(' · '),
           note: "振分けた理由：" + spamWhy + " ／ " + (body.length > 80 ? body.slice(0, 80) + "…" : body), badges: [isNewCard(c) ? { text: "🆕 新着", tone: "accent" } : null] });
         return;
@@ -5571,8 +5602,14 @@
       var keep = spamBtn.hasAttribute('data-spam-keep');
       var sCard = jumpRegistry[spamBtn.getAttribute(keep ? 'data-spam-keep' : 'data-spam-drop')];
       if (!sCard) return;
-      addHistoryEntry(sCard, 'task', keep ? SPAM_KEEP : SPAM_DROP, keep ? '未着手' : '完了', null, currentUser ? currentUser + 'さんが判断' : '');
-      setTaskStatus(sCard, keep ? '未着手' : '完了');
+      // 問い合わせは「不要」で失注（「対象外」と同じ）。対になるカードも同じに決める
+      [sCard, spamPartner(sCard)].forEach(function (c) {
+        if (!c || isDone(c)) return;
+        var kind = c.getAttribute('data-kind');
+        var to = kind === 'inquiry' ? (keep ? '未対応' : '失注') : (keep ? '未着手' : '完了');
+        addHistoryEntry(c, kind, keep ? SPAM_KEEP : SPAM_DROP, to, null, currentUser ? currentUser + 'さんが判断' : '');
+        setTaskStatus(c, to);
+      });
       applyAll();
       return;
     }
