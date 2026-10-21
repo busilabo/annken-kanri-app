@@ -1042,12 +1042,16 @@
   // LILOCLE の仕事の目印。メーカー様へのメールの件名に入れてもらい、返事を元の仕事に付ける
   var TASK_TAG = /【L-(\d+)】/;
 
-  // LILOCLE のホームページ（Shopify）のお問い合わせフォーム。通知は no-reply@shopify.com から、いつも同じ件名で contact@lilocle.jp に届く。
-  // そのままだと差出人も件名も全件同じになり、2件目からが1件目の履歴に入ってしまうので、本文からお客様の名前・メール・内容を読み、
-  // お客様のメールごとに1つの仕事にする（2026-10-20）
-  var SHOPIFY_FORM_SUBJECT = /フォームに新しい送信がありました/;
-  var SHOPIFY_FORM_LABEL = /^(名|姓|お名前|メールアドレス|電話番号|オーダー番号.*|お問い合わせ|件名|内容|本文|メッセージ)$/;
-  var SHOPIFY_FORM_END = /^(送信内容を表示|フォーム通知を管理|©)/;
+  // LILOCLE のホームページ（Shopify）のお問い合わせフォーム。通知は Shopify（no-reply@／mailer@shopify.com）から contact@lilocle.jp に届く。
+  // フォームは2種類ある：Shopify Forms（件名「…フォームに新しい送信がありました」、項目「名・姓・メールアドレス…」）と
+  // ストアの標準フォーム（件名「…の新規お客様メッセージ」、項目「Name:・メール:・本文:」）。
+  // そのままだと差出人がどれも Shopify になり、お客様が分からず、同じ件名だと2件目からが1件目の履歴に入ってしまうので、
+  // 本文からお客様の名前・メール・内容を読み、お客様のメールごとに1つの仕事にする（2026-10-20）
+  var SHOPIFY_FORM_SUBJECT = /フォームに新しい送信がありました|新規お客様メッセージ/;
+  var SHOPIFY_FORM_INTRO = /フォームに新しい送信がありました|お問い合わせフォームから新しいメッセージを受信しました/;
+  var SHOPIFY_FORM_LABEL = /^(名|姓|お名前|名前|Name|メールアドレス|メール|Email|電話番号|電話|Phone|オーダー番号.*|お問い合わせ|件名|内容|本文|メッセージ|Body|Comment|国コード)\s*[:：]?$/i;
+  var SHOPIFY_FORM_ALIAS = { "名前": "お名前", "name": "お名前", "メール": "メールアドレス", "email": "メールアドレス", "電話": "電話番号", "phone": "電話番号", "本文": "内容", "body": "内容", "comment": "内容" };
+  var SHOPIFY_FORM_END = /^(送信内容を表示|フォーム通知を管理|©|オンラインストアの各種設定)/;
   function shopifyFormMail(data) {
     if (!/@shopify\.com$/i.test(String(data.fromAddress || "").trim()) || !SHOPIFY_FORM_SUBJECT.test(String(data.subject || ""))) return data;
     var raw = String(data.preview || "");
@@ -1055,8 +1059,12 @@
     var f = {}, label = "";
     for (var i = 0; i < lines.length; i++) {
       if (SHOPIFY_FORM_END.test(lines[i])) break;
-      if (SHOPIFY_FORM_SUBJECT.test(lines[i])) continue;
-      if (SHOPIFY_FORM_LABEL.test(lines[i])) { label = lines[i].replace(/※.*$/, ""); f[label] = ""; continue; }
+      if (SHOPIFY_FORM_INTRO.test(lines[i])) continue;
+      if (SHOPIFY_FORM_LABEL.test(lines[i])) {
+        label = lines[i].replace(/\s*[:：]$/, "").replace(/※.*$/, "");
+        label = SHOPIFY_FORM_ALIAS[label.toLowerCase()] || label;
+        f[label] = ""; continue;
+      }
       if (label) f[label] = f[label] ? f[label] + "\n" + lines[i] : lines[i];
     }
     var mail = /[\w.+-]+@[\w-]+(\.[\w-]+)+/.exec(f["メールアドレス"] || raw.replace(/\S+@shopify\.com/gi, ""));
@@ -1068,7 +1076,7 @@
       f["オーダー番号"] ? "注文番号：" + f["オーダー番号"] : "",
       f["電話番号"] ? "電話番号：" + f["電話番号"] : "",
       email ? "メールアドレス：" + email : "",
-      "内容：" + (f["内容"] || f["本文"] || f["メッセージ"] || "（通知メールに入りきらなかったので、Shopify の管理画面「フォーム」で確認してください）")
+      "内容：" + (f["内容"] || f["メッセージ"] || "（通知メールに入りきらなかったので、Shopify の管理画面で確認してください）")
     ].filter(Boolean).join("\n");
     return Object.assign({}, data, {
       fromName: name ? name + "様" : (email || "お客様"),
@@ -1105,9 +1113,11 @@
     } else {
       var profile = mailProfile(data);
       if (profile) {
-        // お客様への返信は、下書きを付けて仕事にする（ルーティンが書いてきたものがあればそれを使い、なければ Azure で書く）
+        // お客様への返信は、下書きを付けて仕事にする（ルーティンが書いてきたものがあればそれを使い、なければ Azure で書く）。
+        // 営業・迷惑メールらしいもの（画面の「迷惑メール振分け分」に入る）は下書きを作らない
+        var spam = !data.customer && window.__app.spamReason && window.__app.spamReason(data.fromAddress, data.subject + " " + preview + " " + from);
         var draft = data.draft ? { draft: String(data.draft), needsRep: !!data.needsRep, note: String(data.draftNote || "") }
-          : (profile.draftKind ? await requestDraft({ kind: profile.draftKind, channel: profile.channel, subject: data.subject || "", sender: from, text: preview }) : null);
+          : (profile.draftKind && !spam ? await requestDraft({ kind: profile.draftKind, channel: profile.channel, subject: data.subject || "", sender: from, text: preview }) : null);
         var content = profile.title + "\n" + preview + draftText(draft) + stepsText(profile.steps);
         // 下書きを待つ間に、別の人の画面が同じメールを仕事にしていたら作らない
         if (draft && await remoteTaskExists(key)) { await moveToProcessed(file, "mail task"); return; }
