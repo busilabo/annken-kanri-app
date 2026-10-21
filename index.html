@@ -5029,15 +5029,23 @@
   // 1つでも入っていれば営業・迷惑メールとみなす言葉
   var SPAM_STRONG = ["突然のご連絡", "突然のメール", "突然ご連絡", "初めてご連絡", "はじめてご連絡", "初めてメール", "配信停止", "配信解除", "メルマガ", "メールマガジン", "unsubscribe", "newsletter",
     "営業代行", "テレアポ", "アポイント獲得", "リード獲得", "商談獲得", "seo対策", "meo対策", "上位表示", "広告運用", "ホームページ制作", "サイト制作のご提案",
-    "業務提携のご提案", "協業のご提案", "代理店募集", "パートナー募集", "人材紹介", "採用支援", "補助金", "助成金", "資金調達", "融資のご案内",
+    "業務提携のご提案", "協業のご提案", "代理店募集", "パートナー募集", "人材紹介", "採用支援", "融資のご案内",
     "アカウントが停止", "アカウントを停止", "アカウントの一時停止", "異常なログイン", "不正なログイン", "本人確認のお願い", "支払い方法の更新", "お支払い方法を更新", "パスワードの有効期限",
     "仮想通貨", "ビットコイン", "副業", "稼げる"];
   // 2つ以上入っていれば営業メールとみなす言葉（1つだけならふつうのメールにもある）
   var SPAM_WEAK = ["ご担当者様", "ご担当者さま", "代表者様", "経営者様", "社長様", "ご提案", "ご紹介させて", "無料", "無償", "お試し", "セミナー", "ウェビナー", "導入事例", "資料請求",
-    "お打ち合わせ", "オンライン面談", "15分", "30分", "集客", "売上アップ", "売上向上", "コスト削減", "業務効率化", "今だけ", "当選", "出会い"];
+    "お打ち合わせ", "オンライン面談", "15分", "30分", "集客", "売上アップ", "売上向上", "コスト削減", "業務効率化", "今だけ", "当選", "出会い",
+    "補助金", "助成金", "資金調達"];   // 見込みのお客様も「補助金を使って導入したい」と書くので、1つだけでは振り分けない（2026-10-21）
   // 代表が「営業メール」と決めた相手。社名（署名・送り主の名前）かドメインが入っていれば、言葉に関係なく振り分ける
   var SPAM_SENDERS = ["ビットライト"];   // 株式会社ビットライト（2026-10-21 代表の指定）
   var SPAM_SENDER_REASON = "営業メールの相手";
+  // 代表が「迷惑メールではない」と決めたもの。手で振り分けていても、元の場所に戻す。
+  // このファイルは公開されるのでお客様の名前は書かず、目印（mail:… / inquiry:… の後ろ、問い合わせの SrcId）で書く
+  var SPAM_NOT_IDS = ["forms-13"];   // お問い合わせフォーム 10/15 の件（2026-10-21 代表の指定）
+  function spamExempt(card) {
+    var id = card.getAttribute('data-kind') === 'inquiry' ? card.getAttribute('data-src-id') || "" : roleVal(card, 'teamsMessageId').replace(/^(inquiry|mail):/, "");
+    return SPAM_NOT_IDS.indexOf(id) !== -1;
+  }
   // 取引先・Amazon など、営業・迷惑メールではない相手
   var SPAM_SAFE_FROM = /(^|\.)(watahan\.co\.jp|kaitorikensakukun\.com|hitachi\.co\.jp|amazon\.co\.jp|amazon\.com|marketplace\.amazon\.co\.jp)$/i;
   var SPAM_KEEP = "迷惑メールではないので仕事にする";
@@ -5103,7 +5111,7 @@
   // ただし、スタッフが手で振り分けたものと、代表が営業メールと決めた相手（SPAM_SENDERS）は、受け取っていても振り分ける
   function spamSuspect(card) {
     var kind = card.getAttribute('data-kind');
-    if (isDone(card) || !spamMovable(card)) return "";
+    if (isDone(card) || !spamMovable(card) || spamExempt(card)) return "";
     var decided = spamDecision(card);
     if (decided === SPAM_KEEP) return "";
     if (decided === SPAM_MOVE) return "スタッフが振り分けた";
@@ -5295,7 +5303,7 @@
       var item = {
         card: c, meta: meta, note: note, ownerOff: gone, claim: claimable,
         pass: !claimable && kind === 'task' && owner !== UNASSIGNED && !gone,
-        spamMove: spamMovable(c),
+        spamMove: spamMovable(c) && !spamExempt(c),
         avatar: owner !== UNASSIGNED,
         badges: (gone && isUrg ? [{ text: owner + (presence[owner] === false ? "さんお休み" : "さん退勤済み"), tone: "warn" }] : [])
           .concat(baseBadges(c)).concat([noHandover(c) ? { text: "申し送りなし", tone: "warn" } : null])
