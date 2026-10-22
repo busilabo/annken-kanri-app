@@ -235,12 +235,14 @@
     },
     get_today: function () { return window.__app && window.__app.chatSnapshot ? window.__app.chatSnapshot() : { error: "読めません" }; },
     get_contacts: function (a) {
-      var kw = (a.keyword || "").trim();
-      return Array.prototype.slice.call(document.querySelectorAll('[data-list="contact"] > .card')).map(function (c) {
+      var kw = (a.keyword || "").trim().toLowerCase();
+      var all = Array.prototype.slice.call(document.querySelectorAll('[data-list="contact"] > .card')).map(function (c) {
         return { business: roleVal(c, "business"), side: roleVal(c, "side"), company: roleVal(c, "company"), name: roleVal(c, "name"), role: roleVal(c, "role"), email: roleVal(c, "email"), phone: roleVal(c, "phone"), teams: roleVal(c, "teams"), howto: roleVal(c, "howto") };
-      }).filter(function (x) {
-        return (!a.business || x.business === a.business) && (!kw || JSON.stringify(x).indexOf(kw) !== -1);
-      });
+      }).filter(function (x) { return !a.business || x.business === a.business; });
+      var hit = all.filter(function (x) { return !kw || JSON.stringify(x).toLowerCase().indexOf(kw) !== -1; });
+      // 見つからないときは会社名の一覧を返す（「ラポートブルー」と「LA PORTE BLEUE」のように、カタカナと英語で書き方が違うことがあるため。2026-10-22）
+      if (kw && !hit.length) return { count: 0, note: "そのままの言葉では見つかりませんでした。下の会社名から、読みが同じもの（カタカナ⇔英語・略し方の違い）を選び、その会社名の一部を keyword にしてもう一度探してください。", companies: all.map(function (x) { return x.company; }).filter(Boolean) };
+      return hit;
     },
     // データベース（SharePoint のリスト）。表の名前と列を見る
     db_lists: async function () {
