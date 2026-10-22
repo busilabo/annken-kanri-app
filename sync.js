@@ -1022,7 +1022,8 @@
         return { title: "不良対応：" + subject, business: "家電の卸販売", category: "不良対応", priority: "高", steps: STEPS.wholesaleDefect };
       }
       if (ORDER_SUBJECT.test(subject) || ORDER_QTY.test(String(data.preview || ""))) {
-        return { title: "発注（配送案）：" + subject, business: "家電の卸販売", category: "発注・納期", priority: "高", steps: STEPS.wholesaleOrder };
+        // 発注はしばらく代表の仕事（2026-10-22 代表の指定。スタッフに任せるのは初期不良・修理とその報告）
+        return { title: "発注（配送案）：" + subject, business: "家電の卸販売", category: "発注・納期", priority: "高", owner: "坂中", steps: STEPS.wholesaleOrder };
       }
       return { title: "綿半様からのメール：" + subject, business: "家電の卸販売", category: "代表の確認", owner: "坂中", steps: STEPS.reply };
     }
@@ -1310,6 +1311,7 @@
         TeamsMessageId: faxKey,
         Title: ("納期 FAX の照合：" + summary).slice(0, 60),
         Priority: "高",
+        Owner: "坂中",   // 発注・納期はしばらく代表の仕事（2026-10-22）
         Business: "家電の卸販売",
         Category: "発注・納期",
         Related: "綿半ドットコム",
