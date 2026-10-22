@@ -1579,7 +1579,16 @@
         listColumns.__activity = set;
       }
     } catch (e) { log("activity list lookup failed: " + e.message); }
+    // 画面には出さず、マネージャー（チャット）だけが読み書きする表（2026-10-22：スタッフが作業するサイトの URL）
+    for (var i = 0; i < CHAT_ONLY_LISTS.length; i++) {
+      try {
+        var r2 = await graph("/sites/" + siteId + "/lists?$filter=" + encodeURIComponent("displayName eq '" + CHAT_ONLY_LISTS[i] + "'"));
+        if (r2.value && r2.value[0]) chatOnlyListIds[CHAT_ONLY_LISTS[i]] = r2.value[0].id;
+      } catch (e) { log("list lookup failed (" + CHAT_ONLY_LISTS[i] + "): " + e.message); }
+    }
   }
+  var CHAT_ONLY_LISTS = ["作業サイト"];
+  var chatOnlyListIds = {};
 
   function snapshotActivity(card, f) {
     var hist = [];
@@ -2236,6 +2245,7 @@
       for (var k in LIST_NAMES) if (listIds[k]) out[LIST_NAMES[k]] = listIds[k];
       if (manualListId) out[MANUAL_LIST] = manualListId;
       if (activityListId) out["やり取りログ"] = activityListId;
+      for (var n in chatOnlyListIds) out[n] = chatOnlyListIds[n];
       return out;
     },
     saveManual: saveManual,
