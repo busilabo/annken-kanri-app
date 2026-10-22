@@ -94,7 +94,13 @@
   function render(extra) {
     var html = "";
     if (!state.messages.length) {
-      html += '<div class="chat-msg chat-ai">' + AI_NAME + 'です。仕事のやり方（マニュアル）・今の状況・仕事の追加や申し送り・連絡先や顧客台帳の直しなど、何でも頼んでください。' +
+      // 何を知っていて何を知らないかを最初に見せる（2026-10-22 代表の指定：スタッフはチャットがどこまで分かるか知らないため）
+      html += '<div class="chat-msg chat-ai">' + AI_NAME + 'です。仕事管理のデータベースを見て答えます。' +
+        '<br>・仕事の状況・申し送り・出勤予定・代表の予定' +
+        '<br>・連絡先（メーカー様の電話番号・発注方法など）・顧客台帳' +
+        '<br>・マニュアル（仕事のやり方）' +
+        '<br>仕事の追加や申し送り、連絡先の直しも頼めます。' +
+        '<br><br>商品・注文・発送（Shopify・Amazon）は私には見えません。返信文づくりと合わせて、Claude のプロジェクト（LILOCLE運営AIチーム／Amazon セラーAI チーム）で確かめてください。' +
         (endpoint() ? "" : '<br><br><b>（準備中）</b>まだ AI とつながっていません。代表が Azure の設定を終えると使えるようになります。') + "</div>";
     }
     state.messages.forEach(function (m) {
