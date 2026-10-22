@@ -730,6 +730,11 @@
       "代品の発送日、または修理の訪問日が決まったら、名古屋支店（nagoya@kaitorikensakukun.com）へ staff@busilabo.com から報告する",
       "報告したら「完了」にする"
     ],
+    wholesaleRepairDone: [
+      "FAX の PDF（修理完了報告書）を開いて、品番と修理の内容を確認する",
+      "修理を依頼してきた綿半様の担当（ふだんは名古屋支店 nagoya@kaitorikensakukun.com）へ、staff@busilabo.com から報告書の PDF を添付してメールで報告する（返信文は家電の卸販売のマニュアルどおり。分からなければマネージャーに聞く）",
+      "報告したら「完了」にする"
+    ],
     wholesaleFax: [
       "FAX の PDF を開いて、品番・台数・納期を確認する",
       "仕事一覧で、同じ品番の配送案の仕事（種類：発注・納期）を探し、そちらの履歴に書き写す",
@@ -1295,6 +1300,26 @@
   // FAX 読み取りルーティンが PDF を読み、日立の納期の連絡だったものだけを faxNotice としてキューに置く（坂中商店宛ての FAX は置かない）。
   // faxNotice: { id, receivedAt, summary, items: [{ model, qty, date }], link }
   async function drainFaxNotice(file, data) {
+    // 修理完了報告書（2026-10-22 代表の指定）：スタッフが綿半様へ報告する仕事にする（不良対応・次の走者募集）
+    if (data.kind === "repair") {
+      var rKey = "fax:" + (data.id || file.name);
+      var rSummary = String(data.summary || "").trim() || "日立 修理完了報告書";
+      var rExists = taskCards().some(function (c) { return taskKeyOf(c) === rKey; }) || (await remoteTaskExists(rKey));
+      var rOk = rExists || await createTaskItem({
+        TeamsMessageId: rKey,
+        Title: ("修理完了の報告：" + rSummary).slice(0, 60),
+        Priority: "中",
+        Business: "家電の卸販売",
+        Category: "不良対応",
+        Related: "綿半ドットコム",
+        Requester: "日立（FAX）",
+        TeamsLink: /^https:\/\//.test(data.link || "") ? data.link : "",
+        Content: "修理完了の報告：" + rSummary + (/^https:\/\//.test(data.link || "") ? "\nFAX：" + data.link : "") + stepsText(STEPS.wholesaleRepairDone)
+      }, "修理完了報告書の FAX が届いた", "");
+      if (!rOk) return;   // 入れられなかったら、次の取り込みでもう一度試す
+      await moveToProcessed(file, "fax repair");
+      return;
+    }
     var summary = String(data.summary || "").trim() || "納期のご連絡";
     var memo = summary + (data.items && data.items.length ? "\n" + data.items.map(function (it) { return (it.model || "") + " " + (it.qty || "") + "台 納期 " + (it.date || ""); }).join("\n") : "") +
       (/^https:\/\//.test(data.link || "") ? "\nFAX：" + data.link : "");
