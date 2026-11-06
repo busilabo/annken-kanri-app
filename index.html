@@ -5057,7 +5057,9 @@
   // このファイルは公開されるのでお客様の名前は書かず、目印（mail:… / inquiry:… の後ろ、問い合わせの SrcId）で書く
   var SPAM_NOT_IDS = ["forms-13"];   // お問い合わせフォーム 10/15 の件（2026-10-21 代表の指定）
   function spamExempt(card) {
-    var id = card.getAttribute('data-kind') === 'inquiry' ? card.getAttribute('data-src-id') || "" : roleVal(card, 'teamsMessageId').replace(/^(inquiry|mail):/, "");
+    // LILOCLE の退会希望（「配信停止」「メルマガ」と書かれるが、お客様からの依頼。sync.js isTaikai）
+    if (roleVal(card, 'teamsMessageId').indexOf('mail:taikai:') === 0) return true;
+    var id =card.getAttribute('data-kind') === 'inquiry' ? card.getAttribute('data-src-id') || "" : roleVal(card, 'teamsMessageId').replace(/^(inquiry|mail):/, "");
     return SPAM_NOT_IDS.indexOf(id) !== -1;
   }
   // 取引先・Amazon など、営業・迷惑メールではない相手

@@ -812,6 +812,11 @@
     ],
     reply: [
       "メールを読んで、必要なら返信する"
+    ],
+    liloTaikai: [
+      "Claude に「退会希望を処理して」と頼む（スキル lilocle-taikai。メールアドレスが一致するお客様の情報を削除し、退会手続き完了のメールを contact@lilocle.jp から送ります。代表の確認はいりません）",
+      "Claude が「確認が必要」と言ったもの（お客様が見つからない・2人以上いる・注文があって削除できない）は、代表に聞く",
+      "完了のメールが送られると、この仕事は自動で完了になります（ならなければ「完了」にする）"
     ]
   };
 
@@ -1018,12 +1023,23 @@
   var NOT_WORK_SENDER = /@(alhambrainc\.jp)$/i;   // THERA（取り扱いのないメーカーの一斉案内 2026-11-06）
   var NOT_WORK_DROP = "仕事にしない相手のメールとして片付ける";
 
+  // LILOCLE のお客様からの退会希望（会員にはメルマガが届くため、ときどき来る）。返信の下書きではなく、スキル lilocle-taikai で処理する（2026-11-06）
+  var TAIKAI_WORD = /退会|配信停止|配信解除|メルマガ.{0,6}(解除|停止|不要)|登録.{0,4}(削除|解除)/;
+  function isTaikai(data) {
+    return String(data.mailbox || "").toLowerCase().indexOf("contact@") === 0 && !/@shopify\.com$/i.test(String(data.fromAddress || "")) &&
+      TAIKAI_WORD.test(String(data.subject || "") + " " + String(data.preview || "").slice(0, 200));
+  }
+
   function mailProfile(data) {
     var from = String(data.fromAddress || "").trim();
     var subject = String(data.subject || "（件名なし）");
     var text = subject + " " + String(data.preview || "");
     var mailbox = String(data.mailbox || "").toLowerCase();
     var business = data.business || "";
+    // 退会希望（件名「配信停止」でも、お客様からならお知らせではないので先に見る）
+    if (isTaikai(data)) {
+      return { title: "LILOCLE 退会希望：" + subject, business: "LILOCLE運営", category: "お客様対応", priority: "中", steps: STEPS.liloTaikai };
+    }
     // 明らかに仕事ではないもの（2026-10-18 代表の指定）：自分たちが送った試しのメールなど
     if (OWN_SENDER.test(from) && TEST_WORD.test(subject)) return null;
     if (NOT_WORK_SUBJECT.test(subject)) return null;
@@ -1104,6 +1120,8 @@
 
   async function drainMailTask(file, data) {
     data = shopifyFormMail(data);
+    // 退会希望はお客様のメールアドレスごとに1つの仕事。完了のメールは件名が変わるので、宛先のアドレスで見つけて完了にする（drainMailSent）
+    if (!data.threadKey && isTaikai(data)) data = Object.assign({}, data, { threadKey: "mail:taikai:" + String(data.fromAddress || "").trim().toLowerCase() });
     // 「東中 様」→「東中様」。英字の名前（LA PORTE BLEUE）の空白は残す
     var from = (data.fromName || data.fromAddress || "").trim().replace(/([^\x00-\x7F])\s+(?=[^\x00-\x7F])/g, "$1");
     var preview = teamsText(data.preview || "").slice(0, 400);
@@ -1197,6 +1215,7 @@
     to.forEach(function (a) {
       keys.push(mailThreadKey({ fromAddress: a, subject: subject }));
       keys.push("mail:shopify-form:" + a);   // ホームページのお問い合わせは、お客様のメールごとの仕事
+      keys.push("mail:taikai:" + a);         // 退会希望も、お客様のメールごとの仕事
     });
     var cards = taskCards().filter(function (c) { return isOpenTask(c) && keys.indexOf(taskKeyOf(c)) !== -1; });
     cards.forEach(function (c) {
