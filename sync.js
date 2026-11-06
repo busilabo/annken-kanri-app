@@ -1257,6 +1257,11 @@
   var NO_TASK_REPORTS = ["amazon-morning", "ai-news"];
   // 仕事にしない要対応。「キューに残ったまま」はアプリを開けば片付くので、仕事にしない（2026-10-16 代表の指定）
   var NO_TASK_ACTIONS = ["watch-queue"];
+  // LILOCLE の返信案づくりが「営業」と見た問い合わせ（例：返信案を確認する（○○様・営業・ご提案（Web制作））／要判断：営業のご連絡です）。
+  // 返事をしないので仕事にしない（2026-11-06 代表の指定）
+  function salesReplyAction(id, text) {
+    return /^(routine:)?lilocle-reply-/.test(id || "") && /・営業|要判断：[^\n]*営業/.test(text || "");
+  }
 
   var ROUTINE_KEY_BUSINESS = [[/^routine:amazon-/, "Amazon販売"], [/^routine:lilocle-/, "LILOCLE運営"], [/^routine:inquiry-/, "業務改善・DX支援"], [/^routine:watch-/, "社内・共通"]];
   function businessOfRoutineKey(key) {
@@ -1308,7 +1313,7 @@
     });
     // 毎朝の Amazon チェックは報告だけ（価格の判断は代表が報告を見て行う。代表の指定 2026-10-15）
     var actions = NO_TASK_REPORTS.indexOf(data.routine) !== -1 ? [] : (data.actions || []).filter(function (a) {
-      return NO_TASK_ACTIONS.indexOf(a && a.id) === -1;
+      return NO_TASK_ACTIONS.indexOf(a && a.id) === -1 && !salesReplyAction(a && a.id, (a && a.title || "") + "\n" + (a && a.detail || ""));
     }).slice(0, 20);
     // 仕組みの見張り：今回の報告に出てこない「止まっています」の仕事は、直った（または誤報だった）ので片付ける
     if (data.routine === "watch" && window.__app && window.__app.setTaskStatus) {
@@ -1613,8 +1618,9 @@
       if (/^daily:amazon-sc:/.test(k)) {
         window.__app.setTaskStatus(c, "完了");
         addNote(c, "毎日の確認をやめた", "購入者のメッセージは Claude が見つけて仕事にするので、この確認はいらなくなりました");
-      } else if (/^mail:/.test(k) && (NOT_WORK_SENDER.test("@" + k.split(":")[1]) ||
-          (k.split(":")[1] === "shopify.com" && !SHOPIFY_FORM_SUBJECT.test(k.split(":").slice(2).join(":"))))) {
+      } else if ((/^mail:/.test(k) && (NOT_WORK_SENDER.test("@" + k.split(":")[1]) ||
+          (k.split(":")[1] === "shopify.com" && !SHOPIFY_FORM_SUBJECT.test(k.split(":").slice(2).join(":"))))) ||
+          salesReplyAction(k, textOf(getRoleEl(c, "content")))) {
         // 仕事にしない相手に決める前に入っていた分（今週のゴールには数えない）
         window.__app.setTaskStatus(c, "完了");
         addNote(c, NOT_WORK_DROP, "返事も対応もいらないお知らせなので、仕事にしないことにしました");
