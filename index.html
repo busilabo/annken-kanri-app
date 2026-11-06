@@ -5048,9 +5048,11 @@
     "補助金", "助成金", "資金調達"];   // 見込みのお客様も「補助金を使って導入したい」と書くので、1つだけでは振り分けない（2026-10-21）
   // 代表が「営業メール」と決めた相手。社名（署名・送り主の名前）かドメインが入っていれば、言葉に関係なく振り分ける
   var SPAM_SENDERS = ["ビットライト",   // 株式会社ビットライト（2026-10-21 代表の指定）
-    "bonloyalty.com"];   // Shopify アプリ BON Loyalty のお知らせ（2026-11-06 代表の指定）
+    "bonloyalty.com",
+    "virtuousepics"];   // 飾り文字のメールを番号を変えて何度も送ってくる gmail（virtuousepics011・063… 2026-11-06）   // Shopify アプリ BON Loyalty のお知らせ（2026-11-06 代表の指定）
   var SPAM_SENDER_REASON = "営業メールの相手";
   var SPAM_FANCY_LETTERS = /\uD835[\uDC00-\uDFFF]/;   // U+1D400〜1D7FF（𝐀 𝚊 𝙸 など）
+  var SPAM_TINY_LETTERS = /[ᴬ-ᵪᶛ-ᶿʰ-ʸˠ-ˤ⁰-ₜ]/g;   // 上付き・下付きの英字（ᵃ ʷ ˡ ⁿ など 2026-11-06）
   // 代表が「迷惑メールではない」と決めたもの。手で振り分けていても、元の場所に戻す。
   // このファイルは公開されるのでお客様の名前は書かず、目印（mail:… / inquiry:… の後ろ、問い合わせの SrcId）で書く
   var SPAM_NOT_IDS = ["forms-13"];   // お問い合わせフォーム 10/15 の件（2026-10-21 代表の指定）
@@ -5071,7 +5073,8 @@
     var sender = SPAM_SENDERS.filter(function (w) { w = w.toLowerCase(); return from.indexOf(w) !== -1 || t.indexOf(w) !== -1; });
     if (sender.length) return SPAM_SENDER_REASON + "（" + sender[0] + "）";
     // 𝚊𝚖 𝙸 のような飾り文字（数学用の英字）で書いたメールは、迷惑メールの書き方（2026-11-06 代表の指定。お客様は使わない）
-    if (SPAM_FANCY_LETTERS.test(String(text || ""))) return "「飾り文字の英語」";
+    // ᶜᵃⁿ ʷᵉ のような小さい上付きの英字も同じ（記号の ˆ ˜ などがたまに入るので、3文字以上のときだけ）
+    if (SPAM_FANCY_LETTERS.test(String(text || "")) || (String(text || "").match(SPAM_TINY_LETTERS) || []).length >= 3) return "「飾り文字の英語」";
     var strong =SPAM_STRONG.filter(function (w) { return t.indexOf(w) !== -1; });
     if (strong.length) return "「" + strong.slice(0, 3).join("」「") + "」";
     if (noWeak) return "";
