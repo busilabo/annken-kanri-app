@@ -436,9 +436,14 @@
     var itemId = card.getAttribute("data-item-id");
     if (!itemId) return;
     var fields = collectFields(card, kind);
+    // 前にこの画面で保存した中身から何も変わっていなければ保存しない。何も変わらない保存が続き、
+    // データベースAI社員が「上書きが続いている」と知らせていた（2026-11-06：タスク 69 が1時間で200回）
+    var snap = JSON.stringify(fields);
+    if (card._savedSnap === snap) return;
     var notice = kind === "task" ? teamsNotice(card, fields) : null;
     try {
       await graph("/sites/" + siteId + "/lists/" + listIds[kind] + "/items/" + itemId + "/fields", { method: "PATCH", body: fields });
+      card._savedSnap = snap;
       savedAt[kind + ":" + itemId] = Date.now();
       if (notice) postTeamsReply(card, notice);
       logActivity(card, kind, fields);
@@ -1340,6 +1345,18 @@
         if (/^routine:watch-/.test(k) && isOpenTask(c) && stillIds.indexOf(k) === -1) {
           window.__app.setTaskStatus(c, "完了");
           addNote(c, "自動で片付けた", "仕組みの見張りで、もう止まっていないことを確かめました");
+        }
+      });
+    }
+    // データベースAI社員：前の晩までの「上書きが続いている疑い」は、今晩の点検に出てこなければ収まったので片付ける。
+    // 続いていれば今晩の分（db-alert-<今日>）が新しく入る（2026-11-06：10/19・10/27 の警告が閉じられずに残っていた）
+    if (data.routine === "db-guard" && window.__app && window.__app.setTaskStatus) {
+      var alertIds = actions.map(function (a) { return "routine:" + (a && a.id); });
+      taskCards().forEach(function (c) {
+        var k = taskKeyOf(c);
+        if (/^routine:db-alert-/.test(k) && isOpenTask(c) && alertIds.indexOf(k) === -1) {
+          window.__app.setTaskStatus(c, "完了");
+          addNote(c, "自動で片付けた", "データベースAI社員の次の晩の点検で、上書きが続いていないことを確かめました");
         }
       });
     }
