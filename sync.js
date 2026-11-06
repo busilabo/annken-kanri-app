@@ -1675,7 +1675,7 @@
         // 仕事にしない相手に決める前に入っていた分（今週のゴールには数えない）
         window.__app.setTaskStatus(c, "完了");
         addNote(c, NOT_WORK_DROP, "返事も対応もいらないお知らせなので、仕事にしないことにしました");
-      } else if (/^routine:lilocle-ORDER/.test(k) && ((getRoleEl(c, "status") || {}).textContent || "未着手").trim() === "未着手" && lastReportedDaysAgo(c) >= QUIET_DAYS) {
+      } else if (/^routine:lilocle-(ORDER|tenken-)/.test(k) &&((getRoleEl(c, "status") || {}).textContent || "未着手").trim() === "未着手" && lastReportedDaysAgo(c) >= QUIET_DAYS) {
         // LILOCLE 受注運用の指摘：毎日の点検で、まだのものは毎回「再び指摘」される。3日続けて出てこなければ片付いた（2026-11-06 代表の指定）
         window.__app.setTaskStatus(c, "完了");
         addNote(c, "自動で片付けた", "定時報告の指摘が " + QUIET_DAYS + " 日続けて出ていないので、片付いたと判断しました（違っていたら状態を戻してください）");
