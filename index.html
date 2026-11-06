@@ -5152,7 +5152,7 @@
   // 今週（月曜から）完了した日。履歴の「→ 完了」の記録から読む。履歴が無い完了は日付が分からないので出さない
   function completedThisWeek(card) {
     if (statusOf(card) !== "完了") return false;
-    if (historyHas(card, SPAM_DROP)) return false;   // 迷惑メールを片付けたのはゴールに数えない
+    if (historyHas(card, SPAM_DROP) || historyHas(card, "仕事にしない相手のメールとして片付ける")) return false;   // 迷惑メール・仕事にしない相手を片付けたのはゴールに数えない（sync.js NOT_WORK_DROP）
     var monday = new Date(todayStr + "T00:00:00");
     var dow = monday.getDay();
     monday.setDate(monday.getDate() - (dow === 0 ? 6 : dow - 1));

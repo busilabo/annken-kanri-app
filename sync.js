@@ -1014,6 +1014,9 @@
   var TEST_WORD = /テスト|test|試し|確認用/i;
   // 自動の通知・お知らせ（返事のいらないもの）
   var NOT_WORK_SUBJECT = /^(自動返信|Automatic reply|不在|Out of Office|配信停止|Undeliverable|配信不能|Delivery Status Notification)/i;
+  // 仕事にしない相手（代表の指定）。迷惑メールではないが、返事も対応もいらない一斉のお知らせ。やり取りログへの記録だけ
+  var NOT_WORK_SENDER = /@(alhambrainc\.jp)$/i;   // THERA（取り扱いのないメーカーの一斉案内 2026-11-06）
+  var NOT_WORK_DROP = "仕事にしない相手のメールとして片付ける";
 
   function mailProfile(data) {
     var from = String(data.fromAddress || "").trim();
@@ -1024,6 +1027,7 @@
     // 明らかに仕事ではないもの（2026-10-18 代表の指定）：自分たちが送った試しのメールなど
     if (OWN_SENDER.test(from) && TEST_WORD.test(subject)) return null;
     if (NOT_WORK_SUBJECT.test(subject)) return null;
+    if (NOT_WORK_SENDER.test(from)) return null;
     if (WATAHAN.test(from) || WATAHAN_NAGOYA.test(from)) {
       if (WATAHAN_NAGOYA.test(from) || DEFECT_WORD.test(text)) {
         return { title: "不良対応：" + subject, business: "家電の卸販売", category: "不良対応", priority: "高", steps: STEPS.wholesaleDefect };
@@ -1584,6 +1588,10 @@
       if (/^daily:amazon-sc:/.test(k)) {
         window.__app.setTaskStatus(c, "完了");
         addNote(c, "毎日の確認をやめた", "購入者のメッセージは Claude が見つけて仕事にするので、この確認はいらなくなりました");
+      } else if (/^mail:/.test(k) && NOT_WORK_SENDER.test("@" + k.split(":")[1])) {
+        // 仕事にしない相手に決める前に入っていた分（今週のゴールには数えない）
+        window.__app.setTaskStatus(c, "完了");
+        addNote(c, NOT_WORK_DROP, "返事も対応もいらないお知らせなので、仕事にしないことにしました");
       } else if (k === "routine:watch-queue") {
         window.__app.setTaskStatus(c, "完了");
         addNote(c, "仕事にしないことにした", "キューに残った報告は、アプリを開けば自動で取り込まれます");
