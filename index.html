@@ -5101,7 +5101,8 @@
     "bonloyalty.com",
     "virtuousepics",   // 飾り文字のメールを番号を変えて何度も送ってくる gmail（virtuousepics011・063… 2026-11-06）
     // LILOCLE（contact@）に届く出店・広告・売り込み（2026-11-06 代表の指定「このような営業メール全て」）
-    "shop.tiktok.com", "arcwld.com", "bizmiseru.jp", "plus-shipping.net", "chocoreko.com", "hiyaku-inc.com", "risingsun-assist.com"];
+    // chocoreko.com は外した（LILOCLE から送ったメールへのお返事で、やり取りのある相手だった 2026-11-06）
+    "shop.tiktok.com", "arcwld.com", "bizmiseru.jp", "plus-shipping.net", "hiyaku-inc.com", "risingsun-assist.com"];
   // 迷惑メールによく使われる海外のドメイン。お客様・取引先は使わない（2026-11-06）
   var SPAM_FOREIGN_DOMAIN = /\.(cn|ru|top|xyz|icu|buzz|cfd|sbs)$/i;   // Shopify アプリ BON Loyalty のお知らせ（2026-11-06 代表の指定）
   var SPAM_SENDER_REASON = "営業メールの相手";
@@ -5204,6 +5205,9 @@
       else reason = spamReason(key.split(':')[1] || "", body + " " + roleVal(card, 'requester') + " " + roleVal(card, 'related'));
       // 連絡先・顧客台帳に登録した相手のメールは、決めた相手でなければ振り分けない
       if (key.indexOf('mail:') === 0 && roleVal(card, 'related') && reason.indexOf(SPAM_SENDER_REASON) !== 0) reason = "";
+      // こちらから送ったメールへのお返事（件名が「Re:」）は、やり取りのある相手なので、言葉では振り分けない
+      // （2026-11-06 ChocoReko 様。「〜のご紹介」の件名で営業と見てしまった）。決めた相手・海外のドメイン・飾り文字は今までどおり
+      if (key.indexOf('mail:') === 0 && /：\s*(re|返信)\s*[:：]/i.test(roleVal(card, 'content').split('\n')[0]) && /^「/.test(reason) && !/海外|飾り文字/.test(reason)) reason = "";
     }
     if (!reason) return "";
     return untouched || reason.indexOf(SPAM_SENDER_REASON) === 0 ? reason : "";
