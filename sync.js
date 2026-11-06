@@ -1841,6 +1841,9 @@
     if (!card) return null;
     card.setAttribute("data-item-id", item.id);
     var f = item.fields || {};
+    // SharePoint に入った日時（カードの「📥 いつ追加」に使う。履歴は消せるので、こちらを先に見る）
+    var created = item.createdDateTime || f.Created || "";
+    if (created) card.setAttribute("data-created", created);
     if (kind === "inquiry" && f.SrcId) card.setAttribute("data-src-id", f.SrcId);
     applyItemFields(card, kind, f);
     renderHistory(card, f.History);

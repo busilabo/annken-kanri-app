@@ -4597,7 +4597,10 @@
     return latest;
   }
   // 新しく入った仕事（いちばん古い履歴が今日か昨日）。閉じた段に入っても気づけるように「🆕 新着」を付ける（2026-10-19）
-  function isNewCard(card) {
+  // 仕事が入った日（いちばん古い履歴の日付。年は書いていないので、今日より先なら去年とみなす）
+  function addedOn(card) {
+    var created = new Date(card.getAttribute('data-created') || "");
+    if (!isNaN(created.getTime())) { created.setHours(0, 0, 0, 0); return created; }
     var first = null;
     card.querySelectorAll('[data-history] .history-entry .history-time').forEach(function (t) {
       var m = /(\d{1,2})\/(\d{1,2})/.exec(t.textContent || "");
@@ -4607,8 +4610,18 @@
       if (d > now) d.setFullYear(d.getFullYear() - 1);
       if (!first || d < first) first = d;
     });
-    var n = daysSince(first);
+    return first;
+  }
+  function isNewCard(card) {
+    var n = daysSince(addedOn(card));
     return n !== null && n <= 1;
+  }
+  // カードに出す「いつ入ったか」（2026-11-06 代表の指定「いつ追加された仕事か分からない」）
+  function addedLabel(card) {
+    var d = addedOn(card), n = daysSince(d);
+    if (n === null) return "";
+    var when = n === 0 ? "今日" : n === 1 ? "昨日" : (d.getMonth() + 1) + "/" + d.getDate() + "（" + n + "日前）";
+    return "📥 " + when + "に追加";
   }
   function daysSince(d) { return d ? Math.floor((new Date(todayStr + "T00:00:00") - d) / 86400000) : null; }
   function checkupItems() {
@@ -5199,6 +5212,7 @@
       '<button type="button" class="tile-main" data-jump-key="' + key + '">' +
       '<span class="tile-title">' + esc(cardTitle(it.card)) + '</span>' +
       '<span class="tile-meta">' + esc(it.meta || "") + '</span>' +
+      (addedLabel(it.card) ? '<span class="tile-meta tile-added">' + esc(addedLabel(it.card)) + '</span>' : '') +
       (it.note ? '<span class="tile-note">' + esc(it.note) + '</span>' : '') +
       '</button>' +
       '<div class="tile-foot">' +
