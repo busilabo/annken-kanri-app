@@ -1048,6 +1048,8 @@
     if (OWN_SENDER.test(from) && TEST_WORD.test(subject)) return null;
     if (NOT_WORK_SUBJECT.test(subject)) return null;
     if (NOT_WORK_SENDER.test(from)) return null;
+    // Shopify から届くのは、お問い合わせフォームの通知（shopifyFormMail でお客様のメールに置き換え済み）以外はお知らせ（入金・支払いなど 2026-11-06）
+    if (/@shopify\.com$/i.test(from) && !/^ホームページのお問い合わせ/.test(subject)) return null;
     if (WATAHAN.test(from) || WATAHAN_NAGOYA.test(from)) {
       if (WATAHAN_NAGOYA.test(from) || DEFECT_WORD.test(text)) {
         return { title: "不良対応：" + subject, business: "家電の卸販売", category: "不良対応", priority: "高", steps: STEPS.wholesaleDefect };
@@ -1611,7 +1613,8 @@
       if (/^daily:amazon-sc:/.test(k)) {
         window.__app.setTaskStatus(c, "完了");
         addNote(c, "毎日の確認をやめた", "購入者のメッセージは Claude が見つけて仕事にするので、この確認はいらなくなりました");
-      } else if (/^mail:/.test(k) && NOT_WORK_SENDER.test("@" + k.split(":")[1])) {
+      } else if (/^mail:/.test(k) && (NOT_WORK_SENDER.test("@" + k.split(":")[1]) ||
+          (k.split(":")[1] === "shopify.com" && !SHOPIFY_FORM_SUBJECT.test(k.split(":").slice(2).join(":"))))) {
         // 仕事にしない相手に決める前に入っていた分（今週のゴールには数えない）
         window.__app.setTaskStatus(c, "完了");
         addNote(c, NOT_WORK_DROP, "返事も対応もいらないお知らせなので、仕事にしないことにしました");
