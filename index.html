@@ -1417,6 +1417,9 @@
   .s-manual { border: 1px solid var(--line, #d0d7e2); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
   details.s-manual summary { cursor: pointer; font-weight: 700; }
   .s-manual a.s-btn { text-decoration: none; display: inline-flex; align-items: center; }
+  .s-review { display: flex; flex-direction: column; gap: 10px; }
+  .s-review-what { font-size: 15px; line-height: 1.6; }
+  .s-review-item details summary { cursor: pointer; color: var(--text-muted); font-size: 13px; }
   .s-handover { font-size: 13.5px; line-height: 1.55; background: var(--warn-soft); border-radius: 8px; padding: 8px 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
   .s-handover b { display: block; font-size: 12px; margin-bottom: 2px; }
   .s-handover small { display: block; color: var(--text-muted); margin-top: 2px; }
@@ -4270,7 +4273,10 @@
       (due ? '<span class="row-badge" data-tone="' + due.tone + '">' + esc(due.text) + '</span>' : '') +
       '<span class="s-owner">' + (owner === UNASSIGNED ? '次の走者募集' : avatarHtml(owner) + ' ' + esc(owner) + 'さんが担当') + '</span></div>';
     if (origin) html += '<div class="s-origin">' + origin + '</div>';
-    if (c.desc.length) html += '<div class="s-desc">' + linkify(c.desc.join('\n')) + '</div>';
+    // 「マニュアルの確認」は、一覧の行（・番号｜…）を説明から外し、下で1件ずつボタン付きで出す
+    var reviewRe = window.__manualOps && window.__manualOps.reviewLine;
+    var descLines = reviewRe ? c.desc.filter(function (l) { return !reviewRe.test(l.trim()) && l.trim() !== '【確認するマニュアル】'; }) : c.desc;
+    if (descLines.length) html += '<div class="s-desc">' + linkify(descLines.join('\n')) + '</div>';
     var draft = c.draft.join('\n').trim();
     if (draft) {
       html += '<div class="s-draft"><div class="s-draft-head"><b>✉️ 返信の下書き（AI チームのスキルで作成）</b>' +
@@ -4283,7 +4289,19 @@
     var mkey = roleVal(card, 'teamsMessageId');
     var manuals = window.__manuals || [];
     var mm = /^manual:(\d+)/.exec(mkey);
-    if (mm) {
+    if (/^manual-review:/.test(mkey) && reviewRe) {
+      // 1件ずつ：何のマニュアルを、どう直したか（一言）→ 全体は開いたときだけ → これでよい／いらない
+      var items = c.desc.map(function (l) { return reviewRe.exec(l.trim()); }).filter(Boolean);
+      html += '<div class="s-review">' + (items.length ? items.map(function (r) {
+        var md = manuals.filter(function (x) { return x.id === r[1]; })[0];
+        return '<div class="s-manual s-review-item"><b>📘 ' + esc(r[2]) + '</b> <span class="row-badge" data-tone="neutral">' + esc(r[3]) + '</span>' +
+          '<div class="s-review-what">' + esc(r[4]) + '</div>' +
+          (md ? '<details><summary>マニュアル全体を読む' + (md.state !== '正式' ? '（まだ下書き）' : '') + '</summary><div class="s-draft-text">' + esc(md.body) + '</div></details>' : '<div class="s-draft-note">（このマニュアルは見つかりませんでした。「いらない」で消せます）</div>') +
+          (status !== '完了' ? '<div class="s-actions"><button type="button" class="s-btn s-primary" data-s-review-ok="' + esc(r[1]) + '" data-s-review-card="' + key + '">✅ これでよい</button>' +
+            '<button type="button" class="s-btn" data-s-review-drop="' + esc(r[1]) + '" data-s-review-card="' + key + '">🗑 いらない</button></div>' : '') +
+          '</div>';
+      }).join('') : '<div class="s-done-note">✅ 確認するマニュアルはありません</div>') + '</div>';
+    } else if (mm) {
       var md = manuals.filter(function (x) { return x.id === mm[1]; })[0];
       if (md) html += '<div class="s-manual"><b>📘 マニュアルの' + esc(md.state) + '：' + esc(md.title) + '</b><div class="s-draft-text">' + esc(md.body) + '</div>' +
         '<div class="s-actions">' + (md.state !== '正式' && status !== '完了' ? '<button type="button" class="s-btn s-primary" data-s-manual-ok="' + esc(md.id) + '" data-s-manual-card="' + key + '">✅ 正式にする</button>' : '<span class="s-done-note">✅ 正式になっています</span>') +
@@ -4412,6 +4430,17 @@
     // 受け取る人を選んだら、選ぶ欄を閉じる（受け取りの処理そのものは今日のボードと同じ assignCard）
     var picked = e.target.closest && e.target.closest('[data-simple-panel] [data-assign-key]');
     if (picked) { var pc = picked.closest('.card'); setTimeout(function () { closeSimplePanel(pc); }, 0); return; }
+    var rv = e.target.closest && e.target.closest('[data-s-review-ok],[data-s-review-drop]');
+    if (rv) {
+      var rvCard = jumpRegistry[rv.getAttribute('data-s-review-card')];
+      var rvOk = rv.hasAttribute('data-s-review-ok');
+      var rvId = rv.getAttribute(rvOk ? 'data-s-review-ok' : 'data-s-review-drop');
+      rv.disabled = true; rv.textContent = rvOk ? '確認しています…' : '消しています…';
+      if (rvCard) window.__manualOps.review(rvCard, rvId, rvOk).then(function () { applyAll(); }, function (err) {
+        rv.disabled = false; rv.textContent = rvOk ? '✅ これでよい（もう一度）' : '🗑 いらない（もう一度）'; alert('うまくいきませんでした：' + (err.message || err));
+      });
+      return;
+    }
     var mok = e.target.closest && e.target.closest('[data-s-manual-ok]');
     if (mok) {
       var mCard = jumpRegistry[mok.getAttribute('data-s-manual-card')];

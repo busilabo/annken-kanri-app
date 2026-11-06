@@ -492,6 +492,7 @@
       await drainOne(files[i]);
     }
     try { await ensureDailyTasks(); } catch (e) { log("daily task failed: " + e.message); }
+    try { if (window.__manuals) await migrateManualReviews(); } catch (e) { log("manual review merge failed: " + e.message); }
     try { await ensureRecurring(); } catch (e) { log("recurring task failed: " + e.message); }
     try { await drainInbox(); } catch (e) { log("inbox failed: " + e.message); }
   }
@@ -2346,7 +2347,7 @@
   async function manualOnComplete(card) {
     var business = roleValS(card, "business") || "社内・共通", category = roleValS(card, "category");
     var key = taskKeyOf(card);
-    if (MANUAL_SKIP.indexOf(category) !== -1 || /^(recur:|manual:|manual-update:)/.test(key) || !manualListId) return;
+    if (MANUAL_SKIP.indexOf(category) !== -1 || /^(recur:|manual:|manual-update:|manual-review:)/.test(key) || !manualListId) return;
     var mk = business + "|" + category;
     if (manualBusy[mk]) return;
     manualBusy[mk] = true;
@@ -2364,11 +2365,7 @@
       var src = "仕事 " + card.getAttribute("data-item-id") + "：" + roleValS(card, "content").split("\n")[0].slice(0, 60);
       if (!existing && out.body) {
         var id = await saveManual(null, { Title: business + "／" + category, Business: business, Category: category, Body: out.body, State: "下書き", SourceTask: src, Updater: "マネージャー" });
-        await createTaskOnce("manual:" + id, {
-          Title: ("マニュアルの下書きを確認：" + business + "／" + category).slice(0, 60),
-          Priority: "低", Owner: "坂中", Business: business, Category: "代表の確認", Requester: "マネージャー",
-          Content: "マニュアルの下書きを確認：" + business + "／" + category + "\n終わった仕事（" + src + "）から、マネージャーが下書きを作りました。下の「📘 マニュアルの下書き」を読み、よければ「正式にする」を押してください。直すときは SharePoint の「マニュアル」リストで直せます。"
-        }, "マニュアルの下書き", src);
+        await addManualReview(id, business + "／" + category, "新しく作った", "「" + roleValS(card, "content").split("\n")[0].slice(0, 30) + "」の仕事から、やり方を書き起こしました");
       } else if (existing && out.changed && out.body) {
         // 終わった仕事から、マニュアルを書き直す（2026-10-18 代表の指定「随時更新」）。
         // 正式のマニュアルも書き直し、代表に「何を直したか」を知らせる（前の版は SharePoint の版の履歴から戻せる）
@@ -2378,24 +2375,89 @@
           Body: out.body, Updater: "マネージャー（" + src + "）",
           Suggestion: ((existing.suggestion ? existing.suggestion + "\n" : "") + "・" + stamp + " 更新（" + src + "）\n" + changes).slice(-4000)
         });
-        // まだ確認前（下書き）で、確認の仕事が開いていれば、そこに一言足すだけ（仕事を増やさない）
-        var pending = existing.state !== "正式" && taskCards().filter(function (c) { return taskKeyOf(c) === "manual:" + existing.id && isOpenTask(c); })[0];
-        if (pending) { addNote(pending, "下書きを書き直した", changes.split("\n")[0]); return; }
-        var rkey = "manual-update:" + existing.id;
-        var openReview = taskCards().filter(function (c) { return taskKeyOf(c) === rkey && isOpenTask(c); })[0];
-        if (openReview) addNote(openReview, "マニュアルをまた更新", changes.split("\n")[0]);
-        else await createTaskOnce(rkey, {
-          Title: ("マニュアルを更新しました：" + business + "／" + category).slice(0, 60),
-          Priority: "低", Owner: "坂中", Business: business, Category: "代表の確認", Requester: "マネージャー",
-          Content: "マニュアルを更新しました：" + business + "／" + category + "\n終わった仕事（" + src + "）をもとに、マネージャーがマニュアルを書き直しました。\n\n直したところ：\n" + changes +
-            "\n\n問題なければ「終わった」を押してください。元に戻したいときは、SharePoint の「マニュアル」リストでこの行の「バージョン履歴」から前の版に戻せます。" +
-            (existing.webUrl ? "\n" + existing.webUrl : "")
-        }, "マニュアルの更新", src);
+        await addManualReview(existing.id, business + "／" + category, existing.state === "正式" ? "直した" : "下書きを直した", plainChanges(changes));
       }
     } catch (e) { log("manual on complete failed: " + e.message); }
     finally { manualBusy[mk] = false; }
   }
   function roleValS(card, role) { var el = getRoleEl(card, role); return el ? (el.value !== undefined && el.tagName !== "DIV" ? el.value : textOf(el)) : ""; }
+
+  // ---- マニュアルの確認（2026-11-06 代表の指定「中身が分かりづらい」「いくつも仕事になると困る」）----
+  // マニュアルを作った・直したことは、代表あての仕事「📘 マニュアルの確認」1つに一覧で入れる（目印 manual-review:…）。
+  // 1件1行「・{マニュアルの番号}｜{事業／種類}｜{M/D} {作った・直した}｜{何を直したかの一言}」。
+  // 仕事のかんたん表示で1件ずつ「✅ これでよい」（下書きは正式にする）／「🗑 いらない」を押し、全部決まると自動で完了する
+  var REVIEW_HEAD = "【確認するマニュアル】";
+  var REVIEW_LINE = /^・(\d+)｜([^｜]*)｜([^｜]*)｜(.*)$/;
+  function plainChanges(changes) {
+    var lines = String(changes || "").split("\n").map(function (s) { return s.replace(/^\s*[-・*●]\s*/, "").trim(); }).filter(Boolean);
+    if (!lines.length) return "やり方を少し書き足しました";
+    var first = lines[0].replace(/^(手順\d+に、?|「[^」]+」に、?)/, "").replace(/を追加した$|を追加しました$/, "を足しました");
+    return (first.length > 70 ? first.slice(0, 70) + "…" : first) + (lines.length > 1 ? "（ほか" + (lines.length - 1) + "つ）" : "");
+  }
+  function openManualReview() {
+    return taskCards().filter(function (c) { return /^manual-review:/.test(taskKeyOf(c)) && isOpenTask(c); })[0] || null;
+  }
+  function reviewText(lines) {
+    return "📘 マニュアルの確認\n" +
+      "AI が、終わった仕事をもとに「仕事のやり方（マニュアル）」を作ったり直したりしました。次にその仕事をする人が読みます。\n" +
+      "1件ずつ読んで、よければ「✅ これでよい」、要らなければ「🗑 いらない」を押してください。全部決めると、この仕事は自動で終わります。\n" +
+      REVIEW_HEAD + "\n" + lines.join("\n");
+  }
+  function reviewLinesOf(card) {
+    return roleValS(card, "content").split("\n").filter(function (l) { return REVIEW_LINE.test(l.trim()); }).map(function (l) { return l.trim(); });
+  }
+  function setReviewLines(card, lines) {
+    applying = true;
+    writeField(card, "task", FIELD_MAP.task.Content, reviewText(lines));
+    applying = false;
+    scheduleSave(card);
+  }
+  async function addManualReview(manualId, label, kind, summary, key) {
+    var d = new Date(), line = "・" + manualId + "｜" + label + "｜" + (d.getMonth() + 1) + "/" + d.getDate() + " " + kind + "｜" + String(summary || "").replace(/[｜\n]/g, " ");
+    var open = openManualReview();
+    if (open) {
+      var lines = reviewLinesOf(open).filter(function (l) { return REVIEW_LINE.exec(l)[1] !== String(manualId); });
+      lines.push(line);
+      setReviewLines(open, lines);
+      addNote(open, "確認するマニュアルが増えた", label + "（" + kind + "）");
+      return open;
+    }
+    return await createTaskOnce(key || "manual-review:" + Date.now(), {
+      Title: "マニュアルの確認", Priority: "低", Owner: "坂中", Business: "社内・共通", Category: "代表の確認", Requester: "マネージャー",
+      Content: reviewText([line])
+    }, "マニュアルの確認", label + "（" + kind + "）");
+  }
+  // かんたん表示のボタンから。ok＝これでよい（下書きなら正式にする）／drop＝いらない（マニュアルを削除済みにする）
+  async function reviewManual(card, manualId, ok) {
+    var m = (window.__manuals || []).filter(function (x) { return x.id === String(manualId); })[0];
+    if (ok && m && m.state !== "正式") await saveManual(m.id, { State: "正式", Updater: "坂中（確認済み）" });
+    if (!ok && m) await saveManual(m.id, { Deleted: true });
+    var lines = reviewLinesOf(card).filter(function (l) { return REVIEW_LINE.exec(l)[1] !== String(manualId); });
+    setReviewLines(card, lines);
+    addNote(card, ok ? "マニュアルを確認した" : "マニュアルをいらないとした", m ? m.title : "マニュアル " + manualId);
+    if (!lines.length && window.__app && window.__app.setTaskStatus) {
+      window.__app.setTaskStatus(card, "完了");
+      addNote(card, "完了にする", "確認するマニュアルがなくなりました");
+    }
+  }
+  // 前の作り（マニュアルごとの確認の仕事 manual:<id>／manual-update:<id>）が開いていれば、1つの「マニュアルの確認」にまとめ直す
+  var reviewMigrated = false;
+  async function migrateManualReviews() {
+    if (reviewMigrated || !listIds.task) return;
+    reviewMigrated = true;
+    var olds = taskCards().filter(function (c) { return /^(manual|manual-update):\d+$/.test(taskKeyOf(c)) && isOpenTask(c); });
+    for (var i = 0; i < olds.length; i++) {
+      var c = olds[i], mm = /^(manual|manual-update):(\d+)$/.exec(taskKeyOf(c));
+      var m = (window.__manuals || []).filter(function (x) { return x.id === mm[2]; })[0];
+      var content = roleValS(c, "content");
+      var label = m ? m.business + "／" + m.category : content.split("\n")[0].replace(/^[^：]*：/, "");
+      var summary = mm[1] === "manual" ? "仕事のやり方を新しく書き起こしました（まだ下書き）" : plainChanges((content.split("直したところ：")[1] || "").split("\n\n")[0]);
+      // 別のパソコンが同時にまとめていて、まとめ先がまだ画面に無いときは、次に開いたときに回す
+      if (!(await addManualReview(mm[2], label, mm[1] === "manual" ? "新しく作った" : "直した", summary, "manual-review:matome"))) { reviewMigrated = false; return; }
+      window.__app.setTaskStatus(c, "完了");
+      addNote(c, MERGED_DROP, "「マニュアルの確認」の仕事にまとめました");
+    }
+  }
 
   // 「AIに聞く」（マネージャー、chat.js）が使う操作。追加・保存は既存の仕組み（重複防止・やり取りログ）をそのまま通す
   window.__chatOps = {
@@ -2420,7 +2482,7 @@
     reloadManuals: loadManuals
   };
   // onComplete は「✅ 終わった」とチャットの「完了にする」から呼ぶ
-  window.__manualOps = { save: saveManual, manualFor: manualFor, onComplete: manualOnComplete };
+  window.__manualOps = { save: saveManual, manualFor: manualFor, onComplete: manualOnComplete, review: reviewManual, reviewLine: REVIEW_LINE };
 
   async function boot() {
     await msalApp.initialize();
