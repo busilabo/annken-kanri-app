@@ -1029,7 +1029,7 @@
   // 自動の通知・お知らせ（返事のいらないもの）
   var NOT_WORK_SUBJECT = /^(自動返信|Automatic reply|不在|Out of Office|配信停止|Undeliverable|配信不能|Delivery Status Notification)/i;
   // 仕事にしない相手（代表の指定）。迷惑メールではないが、返事も対応もいらない一斉のお知らせ。やり取りログへの記録だけ
-  var NOT_WORK_SENDER = /@(alhambrainc\.jp)$/i;   // THERA（取り扱いのないメーカーの一斉案内 2026-11-06）
+  var NOT_WORK_SENDER = /@(alhambrainc\.jp|waphyto\.com)$/i;   // THERA・Waphyto（お取引先あての一斉案内。販売終了・新商品 2026-11-06 代表「不要」）
   var NOT_WORK_DROP = "仕事にしない相手のメールとして片付ける";
   var MERGED_DROP = "同じ件の仕事にまとめた";
   var QUIET_DAYS = 3;
