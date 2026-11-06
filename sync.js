@@ -552,6 +552,7 @@
     if (data.type === "verifyRequest") return;
     if (data.type === "teamsTask") { await drainTeamsTask(file, data); return; }
     if (data.type === "mailTask") { await drainMailTask(file, data); return; }
+    if (data.type === "mailSent") { await drainMailSent(file, data); return; }
     if (data.type === "routineReport") { await drainRoutineReport(file, data); return; }
     if (data.type === "faxNotice") { await drainFaxNotice(file, data); return; }
     // 知らない種類のファイルは問い合わせとして登録しない（置いた側の書き間違いで、問い合わせが増えないように）
@@ -1150,6 +1151,70 @@
       }
     }
     await moveToProcessed(file, "mail task");
+  }
+
+  // ---- 送った返信 ----
+  // Power Automate の「送った返信の記録」フローが、送信済みアイテムに入ったメールを mailSent としてキューに置く。
+  // 同じ件（相手のドメイン＋件名）の仕事があり、返信すれば終わる種類なら「完了」にする（今週のゴールに入る）。
+  // 返信のあとにも手順が続く種類（発注・納期／不良対応／メーカー対応）と、セラーセントラルから返す Amazon は、履歴に残すだけ（2026-11-06）
+  // mailSent: { mailbox, to: "a@x.jp;b@y.jp", subject, sentAt, link }
+  var SENT_DONE_CATEGORIES = ["お客様対応", "代表の確認", "問い合わせ・営業"];
+
+  // 履歴の「M/DD HH:MM」を日付にする（年は書いていないので、今より先なら去年とみなす）
+  function historyTime(text) {
+    var m = /(\d{1,2})\/(\d{1,2})\s+(\d{1,2}):(\d{2})/.exec(text || "");
+    if (!m) return null;
+    var now = new Date();
+    var d = new Date(now.getFullYear(), +m[1] - 1, +m[2], +m[3], +m[4]);
+    if (d > now) d.setFullYear(d.getFullYear() - 1);
+    return d;
+  }
+
+  // いちばん新しい「追加のメールが届いた」の時刻（返信のあとに相手がまた書いてきたかを見る）
+  function lastFollowUpAt(card) {
+    var entries = card.querySelectorAll("[data-history] .history-entry");
+    for (var i = 0; i < entries.length; i++) {
+      if ((entries[i].querySelector(".history-action") || {}).textContent === "追加のメールが届いた") {
+        return historyTime((entries[i].querySelector(".history-time") || {}).textContent);
+      }
+    }
+    return null;
+  }
+
+  async function drainMailSent(file, data) {
+    var to = String(data.to || "").split(/[;,]/).map(function (s) {
+      var m = /[\w.+-]+@[\w-]+(\.[\w-]+)+/.exec(s);
+      return m ? m[0].toLowerCase() : "";
+    }).filter(function (a) { return a && !OWN_SENDER.test(a); });
+    var subject = String(data.subject || "");
+    var sentAt = data.sentAt ? new Date(data.sentAt) : new Date();
+    if (isNaN(sentAt.getTime())) sentAt = new Date();
+    var keys = [];
+    to.forEach(function (a) {
+      keys.push(mailThreadKey({ fromAddress: a, subject: subject }));
+      keys.push("mail:shopify-form:" + a);   // ホームページのお問い合わせは、お客様のメールごとの仕事
+    });
+    var cards = taskCards().filter(function (c) { return isOpenTask(c) && keys.indexOf(taskKeyOf(c)) !== -1; });
+    cards.forEach(function (c) {
+      // 仕事ができる前の返信（同じ件名の前のやり取り）は数えない。取り込みが遅れることがあるので1日の余裕を見る。
+      // 一度だけのフローが送信済みアイテムを50件さかのぼって置くため（2026-11-06）
+      var created = createdOn(c);
+      if (created && sentAt < new Date(created.getTime() - 86400000)) return;
+      // 返信を送ったあとに相手がまた書いてきていたら、その分はまだ終わっていない
+      var follow = lastFollowUpAt(c);
+      if (follow && follow > sentAt) return;
+      var memo = (data.mailbox || "") + " から " + to.join("・") + " へ：" + subject.slice(0, 80);
+      var category = (getRoleEl(c, "category") || {}).value || "";
+      var business = (getRoleEl(c, "business") || {}).value || "";
+      if (SENT_DONE_CATEGORIES.indexOf(category) !== -1 && business !== "Amazon販売" && window.__app && window.__app.setTaskStatus) {
+        window.__app.setTaskStatus(c, "完了");
+        addNote(c, "返信を送ったので自動で完了にした", memo);
+      } else {
+        var already = Array.prototype.some.call(c.querySelectorAll(".history-entry"), function (h) { return (h.textContent || "").indexOf(memo) !== -1; });
+        if (!already) addNote(c, "返信を送った", memo);
+      }
+    });
+    await moveToProcessed(file, "mail sent");
   }
 
 
