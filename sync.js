@@ -1032,6 +1032,18 @@
   var NOT_WORK_SENDER = /@(alhambrainc\.jp)$/i;   // THERA（取り扱いのないメーカーの一斉案内 2026-11-06）
   var NOT_WORK_DROP = "仕事にしない相手のメールとして片付ける";
   var MERGED_DROP = "同じ件の仕事にまとめた";
+  var QUIET_DAYS = 3;
+  // 定時報告で最後に指摘された（要対応・再び指摘）のが何日前か。分からなければ 0（片付けない）
+  function lastReportedDaysAgo(card) {
+    var entries = card.querySelectorAll("[data-history] .history-entry");
+    for (var i = 0; i < entries.length; i++) {
+      var a = ((entries[i].querySelector(".history-action") || {}).textContent || "").trim();
+      if (a !== "定時報告で要対応" && a !== "定時報告で再び指摘") continue;
+      var d = historyTime((entries[i].querySelector(".history-time") || {}).textContent);
+      return d ? (Date.now() - d.getTime()) / 86400000 : 0;
+    }
+    return 0;
+  }
 
   // LILOCLE のお客様からの退会希望（会員にはメルマガが届くため、ときどき来る）。返信の下書きではなく、スキル lilocle-taikai で処理する（2026-11-06）
   var TAIKAI_WORD = /退会|配信停止|配信解除|メルマガ.{0,6}(解除|停止|不要)|登録.{0,4}(削除|解除)/;
@@ -1663,6 +1675,10 @@
         // 仕事にしない相手に決める前に入っていた分（今週のゴールには数えない）
         window.__app.setTaskStatus(c, "完了");
         addNote(c, NOT_WORK_DROP, "返事も対応もいらないお知らせなので、仕事にしないことにしました");
+      } else if (/^routine:lilocle-ORDER/.test(k) && ((getRoleEl(c, "status") || {}).textContent || "未着手").trim() === "未着手" && lastReportedDaysAgo(c) >= QUIET_DAYS) {
+        // LILOCLE 受注運用の指摘：毎日の点検で、まだのものは毎回「再び指摘」される。3日続けて出てこなければ片付いた（2026-11-06 代表の指定）
+        window.__app.setTaskStatus(c, "完了");
+        addNote(c, "自動で片付けた", "定時報告の指摘が " + QUIET_DAYS + " 日続けて出ていないので、片付いたと判断しました（違っていたら状態を戻してください）");
       } else if (/^routine:lilocle-reply-/.test(k) && formTaskForReply(textOf(getRoleEl(c, "content")).split("\n")[0])) {
         // フォームの通知からできたお客様の仕事と同じ件（今週のゴールには数えない）
         window.__app.setTaskStatus(c, "完了");
