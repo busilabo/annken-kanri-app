@@ -1032,6 +1032,8 @@
   // 仕事にしない相手（代表の指定）。迷惑メールではないが、返事も対応もいらない一斉のお知らせ。やり取りログへの記録だけ
   var NOT_WORK_SENDER = /@(alhambrainc\.jp|waphyto\.com)$/i;   // THERA・Waphyto（お取引先あての一斉案内。販売終了・新商品 2026-11-06 代表「不要」）
   var NOT_WORK_DROP = "仕事にしない相手のメールとして片付ける";
+  // contact@ に届くが、お客様ではなく作り手（メーカー様・取り扱い候補）の相手
+  var LILO_MAKER_AT_CONTACT = /@(chocoreko\.com)$/i;   // ChocoReko（2026-11-06 代表の指定）
   var MERGED_DROP = "同じ件の仕事にまとめた";
   var QUIET_DAYS = 3;
   // 定時報告で最後に指摘された（要対応・再び指摘）のが何日前か。分からなければ 0（片付けない）
@@ -1084,6 +1086,10 @@
     }
     if (mailbox.indexOf("lilocle@") === 0) {
       if (PAYMENT_WORD.test(text)) return { title: "LILOCLE 請求・支払い：" + subject, business: "LILOCLE運営", category: "代表の確認", owner: "坂中", steps: STEPS.rep };
+      return { title: "LILOCLEメーカー様：" + subject, business: "LILOCLE運営", category: "メーカー対応", steps: STEPS.liloSupplier };
+    }
+    // contact@ に届いても、作り手（メーカー様・取り扱い候補）からのメールはメーカー対応（2026-11-06 代表の指定）
+    if (mailbox.indexOf("contact@") === 0 && LILO_MAKER_AT_CONTACT.test(from)) {
       return { title: "LILOCLEメーカー様：" + subject, business: "LILOCLE運営", category: "メーカー対応", steps: STEPS.liloSupplier };
     }
     if (mailbox.indexOf("contact@") === 0 || (business === "LILOCLE運営" && mailbox.indexOf("order@") !== 0)) {
@@ -1684,6 +1690,14 @@
         // フォームの通知からできたお客様の仕事と同じ件（今週のゴールには数えない）
         window.__app.setTaskStatus(c, "完了");
         addNote(c, MERGED_DROP, "同じお問い合わせの「LILOCLEお客様：ホームページのお問い合わせ」の仕事で対応します");
+      } else if (/^mail:/.test(k) && LILO_MAKER_AT_CONTACT.test("@" + k.split(":")[1]) && (getRoleEl(c, "category") || {}).value === "お客様対応") {
+        // メーカー対応に決める前に、お客様対応で入っていた分を直す
+        var body = textOf(getRoleEl(c, "content"));
+        applying = true;
+        writeField(c, "task", FIELD_MAP.task.Category, "メーカー対応");
+        writeField(c, "task", FIELD_MAP.task.Content, body.replace(/^LILOCLEお客様：/, "LILOCLEメーカー様：").split("\n【手順】")[0] + stepsText(STEPS.liloSupplier));
+        applying = false;
+        addNote(c, "メーカー対応に直した", "作り手からのメールなので、お客様対応からメーカー対応にしました");
       } else if (k === "routine:watch-queue") {
         window.__app.setTaskStatus(c, "完了");
         addNote(c, "仕事にしないことにした", "キューに残った報告は、アプリを開けば自動で取り込まれます");
