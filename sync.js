@@ -822,10 +822,14 @@
 
   // 問い合わせの行き先：case＝案件管理（＋確認の仕事）／task＝仕事だけ（SNS の DM）／other＝どちらにも入れない
   var CLASSIFY_ENDPOINT = "https://busilabo-work-chat.azurewebsites.net/api/classify";
+  // 協業・提携の誘い。Azure の仕分けは「迷ったら案件管理」なので、相手が自分の事業を持ちかけてくるものはここで外す
+  // （2026-11-06 代表の指定。AI 会社からの「地域連携の可能性を相談したい」が案件管理と仕事に入った）。index.html の SPAM_STRONG にも同じ言葉がある
+  var PARTNER_PITCH = /連携の可能性|協業|業務提携|資本提携|代理店|パートナーシップ|共同事業/;
   async function inquiryRoute(data) {
     var memo = String(data.memo || "");
     if (/Instagram|Facebook|Messenger|Meta/i.test(memo)) return "task";
     if (data.source === "資料DL") return "case";   // できるAIチーム＋の資料請求
+    if (PARTNER_PITCH.test(String(data.content || ""))) { data._reason = "協業・提携のお誘い"; return "other"; }
     try {
       var token = await getToken();
       var res = await fetch(CLASSIFY_ENDPOINT, { method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
