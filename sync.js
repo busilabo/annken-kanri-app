@@ -761,7 +761,7 @@
       "納期の確認 → 商品ページの納期の目安を確認する。お客様の指定日があれば、lilocle@lilocle.jp からメーカー様に確認する（件名に下の【L-番号】を入れると、返事がこの仕事に付きます）",
       "キャンセル → 発送前なら、lilocle@lilocle.jp からメーカー様に出荷停止を連絡（件名に【L-番号】）してから、Shopify でキャンセルする。発送後のキャンセルはお断りする",
       "領収書 → 全社共有「ビジラボ共有(全社)／LILOCLE資料／請求書・領収書(お客様)」の雛形を使い、Claude Cowork で作って PDF を送る（代表の確認はいりません）",
-      "上の「返信の下書き」を読んで直し、contact@lilocle.jp から返信する（下書きがなければ「LILOCLE運営AIチーム」で作る。代表の確認はいりません）",
+      "上の「返信の下書き」を読んで直し、contact@lilocle.jp から返信する（下書きがなければ「LILOCLE運営AIチーム」で作る。代表の確認はいりません）。履歴に「返信案ができた」と付いていれば、Claude のチャットで「LILOCLEの返信案を見せて」と頼み、確認して「返信して」と言えば送れます",
       "対応が終わったら「完了」にする"
     ],
     liloSupplier: [
@@ -1026,6 +1026,7 @@
   // 仕事にしない相手（代表の指定）。迷惑メールではないが、返事も対応もいらない一斉のお知らせ。やり取りログへの記録だけ
   var NOT_WORK_SENDER = /@(alhambrainc\.jp)$/i;   // THERA（取り扱いのないメーカーの一斉案内 2026-11-06）
   var NOT_WORK_DROP = "仕事にしない相手のメールとして片付ける";
+  var MERGED_DROP = "同じ件の仕事にまとめた";
 
   // LILOCLE のお客様からの退会希望（会員にはメルマガが届くため、ときどき来る）。返信の下書きではなく、スキル lilocle-taikai で処理する（2026-11-06）
   var TAIKAI_WORD = /退会|配信停止|配信解除|メルマガ.{0,6}(解除|停止|不要)|登録.{0,4}(削除|解除)/;
@@ -1262,6 +1263,22 @@
   function salesReplyAction(id, text) {
     return /^(routine:)?lilocle-reply-/.test(id || "") && /・営業|要判断：[^\n]*営業/.test(text || "");
   }
+  // LILOCLE の返信案づくりの「返信案を確認する（渕上様・お届け日に関して）」は、同じお問い合わせのフォームの通知から
+  // お客様の仕事（目印 mail:shopify-form:<メール>）ができているので、別の仕事にせず、そちらの履歴に付ける（2026-11-06 代表の指定。
+  // 2つあると、返信を送ってもお客様の仕事だけが完了になり、こちらが残っていた）。姓で探し、見つからなければ今までどおり仕事にする
+  function formTaskForReply(text) {
+    var m = /（([^・（）]+?)様・/.exec(text || "");
+    if (!m) return null;
+    var sei = m[1].trim();
+    var hits = taskCards().filter(function (c) {
+      return /^mail:shopify-form:/.test(taskKeyOf(c)) && !c.hasAttribute("data-deleted") &&
+        ((getRoleEl(c, "requester") || {}).value || "").replace(/\s/g, "").indexOf(sei) === 0;
+    });
+    // 開いているものを先に。同じ姓が2人以上いれば決めない
+    var open = hits.filter(isOpenTask);
+    if (open.length === 1) return open[0];
+    return !open.length && hits.length === 1 ? hits[0] : null;
+  }
 
   var ROUTINE_KEY_BUSINESS = [[/^routine:amazon-/, "Amazon販売"], [/^routine:lilocle-/, "LILOCLE運営"], [/^routine:inquiry-/, "業務改善・DX支援"], [/^routine:watch-/, "社内・共通"]];
   function businessOfRoutineKey(key) {
@@ -1331,6 +1348,11 @@
       if (!a.title) continue;
       // id はルーティンをまたいで同じ件なら同じ（LILOCLE の照合と受注運用は注文番号）。同じ件は1つの仕事にまとめる
       var key = "routine:" + (a.id || (data.routine || "unknown") + ":" + a.title);
+      var formTask = /^lilocle-reply-/.test(a.id || "") ? formTaskForReply(a.title) : null;
+      if (formTask) {
+        if (isOpenTask(formTask)) addNote(formTask, "返信案ができた", String(a.title) + (a.detail ? "：" + String(a.detail).split("\n")[0].slice(0, 120) : ""));
+        continue;
+      }
       var open = taskCards().filter(function (c) { return taskKeyOf(c) === key && isOpenTask(c); })[0];
       if (open) {
         // まだ片付いていない件がまた報告された。同じ日に何度も書かない
@@ -1624,6 +1646,10 @@
         // 仕事にしない相手に決める前に入っていた分（今週のゴールには数えない）
         window.__app.setTaskStatus(c, "完了");
         addNote(c, NOT_WORK_DROP, "返事も対応もいらないお知らせなので、仕事にしないことにしました");
+      } else if (/^routine:lilocle-reply-/.test(k) && formTaskForReply(textOf(getRoleEl(c, "content")).split("\n")[0])) {
+        // フォームの通知からできたお客様の仕事と同じ件（今週のゴールには数えない）
+        window.__app.setTaskStatus(c, "完了");
+        addNote(c, MERGED_DROP, "同じお問い合わせの「LILOCLEお客様：ホームページのお問い合わせ」の仕事で対応します");
       } else if (k === "routine:watch-queue") {
         window.__app.setTaskStatus(c, "完了");
         addNote(c, "仕事にしないことにした", "キューに残った報告は、アプリを開けば自動で取り込まれます");
