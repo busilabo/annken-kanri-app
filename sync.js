@@ -986,11 +986,25 @@
       return r2.accessToken;
     }
   }
-  async function sendFromMe(to, subject, body) {
+  // SharePoint のファイル（共有リンク）を読んで、メールの添付にする（修理完了報告書の PDF など。2026-11-08）
+  async function attachmentFrom(url) {
+    var enc = "u!" + btoa(unescape(encodeURIComponent(url))).replace(/=+$/, "").replace(/\//g, "_").replace(/\+/g, "-");
+    var item = await graph("/shares/" + enc + "/driveItem?$select=name,size");
+    if (item.size > 3 * 1024 * 1024) throw new Error("添付のファイルが大きすぎます（3MB まで）");
+    var token = await getToken();
+    var res = await fetch("https://graph.microsoft.com/v1.0/shares/" + enc + "/driveItem/content", { headers: { "Authorization": "Bearer " + token } });
+    if (!res.ok) throw new Error("添付のファイルを読めませんでした（" + res.status + "）");
+    var buf = new Uint8Array(await res.arrayBuffer()), bin = "";
+    for (var i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
+    return { "@odata.type": "#microsoft.graph.fileAttachment", name: item.name, contentBytes: btoa(bin) };
+  }
+  async function sendFromMe(to, subject, body, attachUrl) {
     var token = await getMailToken();
+    var message = { subject: subject, body: { contentType: "Text", content: body }, toRecipients: [{ emailAddress: { address: to } }] };
+    if (attachUrl) message.attachments = [await attachmentFrom(attachUrl)];
     var res = await fetch("https://graph.microsoft.com/v1.0/me/sendMail", {
       method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
-      body: JSON.stringify({ message: { subject: subject, body: { contentType: "Text", content: body }, toRecipients: [{ emailAddress: { address: to } }] }, saveToSentItems: true })
+      body: JSON.stringify({ message: message, saveToSentItems: true })
     });
     if (!res.ok) throw new Error("送れませんでした（" + res.status + " " + (await res.text().catch(function () { return ""; })).slice(0, 120) + "）");
     return {};
@@ -1000,7 +1014,8 @@
     var to = String(mail.to || "").trim();
     if (!/^[\w.+-]+@[\w-]+(\.[\w-]+)+$/.test(to)) throw new Error("宛先のメールアドレスが正しくありません");
     if (!String(mail.subject || "").trim() || !String(mail.body || "").trim()) throw new Error("件名と本文を入れてください");
-    if (mail.route === "self") return sendFromMe(to, mail.subject, mail.body);
+    if (mail.route === "self") return sendFromMe(to, mail.subject, mail.body, mail.attachUrl);
+    if (mail.attachUrl) throw new Error("この送り元からは添付を送れません（添付は本人のメールボックスからだけ）");
     var stamp = fileStamp();
     if (mail.route === "maker") {
       // .json やテキストで置くとフローが読めない（base64ToString が Null。2026-11-06）。中身はそのままの JSON で、拡張子を .bin にする
@@ -1015,7 +1030,11 @@
     }), "application/json");
   }
   window.__act = { order: shopifyOrder, orderCached: function (n) { return orderCache[n] || null; }, cancel: shopifyCancel, draft: composeDraft, send: sendMail, cancelSteps: function () { return STEPS.liloCancel.slice(); }, isCancelRequest: function (t) { return isCancelRequest(t, ""); },
-    me: function () { return (account && account.username) || ""; } };
+    me: function () { return (account && account.username) || ""; },
+    // 仕事の流れ（index.html の FLOWS）が、前の作りの手順を見分けるのに使う
+    steps: function () { return STEPS; },
+    // 仕事の種類を AI が候補から1つ選ぶ（classify の mode: "flow"）
+    classifyFlow: function (content, options) { return callApi(CLASSIFY_ENDPOINT, { mode: "flow", content: content, options: options }, 40000); } };
 
   function stepsText(steps) {
     if (!steps || !steps.length) return "";

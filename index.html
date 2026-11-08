@@ -1443,6 +1443,26 @@
   .s-steps li.s-act[data-unneeded] > span { color: var(--text-muted); text-decoration: line-through; }
   .s-unneeded-note { font-weight: 700; color: var(--text-muted); }
   .s-undo { padding: 4px 10px; font-size: 12.5px; font-weight: 400; }
+  /* 仕事の流れ（いまやることを1つだけ大きく。2026-11-08） */
+  .s-mini { padding: 4px 10px; font-size: 12.5px; font-weight: 400; }
+  .f-kind { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 14px; }
+  .f-by { font-size: 12px; color: var(--text-muted); }
+  .f-done { border-radius: 10px; padding: 8px 12px; background: var(--ok-soft); font-size: 13.5px; display: flex; flex-direction: column; gap: 4px; }
+  .f-done ul { margin: 0; padding-left: 1.2em; display: flex; flex-direction: column; gap: 2px; }
+  .f-done small { display: block; color: var(--text-muted); overflow-wrap: anywhere; }
+  .f-done .s-mini { align-self: flex-start; }
+  .f-now { border: 3px solid var(--accent); border-radius: 14px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; background: var(--surface); }
+  .f-now-label { font-size: 13px; font-weight: 700; color: var(--accent); }
+  .f-now-title { font-size: 20px; line-height: 1.45; }
+  .f-now-help { font-size: 14px; line-height: 1.6; color: var(--text-muted); }
+  .f-now-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .f-big { font-size: 16px; padding: 12px 20px; text-decoration: none; display: inline-flex; align-items: center; }
+  .f-big:disabled { opacity: .5; cursor: not-allowed; }
+  .f-now-sub { display: flex; flex-wrap: wrap; gap: 8px; }
+  .f-got { font-size: 14px; line-height: 1.6; background: var(--ok-soft); border-radius: 8px; padding: 8px 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .f-wait { font-size: 14px; background: var(--warn-soft); border-radius: 8px; padding: 8px 10px; }
+  .f-next { font-size: 13px; color: var(--text-muted); border-top: 1px dashed var(--border); padding-top: 8px; }
+  .f-finished { border-color: var(--ok); }
   .s-act-btn { padding: 8px 14px; font-size: 14px; }
   .s-act-btn:disabled { opacity: .5; cursor: not-allowed; }
   .s-act-note { font-size: 12.5px; color: var(--text-muted); flex-basis: 100%; }
@@ -4266,7 +4286,7 @@
   // 実行ボタンの手順（2026-11-08）。手順の行が「⚡[種類] 説明」ならチェックではなく「実行する」ボタンを出す。
   // 押すと、メールなら下書き（AI）→ 直す → 確認のポップアップ → 送る、Shopify なら確認のポップアップ → 実行。済んだら手順に ✓ が付く。
   // 前の手順が終わるまでは押せない。種類を足すときは、ここと actionStates・openAction に足す（裏側は sync.js の window.__act）
-  var ACTION_STEP = /^⚡\[([\w-]+)\]\s*(.*)$/;
+  var ACTION_STEP = /^⚡\[([\w.-]+)\]\s*(.*)$/;
   var ACTIONS = {
     // ordered：前の手順が全部終わるまで押せない（決まった流れの型だけ。ふつうの手順は「どれか1つ」のことが多いので付けない）
     'maker-stop': { kind: 'mail', route: 'maker', label: '✉️ 下書きを作って送る', needsOrder: true, ordered: true },
@@ -4396,12 +4416,18 @@
       if (inDraft) { out.draft.push(line); continue; }
       var dm = /^【下書きのメモ】\s*(⚠️代表に確認)?\s*(.*)$/.exec(line.trim());
       if (dm) { out.needsRep = !!dm[1]; out.draftNote = dm[2]; continue; }
+      // 【流れ】lilo-cancel：この仕事の流れ（FLOWS）。2026-11-08
+      var fm = /^【流れ】\s*([\w-]+)/.exec(line.trim());
+      if (fm) { out.flow = FLOWS[fm[1]] ? fm[1] : ''; out.flowBy = (/（(.+)）\s*$/.exec(line.trim()) || [])[1] || ''; continue; }
       if (/^【手順】/.test(line.trim())) { inSteps = true; continue; }
       var m = inSteps && STEP_LINE.exec(line.trim());
-      // 「⚡[種類] 説明」の手順は実行ボタンにする（ACTIONS）
-      var am = m && ACTION_STEP.exec(m[3]);
+      // 「⚡[種類] 説明」の手順は実行ボタンにする（ACTIONS／流れの手順は FLOWS）。「｜メモ：…」はその手順で書いたこと
+      var body = m ? m[3] : '', memo = '';
+      var mi = body.indexOf('｜メモ：');
+      if (mi !== -1) { memo = body.slice(mi + 4).trim(); body = body.slice(0, mi).trim(); }
+      var am = m && ACTION_STEP.exec(body);
       // decided＝実行したか不要にしたか（どちらも「決めた」。次の手順・完了の判断はこれで見る）
-      if (m) out.steps.push({ line: i, done: !!m[1] && m[1].charAt(0) === '✓', unneeded: !!m[1] && m[1].charAt(0) === '［', decided: !!m[1], no: m[2], text: am ? am[2] : m[3], action: am && ACTIONS[am[1]] ? am[1] : '' });
+      if (m) out.steps.push({ line: i, done: !!m[1] && m[1].charAt(0) === '✓', unneeded: !!m[1] && m[1].charAt(0) === '［', decided: !!m[1], no: m[2], text: am ? am[2] : body, memo: memo, actId: am ? am[1] : '', action: am && ACTIONS[am[1]] ? am[1] : '' });
       else if (line.trim()) out.desc.push(line);
     }
     return out;
@@ -4426,8 +4452,12 @@
     // 「マニュアルの確認」は、一覧の行（・番号｜…）を説明から外し、下で1件ずつボタン付きで出す
     var reviewRe = window.__manualOps && window.__manualOps.reviewLine;
     var descLines = reviewRe ? c.desc.filter(function (l) { return !reviewRe.test(l.trim()) && l.trim() !== '【確認するマニュアル】'; }) : c.desc;
+    // 「返信先：」はアプリが使う控え。画面には出さない（送るときの欄に出る）
+    descLines = descLines.filter(function (l) { return !/^返信先：/.test(l.trim()); });
     if (descLines.length) html += '<div class="s-desc">' + linkify(descLines.join('\n')) + '</div>';
-    var draft = c.draft.join('\n').trim();
+    // 流れの決まっていない仕事は、流れにする（裏で。決まると描き直す）
+    if (!c.flow) needFlow(card, c, status);
+    var draft = c.flow ? '' : c.draft.join('\n').trim();
     if (draft) {
       // この箱は読むだけ。直すときは「✏️ 直して返信する」で、直せる欄を開く（2026-11-08 代表「下書きを編集できない」）
       var canReply = status !== '完了' && !hasFlow(c) && (function () { var ri = replyInfoOf(card, c); return ri && !ri.blocked; })();
@@ -4438,7 +4468,7 @@
         '<div class="s-draft-text">' + esc(draft) + '</div>' +
         '<small class="s-draft-hint">' + (canReply ? 'ここは読むだけです。直すときは「✏️ 直して返信する」を押すと、直せる欄が下に開きます' : '読んで、直すところがあれば直してから送ってください') + '</small></div>';
     }
-    html += replyBarHtml(card, c, status);
+    if (!c.flow) html += replyBarHtml(card, c, status);
     // マニュアル：確認の仕事なら下書きと「正式にする」、ふつうの仕事なら正式なマニュアルを開けるように
     var mkey = roleVal(card, 'teamsMessageId');
     var manuals = window.__manuals || [];
@@ -4465,6 +4495,10 @@
       if (mf) html += '<details class="s-manual"><summary>📘 この仕事のマニュアルを見る（' + esc(mf.title) + '）</summary><div class="s-draft-text">' + esc(mf.body) + '</div></details>';
     }
     html += orderBoxHtml(card, c);
+    if (c.flow) {
+      // 流れのある仕事：いまやることを1つだけ大きく。申し送り・バトンのボタンはその下
+      html += flowHtml(card, c, status, key);
+    } else {
     html += cancelSwitchHtml(card, c, status);
     if (c.steps.length) {
       var actState = actionStates(card, c, status);
@@ -4474,8 +4508,9 @@
           return plainStepHtml(key, s, actState[si], status);
         }).join('') + '</ol>';
     }
-    var recur = recurOf(card);
     if (status !== '完了') html += '<button type="button" class="s-add" data-s-addstep="' + key + '">＋ 手順を足す</button>';
+    }
+    var recur = recurOf(card);
     var handover = roleVal(card, 'handover');
     if (handover) html += '<div class="s-handover"><b>申し送り</b>' + linkify(handover) + '<small>' + esc(roleVal(card, 'handoverBy')) + '</small></div>';
     if (recur) {
@@ -4487,6 +4522,11 @@
     } else if (owner === UNASSIGNED) {
       html += '<div class="s-actions"><button type="button" class="s-btn s-primary" data-s-claim="' + key + '">🙋 バトンを受け取る</button>' +
         '<button type="button" class="s-btn" data-s-ask="' + key + '">❓ 代表に聞く</button></div>';
+    } else if (c.flow) {
+      // 流れのある仕事は、最後の手順が済むと自動で完了。ここは申し送り・代表に聞くだけ（「終わった」は流れを飛ばすときだけ小さく）
+      html += '<div class="s-actions"><button type="button" class="s-btn" data-s-pass="' + key + '">🏃 申し送りを書いて渡す</button>' +
+        '<button type="button" class="s-btn" data-s-ask="' + key + '">❓ 代表に聞く</button>' +
+        '<button type="button" class="s-btn s-mini" data-s-done="' + key + '">手順を飛ばして終わりにする</button></div>';
     } else {
       html += '<div class="s-actions"><button type="button" class="s-btn s-primary" data-s-done="' + key + '">✅ 終わった</button>' +
         '<button type="button" class="s-btn" data-s-pass="' + key + '">🏃 申し送りを書いて渡す</button>' +
@@ -4494,6 +4534,531 @@
     }
     return html;
   }
+
+  // ======== 仕事の流れ（2026-11-08 代表「一から見直して、ものすごく分かりやすく。簡単な仕事はこの中で完結。ボタンと動きを連動」）========
+  // 仕事を開くと「いまやること」が1つだけ大きく出る。ボタンを押すと本当に動く（メールを送る・Shopify でキャンセル・代表に質問・外のサイトを開く）。
+  // 中身には「【流れ】<id>」と、【手順】の「N. ⚡[<id>.<手順>] 題」を書いて保存する（✓＝済んだ／［不要］＝しない、｜メモ：書いたこと）。
+  // 流れは仕事の系統（前の作りの手順の形で見分ける）ごとにあり、系統の中の種類は AI が選ぶ（違えば「種類を変える」）。全部済むと自動で完了。
+  // 手順の型：mail（下書き→直す→確認→送る）／cancel（Shopify でキャンセル）／choose（選ぶ。待つ手順もこれ。memo＝ひとこと書く）／
+  //           site（外のサイトを開く→済んだら押す。copy＝貼り付ける文）／ask（代表に質問を送る）／task（代表に仕事を頼む）
+  //   go：'next'＝次へ／'<手順>'＝そこへ（間の手順はしない）／'end'＝おしまい／'rep'＝代表に聞く（進まない）。end:true の手順が済むと残りはしない
+  var SITES = {
+    cknet: { name: 'CK-net（日立の発注・代品の手配）', url: 'https://cknet.jp/kakuhan/index.asp?menu=1&main=1' },
+    hivest: { name: 'H-VEST（日立の修理の申し込み）', url: 'https://hivest.hitachi-gls.co.jp/RMS/A0S010' },
+    seller: { name: 'セラーセントラル（Amazon）', url: 'https://sellercentral.amazon.co.jp' },
+    meta: { name: 'Meta Business Suite（Instagram・Facebook）', url: 'https://business.facebook.com' },
+    line: { name: 'LINE 公式アカウント', url: 'https://manager.line.biz' },
+    claude: { name: 'Claude', url: 'https://claude.ai' },
+    outlook: { name: 'Outlook', url: 'https://outlook.office.com/mail/' },
+    teams: { name: 'Teams', url: 'https://teams.microsoft.com' }
+  };
+  function orderLabel(x) { return x.o ? 'ご注文 ' + x.o.name + '（' + itemsText(x.o) + '）' : (x.orderNo ? 'ご注文（注文番号 ' + x.orderNo + '）' : 'ご注文'); }
+  function shipped(x) { return !!(x.o && x.o.shipped && !x.o.cancelledAt); }
+  var FLOWS = {
+    // ---- LILOCLE のお客様 ----
+    'lilo-cancel': { family: 'lilo', label: 'キャンセルのご依頼', hint: '注文のキャンセル・取り消し・選び直し', steps: [
+      { id: 'maker', type: 'mail', to: 'maker', title: 'メーカー様に、出荷を止めていただくようお願いする', help: 'lilocle@ から送ります。件名に【L-番号】が入るので、返事はこの仕事に付きます', skipWhen: shipped,
+        instruction: function (x) { return 'メーカー様（' + x.makerLabel + '）に、LILOCLE でいただいた' + orderLabel(x) + 'について、お客様からキャンセルのご依頼があったため、出荷を止めていただくようお願いするメールを書く。書き出しは「' + x.makerHead + '\n\nいつも大変お世話になっております。\nリロクル(株式会社ビジラボ)です。」の形にする。お手数をおかけすることへのお詫びを添える。もう発送の手配が進んでいて止められない場合は、そのことを教えていただくようお願いする。出荷を止められたかどうか、お返事をお願いする。お客様のお名前・住所・メールアドレスは書かない。署名は付けない。'; },
+        subject: function (x) { return '【L-' + x.no + '】' + (x.o ? 'ご注文 ' + x.o.name + ' ' : '') + '出荷停止のお願い'; } },
+      { id: 'wait', type: 'choose', title: 'メーカー様の返事を待つ', help: '返事が届くと、ここに出ます。読んで選んでください', waitFor: /メーカー様から返事が届いた/, skipWhen: shipped,
+        choices: [{ label: '✅ 止められた', go: 'next' }, { label: '📦 もう発送していた', go: 'refuse' }, { label: '🙋 分からない・相談したい', go: 'rep' }] },
+      { id: 'cancel', type: 'cancel', title: 'Shopify で注文をキャンセルする', help: 'Shopify からお客様にキャンセルのお知らせが届きます。キャンセルは元に戻せません', skipWhen: shipped },
+      { id: 'done', type: 'mail', to: 'requester', end: true, title: 'お客様に、キャンセルの完了と選び直しの案内を送る', help: 'contact@ から送ります', skipWhen: shipped,
+        instruction: function (x) { return 'お客様（' + x.who + '）に、' + orderLabel(x) + 'のキャンセルが完了したことをお伝えするメールを書く。お問い合わせへのお礼を入れる。' + (x.o && x.o.financial === 'AUTHORIZED' ? 'お支払いは確定前だったため、代金のご請求はないこと（カードの仮押さえは取り消されること）を伝える。' : '') + 'Shopify からもキャンセルのお知らせメールが届くことを添える。お問い合わせの内容に合わせて、ご希望の商品（色など）をお選びのうえ、' + (x.url ? '商品ページ（' + x.url + '）' : '商品ページ') + 'から改めてご注文いただけることをご案内する。署名は付けない。'; },
+        subject: function (x) { return '【LILOCLE】' + (x.o ? 'ご注文（' + x.o.name + '）' : 'ご注文') + 'のキャンセルについて'; } },
+      { id: 'refuse', type: 'mail', to: 'requester', end: true, title: 'お客様に、発送済みのためキャンセルできないことをお伝えする', help: 'contact@ から送ります',
+        instruction: function (x) { return 'お客様（' + x.who + '）に、' + orderLabel(x) + 'はすでに発送済みのため、キャンセルをお受けできないことを丁寧にお伝えするメールを書く。お問い合わせへのお礼と、ご希望に沿えないお詫びを入れる。返品・交換などは、決まっていないので約束しない。署名は付けない。'; },
+        subject: function (x) { return '【LILOCLE】' + (x.o ? 'ご注文（' + x.o.name + '）' : 'ご注文') + 'のキャンセルについて'; } }
+    ] },
+    'lilo-delivery': { family: 'lilo', label: '納期・お届け日のご確認', hint: 'いつ届くか・いつ発送か・日にちの指定', steps: [
+      { id: 'how', type: 'choose', title: 'メーカー様に聞かないと答えられませんか？', help: '商品ページの「納期の目安」で答えられるなら、メーカー様に聞かずにお返事します',
+        choices: [{ label: '📨 メーカー様に聞く', go: 'next' }, { label: '💬 商品ページの目安で答えられる', go: 'reply', memo: 'お伝えする納期（例：ご注文から5日ほどで発送します）' }] },
+      { id: 'maker', type: 'mail', to: 'maker', title: 'メーカー様に、発送できる日を聞く', help: 'lilocle@ から送ります。件名に【L-番号】が入るので、返事はこの仕事に付きます',
+        instruction: function (x) { return 'メーカー様（' + x.makerLabel + '）に、LILOCLE でいただいた' + orderLabel(x) + 'について、お客様から納期のお問い合わせがあったため、いつ発送できるかを教えていただくお願いのメールを書く。お客様の指定日があれば、それに間に合うかも聞く。書き出しは「' + x.makerHead + '\n\nいつも大変お世話になっております。\nリロクル(株式会社ビジラボ)です。」の形にする。お客様のお名前・住所・メールアドレスは書かない。署名は付けない。'; },
+        subject: function (x) { return '【L-' + x.no + '】' + (x.o ? 'ご注文 ' + x.o.name + ' ' : '') + '発送日のご確認'; } },
+      { id: 'wait', type: 'choose', title: 'メーカー様の返事を待つ', help: '返事が届くと、ここに出ます', waitFor: /メーカー様から返事が届いた/,
+        choices: [{ label: '✅ 返事が来た', go: 'next', memo: 'メーカー様の答え（例：11/12 に発送できる）' }, { label: '🙋 相談したい', go: 'rep' }] },
+      { id: 'reply', type: 'mail', to: 'requester', end: true, title: 'お客様に、納期をお伝えする', help: 'contact@ から送ります',
+        instruction: function (x) { return 'お客様（' + x.who + '）に、' + orderLabel(x) + 'の納期をお伝えするメールを書く。お伝えする内容：' + (x.memo('wait') || x.memo('how')) + '。お問い合わせへのお礼を入れる。書いていないことは約束しない。署名は付けない。'; } }
+    ] },
+    'lilo-receipt': { family: 'lilo', label: '領収書のご依頼', hint: '領収書・請求書を出してほしい', steps: [
+      { id: 'make', type: 'site', site: 'claude', title: 'Claude で領収書を作る', help: '下の文をコピーして Claude に貼り付けます（スキル「LILOCLE 領収書作成」が PDF を作ります）', doneLabel: '✅ 作った',
+        copy: function (x) { return '領収書を作って\n注文番号：' + (x.orderNo || '') + '\nお客様：' + x.who + '\nお問い合わせの内容：\n' + x.desc; } },
+      { id: 'send', type: 'site', site: 'outlook', end: true, title: '領収書の PDF を添付して、お客様に送る', help: 'いまはアプリから添付付きで contact@ から送れないので、Outlook で差出人を contact@lilocle.jp にして送ってください', doneLabel: '✅ 送った' }
+    ] },
+    'lilo-other': { family: 'lilo', label: 'そのほかのお問い合わせ', hint: '上のどれでもない質問・ご相談', steps: [
+      { id: 'reply', type: 'mail', to: 'requester', useDraft: true, end: true, title: 'お客様にお返事する', help: 'AI の下書きを見て、直して送ります' }
+    ] },
+    'lilo-taikai': { family: 'taikai', label: '退会のご希望', steps: [
+      { id: 'ask', type: 'site', site: 'claude', title: 'Claude に退会の手続きを頼む', help: '下の文をコピーして Claude に貼り付けます。Claude がお客様の情報を消し、完了のメールを contact@ から送ります', doneLabel: '✅ 頼んだ', copy: function () { return '退会希望を処理して'; } },
+      { id: 'result', type: 'choose', end: true, title: 'Claude の結果を見る', help: '完了のメールが送られると、この仕事は自動で完了します',
+        choices: [{ label: '✅ 完了のメールが送られた', go: 'end' }, { label: '🙋「確認が必要」と言われた', go: 'rep' }] }
+    ] },
+    // ---- LILOCLE のメーカー様 ----
+    'maker-shortage': { family: 'maker', label: '欠品・作れない', hint: '在庫がない・作れない・遅れる', steps: [
+      { id: 'ask', type: 'mail', to: 'requester', title: 'メーカー様に、すでに受けた注文の分は作れるか確かめる', help: '急ぎ・大事なことは電話でも',
+        instruction: function (x) { return 'メーカー様（' + x.who + '）から欠品・製造できない旨の連絡があった。すでにいただいている注文の分は作れる（お届けできる）かを確かめるお返事を書く。ご連絡へのお礼を入れる。署名は付けない。'; } },
+      { id: 'wait', type: 'choose', title: 'メーカー様の返事を待つ', waitFor: /メーカー様から返事が届いた|追加のメールが届いた/,
+        choices: [{ label: '✅ 受けた分は作れる', go: 'next' }, { label: '⚠️ 遅れる・作れない分がある', go: 'rep' }] },
+      { id: 'stop', type: 'site', site: 'claude', end: true, title: 'これからの注文を止める（Shopify で販売不可にする）', help: '下の文をコピーして Claude（LILOCLE運営AIチーム）に頼みます', doneLabel: '✅ 販売不可にした',
+        copy: function (x) { return 'LILOCLE の Shopify で、次の商品を販売不可にして（メーカー様から欠品の連絡がありました）：\n' + x.desc; } }
+    ] },
+    'maker-price': { family: 'maker', label: '価格・送料の変更', hint: '値上げ・価格改定・送料の変更', steps: [
+      { id: 'ask', type: 'ask', title: '代表に、変えてよいか聞く', help: '代表に質問が届きます。たいてい1か月ほど先の話なので慌てなくて大丈夫です',
+        question: function (x) { return 'メーカー様（' + x.who + '）から価格・送料の変更の連絡がありました。Shopify を変えてよいですか？いつから・いくらにするかも教えてください。\n\n' + x.desc; } },
+      { id: 'answer', type: 'choose', title: '代表の答えを待つ', choices: [{ label: '✅ 変えてよい', go: 'next', memo: 'いつから・いくらに' }, { label: '✋ 変えない', go: 'end' }] },
+      { id: 'change', type: 'site', site: 'claude', end: true, title: 'Shopify の価格・送料を変える', help: '下の文をコピーして Claude（LILOCLE運営AIチーム）に頼みます', doneLabel: '✅ 変えた',
+        copy: function (x) { return 'LILOCLE の Shopify で、次のとおり変えて（代表に確認済み）：\n' + x.memo('answer') + '\n\nメーカー様からの連絡：\n' + x.desc; } }
+    ] },
+    'maker-new': { family: 'maker', label: '新商品・カタログ', hint: '新しい商品の案内・カタログ', steps: [
+      { id: 'ask', type: 'ask', title: '代表に、載せるか聞く', help: '載せるかどうかは代表が決めます',
+        question: function (x) { return 'メーカー様（' + x.who + '）から新商品・カタログの案内がありました。LILOCLE に載せますか？\n\n' + x.desc; } },
+      { id: 'answer', type: 'choose', title: '代表の答えを待つ', choices: [{ label: '✅ 載せる', go: 'next', memo: '載せる商品' }, { label: '✋ 載せない', go: 'end' }] },
+      { id: 'add', type: 'site', site: 'claude', end: true, title: 'Shopify に登録する', help: '下の文をコピーして Claude（LILOCLE運営AIチーム）に頼みます（画像はメーカー様の資料、説明文は AI チーム）', doneLabel: '✅ 登録した',
+        copy: function (x) { return 'LILOCLE の Shopify に、次の新商品を登録して（代表に確認済み）：\n' + x.memo('answer') + '\n\nメーカー様からの案内：\n' + x.desc; } }
+    ] },
+    'maker-other': { family: 'maker', label: 'そのほか（お返事）', hint: 'お客様の件への返事・確認・あいさつなど', steps: [
+      { id: 'reply', type: 'mail', to: 'requester', end: true, title: 'メーカー様にお返事する', help: 'lilocle@ から送ります',
+        instruction: function (x) { return 'メーカー様（' + x.who + '）からのメールに、LILOCLE（リロクル）としてお返事を書く。書いていないことは約束しない。署名は付けない。'; } }
+    ] },
+    // ---- 家電の卸販売（綿半様・日立）----
+    'ws-order': { family: 'wsOrder', label: '配送案からの発注', steps: [
+      { id: 'order', type: 'site', site: 'cknet', title: '日立の発注システム（CK-net の KDWeb）に入力する', help: '上の配送案のとおりに、日付・台数を入れます', doneLabel: '✅ 入力した', memo: '発注番号など（分かれば）' },
+      { id: 'fax', type: 'choose', title: '日立からの納期の FAX を待つ', help: 'FAX が届くとここに出ます。配送案の日にちと見比べてください', waitFor: /納期の FAX が届いた/,
+        choices: [{ label: '✅ 全部合った', go: 'report' }, { label: '⚠️ 合わない日がある', go: 'next' }] },
+      { id: 'consult', type: 'choose', title: '日立の出口さんに相談する', help: '電話か Teams で相談して、決まった日にちを書きます', choices: [{ label: '✅ 決まった', go: 'next', memo: '決まった納期' }] },
+      { id: 'report', type: 'mail', to: 'requester', title: '東中様に、納期をご報告する', help: 'あなたのアカウント（staff@）から送ります',
+        instruction: function (x) { return '綿半様（東中様）に、配送案でいただいたご注文の納期をご報告するメールを書く。日立からの納期：' + (x.note(/納期の FAX が届いた/) || '') + (x.memo('consult') ? '。相談して決まった納期：' + x.memo('consult') : '') + '。署名は付けない。'; } },
+      { id: 'invoice', type: 'task', end: true, title: '代表に「請求書を発行する」を頼む', help: 'ボタンを押すと、代表あての仕事ができます',
+        task: function (x) { return { Title: ('請求書を発行する：' + x.title).slice(0, 60), Content: '請求書を発行する（配送案の納期を報告したため）\n関係する仕事：' + x.title + '（id ' + x.no + '）', Business: '家電の卸販売', Category: '代表の確認', Owner: REP, Priority: '中' }; } }
+    ] },
+    'ws-defect': { family: 'wsDefect', label: '初期不良・故障', steps: [
+      { id: 'sorry', type: 'mail', to: 'requester', title: '綿半様に、おわびとご要望（修理か交換か）をうかがう', help: 'あなたのアカウント（staff@）から送ります',
+        instruction: function (x) { return '綿半様（' + x.who + '）から初期不良・故障の連絡があった。おわびと、修理か交換か、ご要望をうかがうメールを書く。綿半様の側でもう代品と交換していれば教えていただくようお願いする。署名は付けない。'; } },
+      { id: 'deguchi', type: 'choose', title: '日立の出口さんに報告して、指示をもらう', help: '電話かショートメールで（写真は Teams の日立とつながっているチャットへ）', choices: [{ label: '✅ 報告した', go: 'next', memo: '出口さんの指示' }] },
+      { id: 'what', type: 'choose', title: 'どう対応しますか？', choices: [{ label: '🔁 新品と交換', go: 'exchange' }, { label: '🔧 修理', go: 'repair' }, { label: '📦 箱の破損', go: 'box' }] },
+      { id: 'exchange', type: 'site', site: 'cknet', title: 'CK-net で代品を手配する（必ず「名古屋営業所」）', doneLabel: '✅ 手配した', memo: '代品の品番と納品日' },
+      { id: 'exReport', type: 'mail', to: 'requester', end: true, title: '綿半様に、代品の納品をご報告する', help: 'あなたのアカウント（staff@）から送ります',
+        instruction: function (x) { return '綿半様に、初期不良の代品の納品をご報告するメールを書く。本文に「（初期不良交換品）／品番 1台／納品：日付→ご請求書はございません」の形の行を入れる。代品の品番と納品日：' + x.memo('exchange') + '。不良品は日立が回収することを添える。署名は付けない。'; } },
+      { id: 'repair', type: 'site', site: 'hivest', end: true, title: 'H-VEST で修理を申し込む', help: 'お客様の名前・住所・電話番号・型式・販売日が要ります。希望日は選ばず、備考に「初期不良のため早めに」。修理完了の FAX が届くと、報告の仕事が別にできます', doneLabel: '✅ 申し込んだ', memo: '受付番号など' },
+      { id: 'box', type: 'choose', end: true, title: '出口さんに「箱破損品」として交換を頼む', help: '綿半様が受け取りを拒否されていれば、日立が同じものを手配し直します', choices: [{ label: '✅ 頼んだ', go: 'end' }] }
+    ] },
+    'ws-repair-done': { family: 'wsRepairDone', label: '修理完了の報告', steps: [
+      { id: 'report', type: 'mail', to: 'fixed:nagoya@kaitorikensakukun.com', attach: true, end: true, title: '綿半様に、修理完了報告書（PDF）を添付してご報告する', help: 'あなたのアカウント（staff@）から、FAX の PDF を添付して送ります',
+        instruction: function (x) { return '綿半様（名古屋支店）に、修理が完了したことをご報告するメールを書く。修理完了報告書の PDF を添付していることを書く。内容：' + x.desc + '。署名は付けない。'; },
+        subject: function () { return '修理完了のご報告'; } }
+    ] },
+    'ws-fax': { family: 'wsFax', label: '納期 FAX の照合', steps: [
+      { id: 'match', type: 'choose', title: '同じ品番の配送案の仕事を探して、FAX の内容を書き写す', help: '仕事一覧で、種類が「発注・納期」の仕事を探します', choices: [{ label: '✅ 書き写した', go: 'next' }] },
+      { id: 'check', type: 'choose', end: true, title: '配送案の希望日と見比べる', choices: [{ label: '✅ 全部合った（配送案の仕事で報告する）', go: 'end' }, { label: '⚠️ 合わない日がある', go: 'end', memo: '出口さんに相談した内容' }] }
+    ] },
+    'ws-reply': { family: 'wsReply', label: '綿半様からのメール', steps: [
+      { id: 'reply', type: 'mail', to: 'requester', useDraft: true, end: true, title: '綿半様にお返事する', help: 'あなたのアカウントから送ります' }
+    ] },
+    // ---- Amazon・SNS・問い合わせ ----
+    'amazon-buyer': { family: 'amazon', label: 'Amazon の購入者からのメッセージ', steps: [
+      { id: 'reply', type: 'site', site: 'seller', end: true, title: 'セラーセントラルの「購入者とのメッセージ」から返信する', help: '下書きをコピーして貼り付けます（メールで返すと「返信済み」になりません。期限は届いてから24時間）', doneLabel: '✅ 返信した', copyDraft: 'amazon' }
+    ] },
+    'sns-lilo': { family: 'snsLilo', label: 'Instagram・Facebook のメッセージ（LILOCLE）', steps: [
+      { id: 'reply', type: 'site', site: 'meta', end: true, title: 'Meta Business Suite の受信箱から返信する', help: '下書きをコピーして貼り付けます。価格・値引き・返品など判断が要るときは、先に「代表に聞く」', doneLabel: '✅ 返信した', copyDraft: 'lilocle' }
+    ] },
+    'line-lilo': { family: 'lineLilo', label: 'LINE のメッセージ（LILOCLE）', steps: [
+      { id: 'reply', type: 'site', site: 'line', end: true, title: 'LINE 公式アカウントのチャットから返信する', help: '下書きをコピーして貼り付けます。判断が要るときは、先に「代表に聞く」', doneLabel: '✅ 返信した', copyDraft: 'lilocle' }
+    ] },
+    'sns-dx': { family: 'snsDx', label: 'Instagram・Facebook のメッセージ（ビジラボ）', steps: [
+      { id: 'ask', type: 'ask', title: '代表に、どう返すか聞く', help: '代表に質問が届きます', question: function (x) { return 'Instagram・Facebook にメッセージが届きました。どう返しますか？\n\n' + x.desc; } },
+      { id: 'answer', type: 'choose', title: '代表の答えを待つ', choices: [{ label: '✅ 代表が決めた', go: 'next', memo: '代表が決めた返事の内容' }] },
+      { id: 'reply', type: 'site', site: 'meta', end: true, title: 'Meta Business Suite の受信箱から返信する', help: '代表が決めた内容をもとにした下書きをコピーして貼り付けます', doneLabel: '✅ 返信した', copyDraft: 'busilabo' }
+    ] },
+    'line-dx': { family: 'lineDx', label: 'LINE のメッセージ（ビジラボ）', steps: [
+      { id: 'ask', type: 'ask', title: '代表に、どう返すか聞く', help: '代表に質問が届きます', question: function (x) { return 'LINE にメッセージが届きました。どう返しますか？\n\n' + x.desc; } },
+      { id: 'answer', type: 'choose', title: '代表の答えを待つ', choices: [{ label: '✅ 代表が決めた', go: 'next', memo: '代表が決めた返事の内容' }] },
+      { id: 'reply', type: 'site', site: 'line', end: true, title: 'LINE 公式アカウントのチャットから返信する', help: '代表が決めた内容をもとにした下書きをコピーして貼り付けます', doneLabel: '✅ 返信した', copyDraft: 'busilabo' }
+    ] },
+    'dx-inquiry': { family: 'dxInquiry', label: 'できるAIチーム＋のお問い合わせ', steps: [
+      { id: 'ask', type: 'ask', title: '代表に、内容を伝えてどう返すか聞く', help: '代表に質問が届きます（案件管理の「問い合わせ」にも入っています）', question: function (x) { return 'できるAIチーム＋のお問い合わせが届きました。どう返しますか？\n\n' + x.desc; } },
+      { id: 'answer', type: 'choose', title: '代表の答えを待つ', choices: [{ label: '✅ 代表が決めた', go: 'next', memo: '代表が決めた返事の内容' }] },
+      { id: 'reply', type: 'mail', to: 'requester', end: true, title: 'お客様にお返事する', help: 'あなたのアカウント（staff@）から送ります',
+        instruction: function (x) { return 'できるAIチーム＋のお問い合わせへのお返事を書く。代表が決めた内容：' + x.memo('answer') + '。書いていないことは約束しない。署名は付けない。'; } }
+    ] }
+  };
+  // 系統：前の作りの手順（sync.js の STEPS の名前）→ その系統の流れ。2つ以上あれば AI が選ぶ
+  var FAMILY_OF_STEPS = { liloCustomer: 'lilo', liloCancel: 'lilo', liloTaikai: 'taikai', liloSupplier: 'maker', wholesaleOrder: 'wsOrder', wholesaleDefect: 'wsDefect',
+    wholesaleRepairDone: 'wsRepairDone', wholesaleFax: 'wsFax', reply: 'wsReply', amazonBuyer: 'amazon', snsLilo: 'snsLilo', lineLilo: 'lineLilo', snsDx: 'snsDx', lineDx: 'lineDx', inquiry: 'dxInquiry' };
+  function flowsOfFamily(fam) { return Object.keys(FLOWS).filter(function (k) { return FLOWS[k].family === fam; }); }
+  function stepDef(flowId, actId) {
+    var f = FLOWS[flowId], sid = String(actId || '').split('.').slice(1).join('.');
+    return f && f.steps.filter(function (s) { return s.id === sid; })[0];
+  }
+  // 手順で使う情報（ctx）
+  function flowCtx(card, c) {
+    var os = orderStateOf(card, c) || {};
+    var o = os.order || null;
+    var ri = replyInfoOf(card, c) || {};
+    var makerName = o && o.makers && o.makers[0] || '';
+    var maker = makerName ? findMaker(makerName) : null;
+    var who = (roleVal(card, 'requester') || 'お客様').trim();
+    // 名前がメールアドレスしかないとき：連絡先の会社名、なければ「ご担当者」
+    if (/@/.test(who)) {
+      var ad = (/[\w.+-]+@[\w-]+(\.[\w-]+)+/.exec(who) || [''])[0].toLowerCase();
+      var ct = allContacts().filter(function (m) { return m.email.toLowerCase() === ad; })[0];
+      who = ct ? ct.company + (ct.name ? '　' + ct.name : '') : 'ご担当者';
+    }
+    var desc = c.desc.filter(function (l) { return !/^返信先：/.test(l.trim()); }).join('\n');
+    var faxLink = (/https:\/\/\S+\.pdf\S*/i.exec(desc) || /FAX：\s*(https:\/\/\S+)/.exec(desc) || [])[0] || '';
+    faxLink = faxLink.replace(/^FAX：\s*/, '');
+    var x = {
+      card: card, c: c, o: o, orderLoading: !!os.loading, orderNo: os.n || orderNoOf(card, c), ri: ri, no: card.getAttribute('data-item-id') || '', title: c.title, desc: desc,
+      who: /(様|さん)$/.test(who) ? who : who + '様', url: o && o.items && o.items[0] ? o.items[0].url : '', draft: c.draft.join('\n').trim(), needsRep: c.needsRep, draftNote: c.draftNote,
+      makerName: makerName, maker: maker, makerLabel: maker ? maker.company + '　' + maker.name : (makerName || 'メーカー様'),
+      makerHead: maker ? maker.company + ' 様\n　' + maker.name.replace(/[ 　]+/g, '・') : (makerName || 'ご担当者') + ' 様', faxLink: faxLink
+    };
+    x.memo = function (sid) { var s = c.steps.filter(function (s) { return String(s.actId).split('.').slice(1).join('.') === sid; })[0]; return s ? s.memo.replace(/^選んだ：[^｜]*｜?/, '') : ''; };
+    // いちばん新しい履歴（返事が届いた・FAX が届いた など）の中身
+    x.note = function (re) {
+      var hs = card.querySelectorAll('[data-history] .history-entry');
+      for (var i = 0; i < hs.length; i++) {
+        var a = ((hs[i].querySelector('.history-action') || {}).textContent || '').trim();
+        if (re.test(a)) return ((hs[i].querySelector('.history-memo') || {}).textContent || '').trim();
+      }
+      return '';
+    };
+    return x;
+  }
+  // 手順ごとの状態：skip＝今の状況ではしない手順（発送済みなど）。current＝いまやる手順
+  function flowState(card, c, x) {
+    x = x || flowCtx(card, c);
+    var list = c.steps.map(function (s) { var d = stepDef(c.flow, s.actId); return { s: s, d: d, skip: !s.decided && d && d.skipWhen ? !!d.skipWhen(x) : false }; });
+    var cur = list.filter(function (e) { return !e.s.decided && !e.skip && e.d; })[0] || null;
+    return { list: list, cur: cur, x: x, allDone: list.length > 0 && list.every(function (e) { return e.s.decided || e.skip; }) };
+  }
+  function flowStepText(flowId, i, d) { return (i + 1) + '. ⚡[' + flowId + '.' + d.id + '] ' + d.title; }
+  // 仕事の中身の【流れ】と【手順】を、この流れにする（前の手順・下書きの指示は外す。返信の下書きは「お返事する」で使うので残す）
+  function setFlow(card, flowId, by, carry) {
+    var el = card.querySelector('[data-role="content"]');
+    if (!el || !FLOWS[flowId]) return;
+    var lines = textOf(el).replace(/\s+$/, '').split('\n');
+    var keep = [], inSteps = false;
+    lines.forEach(function (l) {
+      var t = l.trim();
+      if (/^【流れ】/.test(t)) return;
+      if (/^【手順】/.test(t)) { inSteps = true; return; }
+      if (inSteps && (STEP_LINE.test(t) || !t)) return;
+      inSteps = false;
+      keep.push(l);
+    });
+    while (keep.length && !keep[keep.length - 1].trim()) keep.pop();
+    keep.push('', '【流れ】' + flowId + '（' + by + '）', '【手順】');
+    FLOWS[flowId].steps.forEach(function (d, i) { keep.push((carry && carry[i] ? carry[i] + ' ' : '') + flowStepText(flowId, i, d)); });
+    el.textContent = keep.join('\n');
+    el.dispatchEvent(userEvent('input'));
+  }
+  // 前の作りの仕事を、どの系統か見分ける（【手順】の1つ目が STEPS のどれと同じか）
+  function familyOf(card, c) {
+    if (!window.__act || !window.__act.steps || !c.steps.length) return '';
+    if (c.steps.some(function (s) { return s.actId === 'maker-stop'; })) return 'liloCancel';
+    var STEPS = window.__act.steps(), first = c.steps[0].text;
+    for (var k in STEPS) if (FAMILY_OF_STEPS[k] && STEPS[k][0] && STEPS[k][0].replace(/^⚡\[[\w.-]+\]\s*/, '') === first) return k;
+    return '';
+  }
+  // 流れの決まっていない仕事を、流れにする（1件ずつ。AI に聞くのは系統に流れが2つ以上あるときだけ）
+  var flowBusy = {}, flowQueue = [];
+  function needFlow(card, c, status) {
+    if (c.flow || status === '完了' || card.hasAttribute('data-deleted')) return;
+    var id = card.getAttribute('data-item-id');
+    if (!id || flowBusy[id]) return;
+    var stepsKey = familyOf(card, c);
+    if (!stepsKey) return;
+    // 営業・迷惑メールらしいもの（迷惑メール振分けに入るもの）は流れにしない（AI に聞く数も減らす）
+    if (spamSuspect(card)) return;
+    // 前の作りで手順を進めていた仕事は、そのままにする（キャンセルの実行ボタンの仕事は、進み具合ごと引き継ぐ）
+    if (stepsKey !== 'liloCancel' && c.steps.some(function (s) { return s.decided; })) return;
+    flowBusy[id] = true;
+    flowQueue.push(function () { return decideFlow(card, stepsKey); });
+    if (flowQueue.length === 1) runFlowQueue();
+  }
+  function runFlowQueue() {
+    if (!flowQueue.length) return;
+    Promise.resolve(flowQueue[0]()).catch(function (e) { console.warn('flow', e); }).then(function () { flowQueue.shift(); setTimeout(runFlowQueue, 300); });
+  }
+  function decideFlow(card, stepsKey) {
+    var c = parseTaskContent(card);
+    if (c.flow) return;
+    var fam = FAMILY_OF_STEPS[stepsKey], ids = flowsOfFamily(fam);
+    if (stepsKey === 'liloCancel') {
+      // 前の作りのキャンセルの手順（4つ）→ 新しい流れの maker・wait・cancel・done に、済んだ印ごと移す
+      var carry = c.steps.map(function (s) { return s.done ? '✓' : s.unneeded ? STEP_UNNEEDED : ''; });
+      setFlow(card, 'lilo-cancel', '前の手順から', carry.concat(['']));
+      addHistoryEntry(card, 'task', '流れを決めた', statusOf(card), null, 'キャンセルのご依頼（前の手順から引き継ぎ）');
+      applyAll(); return;
+    }
+    if (ids.length === 1) { setFlow(card, ids[0], '自動'); addHistoryEntry(card, 'task', '流れを決めた', statusOf(card), null, FLOWS[ids[0]].label); applyAll(); return; }
+    var text = c.title + '\n' + c.desc.join('\n');
+    // はっきり分かるものは AI に聞かない（キャンセル・退会）
+    if (fam === 'lilo' && window.__act.isCancelRequest(text)) { setFlow(card, 'lilo-cancel', 'AI が判断'); addHistoryEntry(card, 'task', '流れを決めた', statusOf(card), null, 'キャンセルのご依頼'); applyAll(); return; }
+    return window.__act.classifyFlow(text, ids.map(function (k) { return { id: k, label: FLOWS[k].label, hint: FLOWS[k].hint || '' }; })).then(function (r) {
+      var id = FLOWS[r.id] ? r.id : ids[ids.length - 1];
+      if (parseTaskContent(card).flow) return;
+      setFlow(card, id, 'AI が判断');
+      addHistoryEntry(card, 'task', '流れを決めた', statusOf(card), null, FLOWS[id].label + (r.reason ? '（' + r.reason + '）' : ''));
+      applyAll();
+    }, function () { delete flowBusy[card.getAttribute('data-item-id')]; });
+  }
+  // 手順の印をまとめて付け替える。updates = [{ line, mark, memo }]
+  function setStepMarks(card, updates) {
+    var el = card.querySelector('[data-role="content"]');
+    if (!el) return;
+    var lines = textOf(el).split('\n');
+    updates.forEach(function (u) {
+      var m = STEP_LINE.exec((lines[u.line] || '').trim());
+      if (!m) return;
+      var body = m[3].replace(/｜メモ：.*$/, '').trim();
+      var memo = u.memo !== undefined ? u.memo : ((/｜メモ：(.*)$/.exec(m[3]) || [])[1] || '');
+      lines[u.line] = (u.mark ? u.mark + ' ' : '') + m[2] + '. ' + body + (u.mark && memo ? '｜メモ：' + String(memo).replace(/\n/g, ' ').slice(0, 300) : '');
+    });
+    el.textContent = lines.join('\n');
+    el.dispatchEvent(userEvent('input'));
+  }
+  // いまの手順を済ませて、次へ進む（go：next／手順の id／end）。全部済んだら完了
+  function finishFlowStep(card, line, go, memo, histAction) {
+    var c = parseTaskContent(card);
+    var idx = -1;
+    c.steps.forEach(function (s, i) { if (s.line === line) idx = i; });
+    if (idx === -1) return;
+    var d = stepDef(c.flow, c.steps[idx].actId) || {};
+    var who = currentUser || ownerOf(card);
+    var updates = [{ line: line, mark: '✓', memo: memo || '' }];
+    var target = go === 'end' || d.end ? c.steps.length : -1;
+    if (target === -1 && go && go !== 'next') c.steps.forEach(function (s, i) { if (i > idx && target === -1 && String(s.actId).split('.').slice(1).join('.') === go) target = i; });
+    if (target > idx) for (var j = idx + 1; j < target; j++) if (!c.steps[j].decided) updates.push({ line: c.steps[j].line, mark: STEP_UNNEEDED });
+    setStepMarks(card, updates);
+    if (statusOf(card) === '未着手') setTaskStatus(card, '進行中');
+    addHistoryEntry(card, 'task', histAction || d.title || '手順を済ませた', statusOf(card), null, (who ? who + 'さん' : '') + (memo ? '：' + memo : ''));
+    var after = parseTaskContent(card);
+    var fs = flowState(card, after);
+    if (fs.allDone) {
+      setTaskStatus(card, '完了');
+      addHistoryEntry(card, 'task', '完了にする', '完了', null, 'ぜんぶ済んだので完了にした');
+      if (window.__manualOps && window.__manualOps.onComplete) window.__manualOps.onComplete(card);
+    }
+    closeSimplePanel(card);
+    applyAll();
+  }
+  // ひとつ戻す：いちばん最後に済ませた手順と、そのあと「しない」にした手順を元に戻す
+  function undoFlowStep(card) {
+    var c = parseTaskContent(card);
+    var last = -1;
+    c.steps.forEach(function (s, i) { if (s.done) last = i; });
+    if (last === -1) return;
+    var updates = [{ line: c.steps[last].line, mark: '' }];
+    for (var i = last + 1; i < c.steps.length; i++) if (c.steps[i].unneeded) updates.push({ line: c.steps[i].line, mark: '' });
+    setStepMarks(card, updates);
+    if (statusOf(card) === '完了') setTaskStatus(card, '進行中');
+    addHistoryEntry(card, 'task', 'ひとつ戻した', statusOf(card), null, (currentUser ? currentUser + 'さん：' : '') + c.steps[last].text);
+    applyAll();
+  }
+  function routeLabelOf(d, x) {
+    if (!d || d.type !== 'mail') return '';
+    var p = flowMailPlan(d, x);
+    return fromLabel(p.route).split('（')[0] + ' から ' + (p.to || '（宛先は次の画面で入れます）') + ' へ';
+  }
+  function flowHtml(card, c, status, key) {
+    var fs = flowState(card, c);
+    var f = FLOWS[c.flow], x = fs.x;
+    var n = fs.list.filter(function (e) { return !e.skip; }).length;
+    var doneN = fs.list.filter(function (e) { return e.s.decided && !e.s.unneeded; }).length;
+    var html = '<div class="f-kind">この仕事：<b>' + esc(f.label) + '</b>' + (c.flowBy ? '<span class="f-by">（' + esc(c.flowBy) + '）</span>' : '') +
+      (status !== '完了' && flowsOfFamily(f.family).length > 1 ? '<button type="button" class="s-btn s-mini" data-f-kind="' + key + '">種類を変える</button>' : '') + '</div>';
+    if (c.flow === 'lilo-cancel' && shipped(x)) html += '<div class="s-order" data-tone="warn"><b>📦 もう発送済みです</b><span>キャンセルはできないので、お客様へのお断りのご連絡だけになります</span></div>';
+    // やったこと
+    var dones = fs.list.filter(function (e) { return e.s.done; });
+    if (dones.length) html += '<div class="f-done"><b>✔ やったこと</b><ul>' + dones.map(function (e) {
+      return '<li>' + esc(e.d ? e.d.title : e.s.text) + (e.s.memo ? '<small>' + esc(e.s.memo) + '</small>' : '') + '</li>';
+    }).join('') + '</ul>' + (status !== '完了' || dones.length ? '<button type="button" class="s-btn s-mini" data-f-undo="' + key + '">↩ ひとつ戻す</button>' : '') + '</div>';
+    if (fs.allDone || status === '完了') return html + '<div class="f-now f-finished"><b>✅ この仕事は終わりました</b></div>';
+    var cur = fs.cur;
+    if (!cur) return html;
+    var d = cur.d, s = cur.s;
+    var pos = fs.list.filter(function (e) { return !e.skip; }).indexOf(cur) + 1;
+    // このあと
+    var rest = fs.list.slice(fs.list.indexOf(cur) + 1).filter(function (e) { return !e.s.decided && !e.skip && e.d; });
+    html += '<div class="f-now"><div class="f-now-label">いまやること（' + pos + ' / ' + n + '）</div><b class="f-now-title">' + esc(d.title) + '</b>' +
+      (d.help ? '<div class="f-now-help">' + linkify(d.help) + '</div>' : '');
+    // 待つ手順：届いたものを出す
+    if (d.waitFor) {
+      var got = x.note(d.waitFor);
+      html += got ? '<div class="f-got">📩 届きました：' + linkify(got) + '</div>' : '<div class="f-wait">⏳ まだ届いていません。届くと、ここに出ます</div>';
+    }
+    if (d.type === 'site' && d.copyDraft && x.needsRep) html += '<div class="s-draft-warn">⚠️ 下書きに「代表に確認」と出ています。先に「代表に聞く」を押してください：' + esc(x.draftNote) + '</div>';
+    if (d.type === 'mail' && d.useDraft && x.needsRep) html += '<div class="s-draft-warn">⚠️ 下書きに「代表に確認」と出ています。送る前に代表に聞いてください：' + esc(x.draftNote) + '</div>';
+    var b = 'data-f-key="' + key + '" data-f-line="' + s.line + '"';
+    html += '<div class="f-now-actions">';
+    if (d.type === 'mail') html += '<button type="button" class="s-btn s-primary f-big" data-f-act="mail" ' + b + '>✉️ 下書きを見て送る</button><span class="s-act-note">' + esc(routeLabelOf(d, x)) + '</span>';
+    else if (d.type === 'cancel') html += '<button type="button" class="s-btn s-primary f-big" data-f-act="cancel" ' + b + (x.o ? '' : ' disabled') + '>🛒 Shopify でキャンセルする</button>' + (x.o ? '' : '<span class="s-act-note">' + (x.orderLoading ? 'Shopify の注文を読んでいます…' : 'Shopify の注文が読めていません') + '</span>');
+    else if (d.type === 'choose') html += d.choices.map(function (ch, i) { return '<button type="button" class="s-btn' + (i === 0 ? ' s-primary' : '') + ' f-big" data-f-act="choose" data-f-choice="' + i + '" ' + b + '>' + esc(ch.label) + '</button>'; }).join('');
+    else if (d.type === 'site') {
+      var site = SITES[d.site] || {};
+      if (d.copy || d.copyDraft) html += '<button type="button" class="s-btn s-primary f-big" data-f-act="copy" ' + b + '>📋 貼り付ける文を見る</button>';
+      html += '<a class="s-btn' + (d.copy || d.copyDraft ? '' : ' s-primary') + ' f-big" href="' + esc(site.url || '#') + '" target="_blank" rel="noopener">🔗 ' + esc(site.name || d.site) + ' を開く</a>' +
+        '<button type="button" class="s-btn f-big" data-f-act="site-done" ' + b + '>' + esc(d.doneLabel || '✅ 済んだ') + '</button>';
+    }
+    else if (d.type === 'ask') html += '<button type="button" class="s-btn s-primary f-big" data-f-act="ask" ' + b + '>🙋 代表に聞く</button>';
+    else if (d.type === 'task') html += '<button type="button" class="s-btn s-primary f-big" data-f-act="task" ' + b + '>📋 代表に頼む</button>';
+    html += '</div>';
+    html += '<div class="f-now-sub">' + (d.type !== 'ask' && !(d.type === 'choose' && d.choices.some(function (ch) { return ch.go === 'rep'; })) ? '<button type="button" class="s-btn s-mini" data-f-act="rep" ' + b + '>🙋 分からないので代表に聞く</button>' : '') +
+      '<button type="button" class="s-btn s-mini" data-f-act="skip" ' + b + '>この手順はしない</button></div>';
+    if (rest.length) html += '<div class="f-next">このあと：' + rest.map(function (e) { return esc(e.d.title.replace(/（.*?）/g, '')); }).join(' → ') + '</div>';
+    return html + '</div>';
+  }
+  // メールの手順の宛先・送り元・文
+  function flowMailPlan(d, x) {
+    var ri = x.ri || {};
+    var p = { kind: 'busilabo', route: 'self', to: '', subject: '', sender: x.who };
+    if (d.to === 'maker') { p.route = 'maker'; p.kind = 'lilocle-maker'; p.to = x.maker ? x.maker.email : ''; p.sender = x.makerLabel; }
+    else if (/^fixed:/.test(d.to)) { p.route = 'self'; p.to = d.to.slice(6); }
+    else { p.route = ri.route || 'self'; p.kind = ri.kind || 'busilabo'; p.to = ri.to || taskField(x.c, 'メールアドレス') || ''; p.subject = ri.subject || ''; }
+    if (d.subject) p.subject = d.subject(x);
+    if (x.c && businessOf(x.card) === 'LILOCLE運営' && p.route === 'self' && d.to === 'requester') { p.route = 'customer'; p.kind = 'lilocle'; }
+    return p;
+  }
+  function openFlowMail(card, key, line, d) {
+    var c = parseTaskContent(card), x = flowCtx(card, c);
+    var p = flowMailPlan(d, x);
+    var plan = { route: p.route, kind: p.kind, title: d.title, to: p.to, subject: p.subject, sender: p.sender, text: x.desc + (x.o ? '\n\n注文 ' + x.o.name + '：' + itemsText(x.o) : ''),
+      maker: d.to === 'maker' ? x.maker : null, makerName: x.makerName, reply: !d.instruction, draft: d.useDraft ? x.draft : '', draftNote: (x.needsRep ? '⚠️ 代表に確認してから送ってください：' : '') + (x.draftNote || ''),
+      instruction: d.instruction ? d.instruction(x) : '', attachUrl: d.attach ? x.faxLink : '' };
+    var panel = openSimplePanel(card, composeHtml(card, key, line, 'flow', d.id, plan));
+    if (!panel) { delete composeCtx[key]; return; }
+    composeCtx[key] = { card: card, line: line, actionId: 'flow', mode: '', plan: plan, flowStep: d };
+    panel.scrollIntoView({ block: 'start' });
+    if (plan.attachUrl) { var note = panel.querySelector('[data-c-note]'); if (note) note.textContent = '📎 FAX の PDF を添付して送ります'; }
+    if (plan.reply && plan.draft) { fillDraft(key, Promise.resolve({ draft: plan.draft, needsRep: false, note: plan.draftNote })); return; }
+    fillDraft(key, window.__act.draft(plan.reply ? { kind: plan.kind, channel: 'メール', sender: plan.sender, subject: plan.subject, text: plan.text }
+      : { kind: plan.kind, channel: 'メール', sender: plan.sender, instruction: plan.instruction, text: plan.text }));
+  }
+  // 外のサイトに貼る文（Amazon・SNS の返信、Claude への頼みごと）。直せて、コピーできる
+  function openFlowCopy(card, key, line, d) {
+    var c = parseTaskContent(card), x = flowCtx(card, c);
+    var site = SITES[d.site] || {};
+    var html = '<div data-c-act="copy-' + d.id + '" class="s-compose" data-compose="' + key + '"><b>📋 ' + esc(site.name || '') + ' に貼り付ける文</b>' +
+      '<label>文（ここで直せます）<textarea data-c-body disabled>' + (d.copy ? '' : 'AI が下書きを作っています…') + '</textarea></label>' +
+      '<div class="s-draft-note" data-c-note></div>' +
+      (d.copyDraft ? '<div class="s-revise"><input type="text" data-c-request placeholder="直してほしいことを一言（例：もっと短く）"><button type="button" class="s-btn" data-c-revise="' + key + '">🤖 AI に直してもらう</button></div>' : '<input type="hidden" data-c-request><button type="button" hidden data-c-revise="' + key + '"></button>') +
+      '<div class="s-compose-err" data-c-err></div>' +
+      '<div class="s-actions"><button type="button" class="s-btn s-primary" data-f-copy="' + key + '">📋 コピーして ' + esc(site.name || '') + ' を開く</button><button type="button" class="s-btn" data-c-close="' + key + '">閉じる</button>' +
+      '<input type="hidden" data-c-to value="x@x.x"><input type="hidden" data-c-subject value="x"><button type="button" hidden data-c-send="' + key + '"></button></div></div>';
+    var panel = openSimplePanel(card, html);
+    if (!panel) { delete composeCtx[key]; return; }
+    var kind = d.copyDraft || 'busilabo';
+    composeCtx[key] = { card: card, line: line, actionId: 'flow-copy', plan: { route: 'site', kind: kind, sender: x.who, text: x.desc + (x.memo('answer') ? '\n\n代表が決めた内容：' + x.memo('answer') : '') }, flowStep: d, siteUrl: site.url };
+    panel.scrollIntoView({ block: 'start' });
+    if (d.copy) { fillDraft(key, Promise.resolve({ draft: d.copy(x), needsRep: false, note: '' })); return; }
+    if (x.draft && !x.memo('answer')) { fillDraft(key, Promise.resolve({ draft: x.draft, needsRep: false, note: x.draftNote })); return; }
+    fillDraft(key, window.__act.draft(x.memo('answer')
+      ? { kind: kind, channel: site.name, sender: x.who, instruction: '届いたメッセージへの返信を書く。代表が決めた内容：' + x.memo('answer') + '。チャットなので短めに。署名は付けない。', text: x.desc }
+      : { kind: kind, channel: site.name, sender: x.who, text: x.desc }));
+  }
+  // ひとこと書いてから進む（memo のある選択肢・メモを書く外の作業）
+  function openFlowMemo(card, key, line, label, go, choiceLabel, histAction) {
+    openSimplePanel(card, '<div class="passer" data-f-memo-box><label class="passer-label">' + esc(label) + '</label><textarea class="passer-text" rows="2"></textarea>' +
+      '<div class="passer-actions"><button type="button" class="claim-btn" data-f-memo-ok="' + key + '" data-f-line="' + line + '" data-f-go="' + esc(go || 'next') + '" data-f-choice-label="' + esc(choiceLabel || '') + '" data-f-hist="' + esc(histAction || '') + '">決めて次へ</button><span class="passer-hint" data-f-hint></span></div></div>');
+    var panel = card.querySelector('[data-simple-panel]'); if (panel) panel.scrollIntoView({ block: 'start' });
+  }
+  function openFlowAsk(card, key, line, text, advance) {
+    openSimplePanel(card, '<div class="passer"><label class="passer-label">代表に聞くこと（直してから送れます）</label><textarea class="passer-text" rows="6">' + esc(text) + '</textarea>' +
+      '<div class="passer-actions"><button type="button" class="claim-btn" data-f-ask-send="' + key + '" data-f-line="' + line + '"' + (advance ? ' data-f-advance' : '') + '>🙋 代表に送る</button><span class="passer-hint" data-f-hint></span></div></div>');
+    var panel = card.querySelector('[data-simple-panel]'); if (panel) panel.scrollIntoView({ block: 'start' });
+  }
+  function sendRepQuestion(card, q) {
+    var who = currentUser || ownerOf(card);
+    return window.__chatOps.createTask({
+      Title: ('代表への質問：' + q).slice(0, 60), Content: '代表への質問（' + (who || '') + 'さんから）\n' + q + '\n\n関係する仕事：' + parseTaskContent(card).title + '（id ' + card.getAttribute('data-item-id') + '）',
+      Business: businessOf(card), Priority: '中', Owner: REP, Requester: who || '', Category: '代表の確認'
+    }, '代表に質問', (who || '') + 'さんから');
+  }
+  document.body.addEventListener('click', function (e) {
+    var t = e.target.closest && e.target.closest('[data-f-act],[data-f-kind],[data-f-undo],[data-f-memo-ok],[data-f-ask-send],[data-f-copy],[data-f-kind-pick]');
+    if (!t || t.disabled) return;
+    var key = t.getAttribute('data-f-key') || t.getAttribute('data-f-kind') || t.getAttribute('data-f-undo') || t.getAttribute('data-f-memo-ok') || t.getAttribute('data-f-ask-send') || t.getAttribute('data-f-copy') || t.getAttribute('data-f-kind-pick');
+    var card = jumpRegistry[key];
+    if (!card || !window.__act) return;
+    var c = parseTaskContent(card);
+    var line = +t.getAttribute('data-f-line');
+    var step = c.steps.filter(function (s) { return s.line === line; })[0];
+    var d = step && stepDef(c.flow, step.actId);
+    var x = flowCtx(card, c);
+    if (t.hasAttribute('data-f-kind')) {
+      var ids = flowsOfFamily(FLOWS[c.flow].family);
+      openSimplePanel(card, '<div class="passer"><label class="passer-label">この仕事の種類を選んでください（手順が入れ替わります）</label><div class="passer-actions">' +
+        ids.map(function (k) { return '<button type="button" class="s-btn' + (k === c.flow ? ' s-primary' : '') + '" data-f-kind-pick="' + key + '" data-f-flow="' + k + '">' + esc(FLOWS[k].label) + '</button>'; }).join('') + '</div></div>');
+      return;
+    }
+    if (t.hasAttribute('data-f-kind-pick')) {
+      var nf = t.getAttribute('data-f-flow');
+      if (nf !== c.flow && window.confirm('種類を「' + FLOWS[nf].label + '」に変えます。手順が最初からになります。よろしいですか？')) {
+        setFlow(card, nf, (currentUser || 'スタッフ') + 'さんが選んだ');
+        if (statusOf(card) === '完了') setTaskStatus(card, '進行中');
+        addHistoryEntry(card, 'task', '種類を変えた', statusOf(card), null, FLOWS[nf].label);
+      }
+      closeSimplePanel(card); applyAll(); return;
+    }
+    if (t.hasAttribute('data-f-undo')) { if (window.confirm('最後に済ませた手順を、元に戻しますか？（送ったメールは取り消せません）')) undoFlowStep(card); return; }
+    if (t.hasAttribute('data-f-memo-ok')) {
+      var box = t.closest('[data-simple-panel]'), memo = box.querySelector('textarea').value.trim();
+      if (!memo) { box.querySelector('[data-f-hint]').textContent = 'ひとこと書いてください'; return; }
+      var cl = t.getAttribute('data-f-choice-label');
+      finishFlowStep(card, line, t.getAttribute('data-f-go'), (cl ? '選んだ：' + cl + '｜' : '') + memo, t.getAttribute('data-f-hist') || '');
+      return;
+    }
+    if (t.hasAttribute('data-f-ask-send')) {
+      var abox = t.closest('[data-simple-panel]'), q = abox.querySelector('textarea').value.trim();
+      if (!q) return;
+      if (!window.__chatOps) { abox.querySelector('[data-f-hint]').textContent = 'まだ読み込み中です。少し待ってからもう一度押してください'; return; }
+      t.disabled = true;
+      var adv = t.hasAttribute('data-f-advance');
+      sendRepQuestion(card, q).then(function (created) {
+        if (!created) { t.disabled = false; abox.querySelector('[data-f-hint]').textContent = '送れませんでした。もう一度押してください'; return; }
+        if (adv) finishFlowStep(card, line, 'next', '代表に聞いた', '代表に質問を送った');
+        else { addHistoryEntry(card, 'task', '代表に質問', statusOf(card), null, q); card.querySelector('[data-role="content"]').dispatchEvent(userEvent('input')); closeSimplePanel(card); applyAll(); }
+      });
+      return;
+    }
+    if (t.hasAttribute('data-f-copy')) {
+      var ctx = composeCtx[key], ce = composeEls(key);
+      if (!ctx || !ce) return;
+      var text = ce.body.value;
+      var done = function () { t.textContent = '✅ コピーしました（貼り付けてください）'; window.open(ctx.siteUrl, '_blank', 'noopener'); };
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, function () { ce.body.select(); document.execCommand('copy'); done(); });
+      else { ce.body.select(); document.execCommand('copy'); done(); }
+      return;
+    }
+    if (!d) return;
+    var act = t.getAttribute('data-f-act');
+    if (act === 'mail') openFlowMail(card, key, line, d);
+    else if (act === 'cancel') runCancel(card, key, line);
+    else if (act === 'copy') openFlowCopy(card, key, line, d);
+    else if (act === 'site-done') {
+      if (d.memo) openFlowMemo(card, key, line, d.memo, 'next', '', d.title);
+      else if (window.confirm('「' + d.title + '」は済みましたか？')) finishFlowStep(card, line, 'next', '', d.title);
+    }
+    else if (act === 'ask') openFlowAsk(card, key, line, d.question ? d.question(x) : '', true);
+    else if (act === 'task') {
+      if (!window.__chatOps) { alert('まだ読み込み中です。少し待ってからもう一度押してください'); return; }
+      var tf = d.task(x);
+      if (!window.confirm('代表に「' + tf.Title + '」を頼みます。よろしいですか？')) return;
+      t.disabled = true;
+      window.__chatOps.createTask(tf, '仕事の流れから', (currentUser || '') + 'さんが頼んだ').then(function (cr) { if (cr) finishFlowStep(card, line, 'next', '代表に頼んだ', d.title); else { t.disabled = false; alert('頼めませんでした。もう一度押してください'); } });
+    }
+    else if (act === 'choose') {
+      var ch = d.choices[+t.getAttribute('data-f-choice')];
+      if (!ch) return;
+      if (ch.go === 'rep') { openFlowAsk(card, key, line, '「' + d.title + '」で相談です（' + ch.label.replace(/^\S+\s/, '') + '）。\n\n' + (d.waitFor ? '届いた内容：' + x.note(d.waitFor) + '\n\n' : '') + x.title, false); return; }
+      if (ch.memo) { openFlowMemo(card, key, line, ch.memo, ch.go, ch.label.replace(/^\S+\s/, ''), d.title); return; }
+      finishFlowStep(card, line, ch.go, '選んだ：' + ch.label.replace(/^\S+\s/, ''), d.title);
+    }
+    else if (act === 'rep') openFlowAsk(card, key, line, '「' + d.title + '」が分からないので教えてください。\n\n' + x.title, false);
+    else if (act === 'skip') { if (window.confirm('「' + d.title + '」はしないことにしますか？')) { setStepMarks(card, [{ line: line, mark: STEP_UNNEEDED }]); addHistoryEntry(card, 'task', 'この手順はしない', statusOf(card), null, (currentUser ? currentUser + 'さん：' : '') + d.title); var fs2 = flowState(card, parseTaskContent(card)); if (fs2.allDone) { setTaskStatus(card, '完了'); addHistoryEntry(card, 'task', '完了にする', '完了', null, 'ぜんぶ済んだので完了にした'); } applyAll(); } }
+  });
 
   // ---- 実行ボタンを押したとき（2026-11-08）----
   function makerContacts() {
@@ -4733,10 +5298,12 @@
     if (!window.confirm('このメールを送ります。\n\n送り元：' + from + '\n宛先：' + to + '\n件名：' + subject + '\n\n本文の最初：\n' + body.slice(0, 120) + (body.length > 120 ? '…' : '') + '\n\n送ったあとは取り消せません。送ってよいですか？')) return;
     var who = currentUser || ownerOf(ctx.card);
     e.send.disabled = true; e.send.textContent = '送っています…';
-    window.__act.send({ route: route, to: to, subject: subject, body: body, taskNo: ctx.card.getAttribute('data-item-id') || '', staff: who }).then(function () {
+    window.__act.send({ route: route, to: to, subject: subject, body: body, taskNo: ctx.card.getAttribute('data-item-id') || '', staff: who, attachUrl: ctx.plan.attachUrl || '' }).then(function () {
       var memo = (who ? who + 'さん：' : '') + from.split('（')[0] + ' から ' + to + ' へ「' + subject + '」' + (route === 'self' ? '' : '（数分で送られます）');
       closeSimplePanel(ctx.card);
       delete composeCtx[key];
+      // 仕事の流れの手順：送ったら次へ（end の手順なら仕事が終わる）
+      if (ctx.actionId === 'flow') { finishFlowStep(ctx.card, ctx.line, 'next', '送った：' + to + '「' + subject + '」', ctx.flowStep.title); return; }
       if (ctx.actionId === 'reply') {
         // 返信は手順とは別。返信で終わる種類の仕事は、送信済みアイテムの取り込み（⑥送った返信）が今までどおり完了にする
         if (statusOf(ctx.card) === '未着手') setTaskStatus(ctx.card, '進行中');
@@ -4766,7 +5333,8 @@
       if (o.shipped) { alert('この注文はもう発送されています。キャンセルはできません。お客様にはお断りのご連絡を送ってください。'); return; }
       if (!window.confirm('Shopify で注文 ' + o.name + ' をキャンセルします。\n\n商品：' + itemsText(o) + '\n金額：' + Number(String(o.total).split(' ')[0]).toLocaleString('ja-JP') + '円（' + (FINANCIAL_JA[o.financial] || o.financial) + '）\n\n・Shopify からお客様に、キャンセルのお知らせメールが届きます\n・在庫は戻します\n\nキャンセルは元に戻せません。メーカー様の返事は確かめましたか？\nキャンセルしてよいですか？')) return;
       window.__act.cancel({ number: n, orderId: o.id, staff: who, taskNo: card.getAttribute('data-item-id') || '' }).then(function () {
-        completeActionStep(card, line, 'Shopify で注文をキャンセルした', (who ? who + 'さん：' : '') + o.name + '（お客様に Shopify からお知らせ・在庫を戻した）');
+        if (parseTaskContent(card).flow) finishFlowStep(card, line, 'next', o.name + ' をキャンセルした（お客様に Shopify からお知らせ・在庫を戻した）', 'Shopify で注文をキャンセルした');
+        else completeActionStep(card, line, 'Shopify で注文をキャンセルした', (who ? who + 'さん：' : '') + o.name + '（お客様に Shopify からお知らせ・在庫を戻した）');
         window.__act.order(n, true).then(function () { renderSimpleTasks(); });
       }, function (err) { alert('キャンセルできませんでした：' + (err.message || err) + '\n\n注文は変わっていません。もう一度押すか、代表に聞いてください。'); });
     });
@@ -5719,7 +6287,7 @@
       var key = roleVal(card, 'teamsMessageId');
       untouched = ownerOf(card) === UNASSIGNED && (statusOf(card) || '未着手') === '未着手';
       // 見るのはメール・問い合わせの部分だけ（アプリが付けた手順・下書きは見ない）
-      var body = roleVal(card, 'content').split(/\n【(手順|返信の下書き)】/)[0];
+      var body = roleVal(card, 'content').split(/\n【(手順|返信の下書き|流れ)】/)[0];
       if (key.indexOf('inquiry:') === 0) reason = spamReason("", body + " " + roleVal(card, 'related') + " " + roleVal(card, 'requester'), true);
       else reason = spamReason(key.split(':')[1] || "", body + " " + roleVal(card, 'requester') + " " + roleVal(card, 'related'));
       // 連絡先・顧客台帳に登録した相手のメールは、決めた相手でなければ振り分けない
