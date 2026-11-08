@@ -974,11 +974,33 @@
     if (!res.ok) throw new Error("送信の待ち行列に置けませんでした（" + res.status + "）");
     return res.json().catch(function () { return {}; });
   }
-  // mail = { route: "maker"|"customer", to, subject, body, taskNo, staff }
+  // 自分のメールボックスから送る（staff@ でサインインしていれば staff@、代表なら busilabo@）。
+  // Mail.Send は 2026-11-08 に組織として同意済み（代表の指定）。送ったメールは送信済みアイテムに入り、⑥送った返信に乗る
+  var MAIL_SCOPES = ["Mail.Send"];
+  async function getMailToken() {
+    try {
+      var r = await msalApp.acquireTokenSilent({ scopes: MAIL_SCOPES, account: account });
+      return r.accessToken;
+    } catch (e) {
+      var r2 = await msalApp.acquireTokenPopup({ scopes: MAIL_SCOPES, account: account });
+      return r2.accessToken;
+    }
+  }
+  async function sendFromMe(to, subject, body) {
+    var token = await getMailToken();
+    var res = await fetch("https://graph.microsoft.com/v1.0/me/sendMail", {
+      method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+      body: JSON.stringify({ message: { subject: subject, body: { contentType: "Text", content: body }, toRecipients: [{ emailAddress: { address: to } }] }, saveToSentItems: true })
+    });
+    if (!res.ok) throw new Error("送れませんでした（" + res.status + " " + (await res.text().catch(function () { return ""; })).slice(0, 120) + "）");
+    return {};
+  }
+  // mail = { route: "maker"|"customer"|"self", to, subject, body, taskNo, staff }
   async function sendMail(mail) {
     var to = String(mail.to || "").trim();
     if (!/^[\w.+-]+@[\w-]+(\.[\w-]+)+$/.test(to)) throw new Error("宛先のメールアドレスが正しくありません");
     if (!String(mail.subject || "").trim() || !String(mail.body || "").trim()) throw new Error("件名と本文を入れてください");
+    if (mail.route === "self") return sendFromMe(to, mail.subject, mail.body);
     var stamp = fileStamp();
     if (mail.route === "maker") {
       // .json やテキストで置くとフローが読めない（base64ToString が Null。2026-11-06）。中身はそのままの JSON で、拡張子を .bin にする
@@ -992,7 +1014,8 @@
       approvedAt: new Date().toISOString(), approvedBy: (mail.staff || "スタッフ") + "（仕事管理アプリで確認して送信）"
     }), "application/json");
   }
-  window.__act = { order: shopifyOrder, orderCached: function (n) { return orderCache[n] || null; }, cancel: shopifyCancel, draft: composeDraft, send: sendMail, cancelSteps: function () { return STEPS.liloCancel.slice(); }, isCancelRequest: function (t) { return isCancelRequest(t, ""); } };
+  window.__act = { order: shopifyOrder, orderCached: function (n) { return orderCache[n] || null; }, cancel: shopifyCancel, draft: composeDraft, send: sendMail, cancelSteps: function () { return STEPS.liloCancel.slice(); }, isCancelRequest: function (t) { return isCancelRequest(t, ""); },
+    me: function () { return (account && account.username) || ""; } };
 
   function stepsText(steps) {
     if (!steps || !steps.length) return "";
@@ -1285,7 +1308,11 @@
         var spam = !data.customer && window.__app.spamReason && window.__app.spamReason(data.fromAddress, data.subject + " " + preview + " " + from);
         var draft = data.draft ? { draft: String(data.draft), needsRep: !!data.needsRep, note: String(data.draftNote || "") }
           : (profile.draftKind && !spam ? await requestDraft({ kind: profile.draftKind, channel: profile.channel, subject: data.subject || "", sender: from, text: preview }) : null);
-        var content = profile.title + "\n" + preview + draftText(draft) + stepsText(profile.steps);
+        // 返信先（相手のアドレスと届いたメールボックス）を残す。アプリの「返信する」が使う（2026-11-08）。Amazon はセラーセントラルから返すので残さない
+        var replyAddr = String(data.fromAddress || "").trim().toLowerCase();
+        var replyLine = profile.business !== "Amazon販売" && /^[\w.+-]+@[\w-]+(\.[\w-]+)+$/.test(replyAddr) && !OWN_SENDER.test(replyAddr) && !/@shopify\.com$/.test(replyAddr)
+          ? "\n返信先：" + replyAddr + "（" + String(data.mailbox || "").trim().toLowerCase() + " に届いたメール。件名「" + String(data.subject || "").slice(0, 80) + "」）" : "";
+        var content = profile.title + "\n" + preview + replyLine + draftText(draft) + stepsText(profile.steps);
         // 下書きを待つ間に、別の人の画面が同じメールを仕事にしていたら作らない
         if (draft && await remoteTaskExists(key)) { await moveToProcessed(file, "mail task"); return; }
         var fields = {

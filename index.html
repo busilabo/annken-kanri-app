@@ -4261,15 +4261,27 @@
   // 前の手順が終わるまでは押せない。種類を足すときは、ここと actionStates・openAction に足す（裏側は sync.js の window.__act）
   var ACTION_STEP = /^⚡\[([\w-]+)\]\s*(.*)$/;
   var ACTIONS = {
-    'maker-stop': { kind: 'mail', route: 'maker', label: '✉️ 下書きを作って送る', needsOrder: true },
-    'shopify-cancel': { kind: 'cancel', label: '🛒 キャンセルする', needsOrder: true },
-    'customer-cancel': { kind: 'mail', route: 'customer', label: '✉️ 下書きを作って送る', needsOrder: true }
+    // ordered：前の手順が全部終わるまで押せない（決まった流れの型だけ。ふつうの手順は「どれか1つ」のことが多いので付けない）
+    'maker-stop': { kind: 'mail', route: 'maker', label: '✉️ 下書きを作って送る', needsOrder: true, ordered: true },
+    'shopify-cancel': { kind: 'cancel', label: '🛒 キャンセルする', needsOrder: true, ordered: true },
+    'customer-cancel': { kind: 'mail', route: 'customer', label: '✉️ 下書きを作って送る', needsOrder: true, ordered: true },
+    // どの事業の仕事にも使える：手順に書いたこと（例「綿半様に納期を連絡する」）をもとに AI が下書きを作り、送り元と宛先を選んで送る
+    'mail': { kind: 'mail', route: 'choose', label: '✉️ 下書きを作って送る' }
   };
+  // 送り元。self＝サインインしている本人のメールボックス（staff@ なら staff@。Mail.Send、2026-11-08 組織として同意済み）
   var MAIL_FROM = { maker: 'lilocle@lilocle.jp（LILOCLE）', customer: 'contact@lilocle.jp（LILOCLE お客様窓口）' };
+  function fromLabel(route) { return route === 'self' ? ((window.__act && window.__act.me()) || 'あなたのアカウント') + '（あなたのアカウント）' : MAIL_FROM[route]; }
   var LILO_SIGNATURE = '\n\n――――――――――――\nLILOCLE（リロクル）\nエシカルな暮らしと商品を提案する通販サイト\nhttps://lilocle.jp/\ncontact@lilocle.jp\n――――――――――――';
+  function selfSignature() {
+    var me = (window.__act && window.__act.me()) || 'staff@busilabo.com';
+    return '\n\n――――――――――――\n株式会社ビジラボ\n' + me + '\n――――――――――――';
+  }
+  // メーカー様あて（lilocle@）は、これまでのメールと同じく署名を付けない（本文の書き出しで名乗る）
+  function signatureFor(route) { return route === 'customer' ? LILO_SIGNATURE : route === 'self' ? selfSignature() : ''; }
   var FINANCIAL_JA = { AUTHORIZED: '仮押さえ（まだ確定していない）', PAID: '支払い済み', PENDING: '支払い待ち', PARTIALLY_PAID: '一部支払い済み', REFUNDED: '返金済み', PARTIALLY_REFUNDED: '一部返金済み', VOIDED: '取り消し済み', EXPIRED: '期限切れ' };
   var FULFILL_JA = { UNFULFILLED: 'まだ発送していない', IN_PROGRESS: 'まだ発送していない（メーカー様に注文書を送った・処理中）', ON_HOLD: '保留中', SCHEDULED: '発送予定', FULFILLED: '発送済み', PARTIALLY_FULFILLED: '一部発送済み', IN_TRANSIT: '配送中', OUT_FOR_DELIVERY: '配達中', DELIVERED: '配達済み' };
 
+  function hasFlow(c) { return c.steps.some(function (s) { return s.action && ACTIONS[s.action].ordered; }); }
   function taskField(c, label) {
     var m = new RegExp('^' + label + '：\\s*(.+)$', 'm').exec(c.desc.join('\n'));
     return m ? m[1].trim() : '';
@@ -4314,7 +4326,7 @@
   // キャンセルの依頼なのに、前の作り（チェックだけの手順）の仕事なら、キャンセルの手順に切り替えるボタンを出す
   function cancelSwitchHtml(card, c, status) {
     if (status === '完了' || !orderNoOf(card, c) || !window.__act || !window.__act.isCancelRequest(c.desc.join('\n'))) return '';
-    if (c.steps.some(function (s) { return s.action; })) return '';
+    if (hasFlow(c)) return '';
     return '<div class="s-order"><b>⚡ キャンセルのご依頼です</b><span>手順を、実行ボタン付きのキャンセルの手順（メーカー様へのお願い → 返事を読む → Shopify でキャンセル → お客様へのご連絡）に切り替えられます。</span>' +
       '<div class="s-actions"><button type="button" class="s-btn s-primary" data-s-cancel-switch="' + jumpKeyOf(card) + '">⚡ キャンセルの手順にする</button></div></div>';
   }
@@ -4333,7 +4345,7 @@
       if (s.action === 'customer-cancel') st.mode = order && order.shipped && !order.cancelledAt ? 'refuse' : 'cancel';
       if (s.action && !s.done && !st.skip) {
         if (status === '完了') st.why = 'この仕事は終わっています';
-        else if (blocked) st.why = blocked;
+        else if (blocked && ACTIONS[s.action].ordered) st.why = blocked;
         else if (ACTIONS[s.action].needsOrder && !order) st.why = os && os.loading ? 'Shopify の注文を読んでいます…' : 'Shopify の注文が読めていません（上の「もう一度読む」）';
       }
       out.push(st);
@@ -4402,6 +4414,7 @@
         '<div class="s-draft-text">' + esc(draft) + '</div>' +
         '<small class="s-draft-hint">読んで、直すところがあれば直してから送ってください</small></div>';
     }
+    html += replyBarHtml(card, c, status);
     // マニュアル：確認の仕事なら下書きと「正式にする」、ふつうの仕事なら正式なマニュアルを開けるように
     var mkey = roleVal(card, 'teamsMessageId');
     var manuals = window.__manuals || [];
@@ -4480,10 +4493,62 @@
       return (dom.length >= 3 && (dom.indexOf(n) !== -1 || n.indexOf(dom) !== -1)) || (cn.length >= 2 && (cn.indexOf(n) !== -1 || n.indexOf(cn) !== -1));
     })[0] || null;
   }
-  function stripSignature(text) { var i = String(text).indexOf(LILO_SIGNATURE.trim()); return i === -1 ? String(text) : String(text).slice(0, i).replace(/\s+$/, ''); }
+  function stripSignature(text) {
+    var s = String(text);
+    [LILO_SIGNATURE, selfSignature()].forEach(function (sig) { var i = s.indexOf(sig.trim()); if (i !== -1) s = s.slice(0, i).replace(/\s+$/, ''); });
+    return s;
+  }
+  function allContacts() {
+    return Array.prototype.slice.call(document.querySelectorAll('[data-list="contact"] > .card[data-kind="contact"]')).filter(function (c) {
+      return !c.hasAttribute('data-deleted') && /@/.test(roleVal(c, 'email'));
+    }).map(function (c) {
+      var m = /[\w.+-]+@[\w-]+(\.[\w-]+)+/.exec(roleVal(c, 'email'));
+      return { company: roleVal(c, 'company').trim(), name: roleVal(c, 'name').trim(), email: m ? m[0] : '', business: roleVal(c, 'business') };
+    });
+  }
+  // ---- 返信する（どの事業のメールの仕事にも。2026-11-08）----
+  // 返信先は、中身の「返信先：」（2026-11-08 から記録）→ ホームページのお問い合わせの目印 → 連絡先（同じドメイン）の順で探す。
+  // 届いたメールボックスで送り元を決める：contact@ → contact@（outbox）、lilocle@ → lilocle@（メール送信キュー）、それ以外 → 本人のメールボックス
+  function replyInfoOf(card, c) {
+    var key = roleVal(card, 'teamsMessageId');
+    if (!/^mail:/.test(key)) return null;
+    if (businessOf(card) === 'Amazon販売') return { blocked: 'Amazon の購入者には、セラーセントラルの「購入者とのメッセージ」から返信してください（アプリからは送れません）' };
+    var to = '', mailbox = '', subject = '';
+    var rm = /^([\w.+-]+@[\w-]+(?:\.[\w-]+)+)（([^ ）]+) に届いたメール。件名「(.*)」）$/.exec(taskField(c, '返信先'));
+    if (rm) { to = rm[1]; mailbox = rm[2]; subject = rm[3]; }
+    var km = /^mail:(shopify-form|taikai):(.+)$/.exec(key);
+    if (!to && km) { to = km[2]; mailbox = 'contact@lilocle.jp'; }
+    var parts = key.split(':');
+    if (!subject && !km) subject = parts.slice(2).join(':');
+    if (!to) {
+      var dom = (parts[1] || '').toLowerCase();
+      var hit = dom && !/^(gmail|yahoo|outlook|hotmail|icloud)\./.test(dom) ? allContacts().filter(function (x) { return x.email.toLowerCase().split('@')[1] === dom; })[0] : null;
+      if (hit) to = hit.email;
+    }
+    if (!mailbox) {
+      // 「メールで依頼」の履歴に、届いたメールボックスが（ ）で入っている
+      var hs = card.querySelectorAll('[data-history] .history-entry');
+      for (var i = hs.length - 1; i >= 0; i--) { var mm = /（([\w.+-]+@[\w.-]+)）/.exec(hs[i].textContent || ''); if (mm) { mailbox = mm[1].toLowerCase(); break; } }
+    }
+    var route = /^contact@lilocle\.jp$/.test(mailbox) ? 'customer' : /^lilocle@lilocle\.jp$/.test(mailbox) ? 'maker' : 'self';
+    var kind = route === 'customer' ? 'lilocle' : route === 'maker' ? 'lilocle-maker' : 'busilabo';
+    if (km) subject = '【LILOCLE】お問い合わせについて';
+    else if (subject && !/^(re|返信)\s*[:：]/i.test(subject)) subject = 'Re: ' + subject;
+    return { to: to, mailbox: mailbox, route: route, kind: kind, subject: subject };
+  }
+  function replyBarHtml(card, c, status) {
+    // キャンセルのような決まった流れの仕事は、流れの中でお客様に送るので出さない
+    if (status === '完了' || hasFlow(c)) return '';
+    var ri = replyInfoOf(card, c);
+    if (!ri) return '';
+    if (ri.blocked) return '<div class="s-draft-note">📨 ' + esc(ri.blocked) + '</div>';
+    var hasDraft = c.draft.join('').trim();
+    return '<div class="s-actions"><button type="button" class="s-btn s-primary" data-s-reply="' + jumpKeyOf(card) + '">📨 ' + (hasDraft ? 'この下書きで返信する' : '返信を書く（AI が下書き）') + '</button>' +
+      '<span class="s-act-note">' + esc(fromLabel(ri.route)) + ' から' + (ri.to ? ' ' + esc(ri.to) + ' へ' : '（宛先は次の画面で入れます）') + '</span></div>';
+  }
 
   var composeCtx = {};   // 仕事のキー → 開いているメールの欄の情報
-  function mailPlan(card, actionId, mode) {
+  function mailPlan(card, actionId, mode, line) {
     var c = parseTaskContent(card);
     var os = orderStateOf(card, c) || {};
     var o = os.order;
@@ -4492,6 +4557,22 @@
     var inquiry = c.desc.join('\n');
     var orderLine = o ? '注文 ' + o.name + '：' + itemsText(o) + '／' + FINANCIAL_JA[o.financial] + '／' + (FULFILL_JA[o.fulfillment] || o.fulfillment) + '／商品ページ ' + ((o.items[0] || {}).url || '') : '';
     var context = inquiry + (orderLine ? '\n\n' + orderLine : '');
+    // 返信（どの事業でも）：下書きがあればそれを使い、なければ届いたメールへの返信を AI が書く
+    if (actionId === 'reply') {
+      var ri = replyInfoOf(card, c) || {};
+      return { route: ri.route || 'self', kind: ri.kind || 'busilabo', title: '返信', to: ri.to || '', subject: ri.subject || '', sender: roleVal(card, 'requester') || '',
+        draft: c.draft.join('\n').trim(), draftNote: (c.needsRep ? '⚠️ 代表に確認してから送ってください：' : '') + (c.draftNote || ''), text: inquiry, reply: true };
+    }
+    // メールを送る（どの事業でも）：手順に書いたことをもとに書く。送り元は選べる（事業と種類から最初の候補を決める）
+    if (actionId === 'mail') {
+      var step = c.steps.filter(function (s) { return s.line === line; })[0] || {};
+      var ri2 = replyInfoOf(card, c) || {};
+      var biz = businessOf(card), cat = roleVal(card, 'category');
+      var r0 = biz === 'LILOCLE運営' ? (cat === 'メーカー対応' ? 'maker' : 'customer') : 'self';
+      return { route: r0, chooseRoute: true, kind: r0 === 'customer' ? 'lilocle' : r0 === 'maker' ? 'lilocle-maker' : 'busilabo', title: 'メールを送る：' + (step.text || ''),
+        to: ri2.to || '', subject: ri2.subject || '', sender: roleVal(card, 'requester') || '',
+        instruction: (step.text || '') + '。この仕事の内容（下の参考）に合わせて書く。分からないこと・決まっていないことは書かない。署名は付けない。', text: context };
+    }
     if (actionId === 'maker-stop') {
       var makerName = o && o.makers && o.makers[0] || '';
       var m = findMaker(makerName);
@@ -4520,16 +4601,21 @@
     };
   }
   function composeHtml(card, key, line, actionId, mode, plan) {
-    var makers = plan.route === 'maker' ? makerContacts() : [];
+    var makers = plan.route === 'maker' && !plan.chooseRoute && !plan.reply ? makerContacts() : [];
+    var dl = 'c-contacts-' + key;
     // 先頭に手順の種類を入れる（openSimplePanel は先頭40文字で「同じ欄をもう一度押した＝閉じる」を見分けるため）
     return '<div data-c-act="' + actionId + (mode ? '-' + mode : '') + '" class="s-compose" data-compose="' + key + '">' +
       '<b>✉️ ' + esc(plan.title) + '</b>' +
-      '<div class="s-compose-from">送り元：' + esc(MAIL_FROM[plan.route]) + '（送ると、数分で Power Automate が送ります）</div>' +
-      (plan.route === 'maker' ? '<label>メーカー様' + (plan.maker ? '' : '（「' + esc(plan.makerName || '？') + '」が連絡先で見つかりません。選んでください）') +
+      (plan.chooseRoute ? '<label>送り元<select data-c-route="' + key + '">' + ['self', 'maker', 'customer'].map(function (r) {
+          return '<option value="' + r + '"' + (r === plan.route ? ' selected' : '') + '>' + esc(fromLabel(r)) + (r === 'maker' ? '：LILOCLE のメーカー様あて' : r === 'customer' ? '：LILOCLE のお客様あて' : '') + '</option>';
+        }).join('') + '</select></label>'
+        : '<div class="s-compose-from">送り元：' + esc(fromLabel(plan.route)) + (plan.route === 'self' ? '' : '（送ると、数分で Power Automate が送ります）') + '</div>') +
+      '<datalist id="' + dl + '">' + allContacts().map(function (m) { return '<option value="' + esc(m.email) + '">' + esc(m.company + ' ' + m.name) + '</option>'; }).join('') + '</datalist>' +
+      (makers.length ? '<label>メーカー様' + (plan.maker ? '' : '（「' + esc(plan.makerName || '？') + '」が連絡先で見つかりません。選んでください）') +
         '<select data-c-maker="' + key + '"><option value="">選んでください</option>' + makers.map(function (m) {
           return '<option value="' + esc(m.email) + '"' + (plan.maker && plan.maker.email === m.email ? ' selected' : '') + '>' + esc(m.company + '（' + m.name + '）') + '</option>';
         }).join('') + '</select></label>' : '') +
-      '<label>宛先<input type="email" data-c-to value="' + esc(plan.to) + '"></label>' +
+      '<label>宛先（連絡先から選べます）<input type="email" list="' + dl + '" data-c-to value="' + esc(plan.to) + '"></label>' +
       '<label>件名<input type="text" data-c-subject value="' + esc(plan.subject) + '"></label>' +
       '<label>本文<textarea data-c-body disabled>AI が下書きを作っています…（30秒ほど）</textarea></label>' +
       '<div class="s-draft-note" data-c-note></div>' +
@@ -4550,8 +4636,7 @@
     e.body.disabled = true; e.send.disabled = true; e.revise.disabled = true; e.err.textContent = '';
     promise.then(function (d) {
       var e2 = composeEls(key); if (!e2) return;
-      var ctx = composeCtx[key] || {};
-      e2.body.value = String(d.draft).trim() + (ctx.plan && ctx.plan.route === 'customer' ? LILO_SIGNATURE : '');
+      e2.body.value = String(d.draft).trim() + signatureFor(routeOf(key));
       e2.note.textContent = (d.needsRep ? '⚠️ 代表に確認してから送ってください：' : '') + (d.note || '');
       e2.body.disabled = false; e2.send.disabled = false; e2.revise.disabled = false;
     }, function (err) {
@@ -4561,19 +4646,30 @@
       e2.err.textContent = '下書きを作れませんでした（' + (err.message || err) + '）。本文を手で書いて送ることもできます';
     });
   }
+  // 今選んでいる送り元（選べる欄があればその値）
+  function routeOf(key) {
+    var sel = document.querySelector('[data-c-route="' + key + '"]');
+    var ctx = composeCtx[key];
+    return sel ? sel.value : (ctx && ctx.plan.route) || 'self';
+  }
+  function kindForRoute(route) { return route === 'customer' ? 'lilocle' : route === 'maker' ? 'lilocle-maker' : 'busilabo'; }
   function openAction(btn) {
-    var key = btn.getAttribute('data-s-act-key');
+    var key = btn.getAttribute('data-s-act-key') || btn.getAttribute('data-s-reply');
     var card = jumpRegistry[key];
-    var actionId = btn.getAttribute('data-s-act');
+    var actionId = btn.hasAttribute('data-s-reply') ? 'reply' : btn.getAttribute('data-s-act');
     var line = +btn.getAttribute('data-s-act-line');
     var mode = btn.getAttribute('data-s-act-mode') || '';
-    if (!card || !ACTIONS[actionId] || !window.__act) return;
-    if (ACTIONS[actionId].kind === 'cancel') { runCancel(card, key, line); return; }
-    var plan = mailPlan(card, actionId, mode);
+    if (!card || (actionId !== 'reply' && !ACTIONS[actionId]) || !window.__act) return;
+    if (actionId !== 'reply' && ACTIONS[actionId].kind === 'cancel') { runCancel(card, key, line); return; }
+    var plan = mailPlan(card, actionId, mode, line);
     var panel = openSimplePanel(card, composeHtml(card, key, line, actionId, mode, plan));
     if (!panel) { delete composeCtx[key]; return; }
     composeCtx[key] = { card: card, line: line, actionId: actionId, mode: mode, plan: plan };
-    fillDraft(key, window.__act.draft({ kind: plan.kind, channel: 'メール', sender: plan.sender, instruction: plan.instruction, text: plan.text }));
+    // 返信で、もう下書きがあれば AI を呼ばずにそのまま入れる
+    if (plan.reply && plan.draft) { fillDraft(key, Promise.resolve({ draft: plan.draft, needsRep: false, note: plan.draftNote })); return; }
+    fillDraft(key, window.__act.draft(plan.reply
+      ? { kind: plan.kind, channel: 'メール', sender: plan.sender, subject: plan.subject, text: plan.text }
+      : { kind: plan.kind, channel: 'メール', sender: plan.sender, instruction: plan.instruction, text: plan.text }));
   }
   // 実行した手順に ✓ を付け、履歴に残す。全部の手順が終わったら（飛ばした手順も含めて）完了にする
   function completeActionStep(card, line, action, memo) {
@@ -4603,15 +4699,25 @@
     e.err.textContent = '';
     if (!/^[\w.+-]+@[\w-]+(\.[\w-]+)+$/.test(to)) { e.err.textContent = '宛先のメールアドレスを確かめてください'; return; }
     if (!subject || !body) { e.err.textContent = '件名と本文を入れてください'; return; }
-    var from = MAIL_FROM[ctx.plan.route];
+    var route = routeOf(key);
+    var from = fromLabel(route);
     if (!window.confirm('このメールを送ります。\n\n送り元：' + from + '\n宛先：' + to + '\n件名：' + subject + '\n\n本文の最初：\n' + body.slice(0, 120) + (body.length > 120 ? '…' : '') + '\n\n送ったあとは取り消せません。送ってよいですか？')) return;
     var who = currentUser || ownerOf(ctx.card);
     e.send.disabled = true; e.send.textContent = '送っています…';
-    window.__act.send({ route: ctx.plan.route, to: to, subject: subject, body: body, taskNo: ctx.card.getAttribute('data-item-id') || '', staff: who }).then(function () {
-      var label = ctx.actionId === 'maker-stop' ? 'メーカー様に出荷停止をお願いした' : (ctx.mode === 'refuse' ? 'お客様にお断りのご連絡を送った' : 'お客様にキャンセル完了のご連絡を送った');
+    window.__act.send({ route: route, to: to, subject: subject, body: body, taskNo: ctx.card.getAttribute('data-item-id') || '', staff: who }).then(function () {
+      var memo = (who ? who + 'さん：' : '') + from.split('（')[0] + ' から ' + to + ' へ「' + subject + '」' + (route === 'self' ? '' : '（数分で送られます）');
       closeSimplePanel(ctx.card);
       delete composeCtx[key];
-      completeActionStep(ctx.card, ctx.line, label, (who ? who + 'さん：' : '') + from.split('（')[0] + ' から ' + to + ' へ「' + subject + '」（数分で送られます）');
+      if (ctx.actionId === 'reply') {
+        // 返信は手順とは別。返信で終わる種類の仕事は、送信済みアイテムの取り込み（⑥送った返信）が今までどおり完了にする
+        if (statusOf(ctx.card) === '未着手') setTaskStatus(ctx.card, '進行中');
+        addHistoryEntry(ctx.card, 'task', 'アプリから返信を送った', statusOf(ctx.card), null, memo);
+        var ce = ctx.card.querySelector('[data-role="content"]'); if (ce) ce.dispatchEvent(userEvent('input'));
+        applyAll();
+        return;
+      }
+      var label = ctx.actionId === 'mail' ? 'メールを送った' : ctx.actionId === 'maker-stop' ? 'メーカー様に出荷停止をお願いした' : (ctx.mode === 'refuse' ? 'お客様にお断りのご連絡を送った' : 'お客様にキャンセル完了のご連絡を送った');
+      completeActionStep(ctx.card, ctx.line, label, memo);
     }, function (err) {
       var e2 = composeEls(key); if (!e2) return;
       e2.send.disabled = false; e2.send.textContent = '📨 送る（もう一度）';
@@ -4665,9 +4771,9 @@
   }
 
   document.body.addEventListener('click', function (e) {
-    var t = e.target.closest && e.target.closest('[data-s-act],[data-s-cancel-switch],[data-s-order-reload],[data-c-send],[data-c-revise],[data-c-close]');
+    var t = e.target.closest && e.target.closest('[data-s-act],[data-s-reply],[data-s-cancel-switch],[data-s-order-reload],[data-c-send],[data-c-revise],[data-c-close]');
     if (!t || t.disabled) return;
-    if (t.hasAttribute('data-s-act')) { openAction(t); return; }
+    if (t.hasAttribute('data-s-act') || t.hasAttribute('data-s-reply')) { openAction(t); return; }
     if (t.hasAttribute('data-s-cancel-switch')) {
       var sc = jumpRegistry[t.getAttribute('data-s-cancel-switch')];
       if (sc && window.confirm('手順を、キャンセルの手順（実行ボタン付き）に入れ替えます。よろしいですか？')) switchToCancelSteps(sc);
@@ -4687,10 +4793,17 @@
       if (!req) { el2.err.textContent = '直してほしいことを一言入れてください'; el2.request.focus(); return; }
       var cur = stripSignature(el2.body.value);
       el2.body.value = 'AI が直しています…';
-      fillDraft(rk, window.__act.draft({ kind: ctx.plan.kind, channel: 'メール', sender: ctx.plan.sender, revise: { draft: cur, request: req }, text: ctx.plan.text }).then(function (d) { el2.request.value = ''; return d; }, function (err) { var e3 = composeEls(rk); if (e3) e3.body.value = cur + (ctx.plan.route === 'customer' ? LILO_SIGNATURE : ''); throw err; }));
+      fillDraft(rk, window.__act.draft({ kind: ctx.plan.chooseRoute ? kindForRoute(routeOf(rk)) : ctx.plan.kind, channel: 'メール', sender: ctx.plan.sender, revise: { draft: cur, request: req }, text: ctx.plan.text }).then(function (d) { el2.request.value = ''; return d; }, function (err) { var e3 = composeEls(rk); if (e3) e3.body.value = cur + signatureFor(routeOf(rk)); throw err; }));
     }
   });
   document.body.addEventListener('change', function (e) {
+    // 送り元を変えたら、署名を付け替える
+    var rs = e.target.closest && e.target.closest('[data-c-route]');
+    if (rs) {
+      var re = composeEls(rs.getAttribute('data-c-route'));
+      if (re && !re.body.disabled && re.body.value.trim()) re.body.value = stripSignature(re.body.value) + signatureFor(rs.value);
+      return;
+    }
     var sel = e.target.closest && e.target.closest('[data-c-maker]');
     if (!sel) return;
     var el3 = composeEls(sel.getAttribute('data-c-maker'));
@@ -4865,11 +4978,14 @@
     } else if (t.hasAttribute('data-s-addstep')) {
       openSimplePanel(card, '<div class="passer"><label class="passer-label">足す手順（1つずつ。改行すると複数足せます）</label>' +
         '<textarea class="passer-text" rows="2"></textarea><div class="passer-actions">' +
-        '<button type="button" class="claim-btn" data-s-addstep-save="' + key + '">手順に足す</button><span class="passer-hint" data-add-hint></span></div></div>');
+        '<button type="button" class="claim-btn" data-s-addstep-save="' + key + '">手順に足す</button>' +
+        // メールを送る手順にすると「実行する」ボタンになり、書いたこと（例「綿半様に納期を連絡する」）をもとに AI が下書きを作る（2026-11-08）
+        '<button type="button" class="claim-btn" data-s-addstep-save="' + key + '" data-s-addstep-mail>⚡ メールを送る手順として足す</button><span class="passer-hint" data-add-hint></span></div></div>');
     } else if (t.hasAttribute('data-s-addstep-save')) {
       var abox = t.closest('[data-simple-panel]');
-      var added = abox.querySelector('textarea').value.split('\n').map(function (s) { return s.replace(/^\s*(\d+[.．、)]|[・\-])\s*/, '').trim(); }).filter(Boolean);
+      var added = abox.querySelector('textarea').value.split('\n').map(function (s) { return s.replace(/^\s*(\d+[.．、)]|[・\-])\s*/, '').replace(/^⚡\[[\w-]+\]\s*/, '').trim(); }).filter(Boolean);
       if (!added.length) { abox.querySelector('[data-add-hint]').textContent = '足す手順を書いてください'; return; }
+      if (t.hasAttribute('data-s-addstep-mail')) added = added.map(function (s) { return '⚡[mail] ' + s; });
       addSteps(card, added, who);
       closeSimplePanel(card);
       applyAll();
