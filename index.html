@@ -4408,11 +4408,14 @@
     if (descLines.length) html += '<div class="s-desc">' + linkify(descLines.join('\n')) + '</div>';
     var draft = c.draft.join('\n').trim();
     if (draft) {
-      html += '<div class="s-draft"><div class="s-draft-head"><b>✉️ 返信の下書き（AI チームのスキルで作成）</b>' +
-        '<button type="button" class="s-btn s-copy" data-s-copy="' + key + '">📋 コピー</button></div>' +
+      // この箱は読むだけ。直すときは「✏️ 直して返信する」で、直せる欄を開く（2026-11-08 代表「下書きを編集できない」）
+      var canReply = status !== '完了' && !hasFlow(c) && (function () { var ri = replyInfoOf(card, c); return ri && !ri.blocked; })();
+      html += '<div class="s-draft"><div class="s-draft-head"><b>✉️ 返信の下書き（AI チームのスキルで作成）</b><span class="s-actions">' +
+        (canReply ? '<button type="button" class="s-btn s-primary" data-s-reply="' + key + '">✏️ 直して返信する</button>' : '') +
+        '<button type="button" class="s-btn s-copy" data-s-copy="' + key + '">📋 コピー</button></span></div>' +
         (c.needsRep ? '<div class="s-draft-warn">⚠️ 代表に確認してから送る：' + esc(c.draftNote) + '</div>' : (c.draftNote ? '<div class="s-draft-note">' + esc(c.draftNote) + '</div>' : '')) +
         '<div class="s-draft-text">' + esc(draft) + '</div>' +
-        '<small class="s-draft-hint">読んで、直すところがあれば直してから送ってください</small></div>';
+        '<small class="s-draft-hint">' + (canReply ? 'ここは読むだけです。直すときは「✏️ 直して返信する」を押すと、直せる欄が下に開きます' : '読んで、直すところがあれば直してから送ってください') + '</small></div>';
     }
     html += replyBarHtml(card, c, status);
     // マニュアル：確認の仕事なら下書きと「正式にする」、ふつうの仕事なら正式なマニュアルを開けるように
@@ -4639,6 +4642,8 @@
       e2.body.value = String(d.draft).trim() + signatureFor(routeOf(key));
       e2.note.textContent = (d.needsRep ? '⚠️ 代表に確認してから送ってください：' : '') + (d.note || '');
       e2.body.disabled = false; e2.send.disabled = false; e2.revise.disabled = false;
+      // できたらすぐ書き始められるように、本文の先頭にカーソルを置く
+      try { e2.body.focus({ preventScroll: true }); e2.body.setSelectionRange(0, 0); e2.body.scrollTop = 0; e2.box.scrollIntoView({ block: 'start' }); } catch (x) { /* ignore */ }
     }, function (err) {
       var e2 = composeEls(key); if (!e2) return;
       e2.body.disabled = false; e2.revise.disabled = false; e2.send.disabled = false;
@@ -4665,6 +4670,8 @@
     var panel = openSimplePanel(card, composeHtml(card, key, line, actionId, mode, plan));
     if (!panel) { delete composeCtx[key]; return; }
     composeCtx[key] = { card: card, line: line, actionId: actionId, mode: mode, plan: plan };
+    // 欄は仕事のいちばん下に開くので、そこまで動かす（押しても何も起きないように見えていた。2026-11-08）
+    panel.scrollIntoView({ block: 'start' });
     // 返信で、もう下書きがあれば AI を呼ばずにそのまま入れる
     if (plan.reply && plan.draft) { fillDraft(key, Promise.resolve({ draft: plan.draft, needsRep: false, note: plan.draftNote })); return; }
     fillDraft(key, window.__act.draft(plan.reply
