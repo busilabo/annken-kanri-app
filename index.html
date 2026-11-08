@@ -1429,6 +1429,26 @@
   .s-primary { background: var(--accent); border-color: var(--accent); color: var(--surface); }
   .s-done-note { font-weight: 700; color: var(--ok); }
   [data-simple-panel]:empty { display: none; }
+  /* 実行ボタン（⚡ の手順）と Shopify の注文（2026-11-08） */
+  .s-order { border: 1px solid var(--line, #d0d7e2); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; font-size: 14px; line-height: 1.55; }
+  .s-order[data-tone="warn"] { border-color: var(--warn); background: var(--warn-soft); }
+  .s-order small { color: var(--text-muted); }
+  .s-steps li.s-act { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 8px 10px; border-radius: 8px; background: var(--accent-soft, var(--surface-2)); font-size: 14px; line-height: 1.55; }
+  .s-steps li.s-act > span { flex: 1 1 240px; min-width: 0; }
+  .s-steps li.s-act[data-done] { background: var(--ok-soft); }
+  .s-steps li.s-act[data-done] > span { color: var(--text-muted); text-decoration: line-through; }
+  .s-steps li.s-act[data-skip] > span { color: var(--text-muted); }
+  .s-act-btn { padding: 8px 14px; font-size: 14px; }
+  .s-act-btn:disabled { opacity: .5; cursor: not-allowed; }
+  .s-act-note { font-size: 12.5px; color: var(--text-muted); flex-basis: 100%; }
+  .s-compose { border: 2px solid var(--accent); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px; font-size: 14px; }
+  .s-compose label { display: flex; flex-direction: column; gap: 3px; font-weight: 700; font-size: 13px; }
+  .s-compose input, .s-compose textarea, .s-compose select { font: inherit; font-size: 14px; font-weight: 400; padding: 7px 9px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); }
+  .s-compose textarea[data-c-body] { min-height: 260px; line-height: 1.6; }
+  .s-compose .s-revise { display: flex; gap: 6px; flex-wrap: wrap; }
+  .s-compose .s-revise input { flex: 1 1 220px; }
+  .s-compose-from { font-size: 13px; color: var(--text-muted); }
+  .s-compose-err { font-size: 13px; font-weight: 700; color: var(--danger, #b42318); }
   .card-more { margin-top: 12px; border-top: 1px dashed var(--border); padding-top: 8px; }
   .card-more > summary { cursor: pointer; font-size: 12.5px; color: var(--text-muted); padding: 4px 0; }
   .card-more[open] > summary { margin-bottom: 10px; }
@@ -4236,6 +4256,101 @@
   // 仕事の中身の「【手順】」の行をチェックリストにし、やることを3つのボタン（終わった／申し送りを書いて渡す／代表に聞く）に絞る。
   // チェックは中身の行頭に「✓ 」を付けて保存する（列を増やさずに、誰の画面でも同じに見えるように）
   var STEP_LINE = /^(✓\s*)?(\d+)\.\s*(.*)$/;
+  // 実行ボタンの手順（2026-11-08）。手順の行が「⚡[種類] 説明」ならチェックではなく「実行する」ボタンを出す。
+  // 押すと、メールなら下書き（AI）→ 直す → 確認のポップアップ → 送る、Shopify なら確認のポップアップ → 実行。済んだら手順に ✓ が付く。
+  // 前の手順が終わるまでは押せない。種類を足すときは、ここと actionStates・openAction に足す（裏側は sync.js の window.__act）
+  var ACTION_STEP = /^⚡\[([\w-]+)\]\s*(.*)$/;
+  var ACTIONS = {
+    'maker-stop': { kind: 'mail', route: 'maker', label: '✉️ 下書きを作って送る', needsOrder: true },
+    'shopify-cancel': { kind: 'cancel', label: '🛒 キャンセルする', needsOrder: true },
+    'customer-cancel': { kind: 'mail', route: 'customer', label: '✉️ 下書きを作って送る', needsOrder: true }
+  };
+  var MAIL_FROM = { maker: 'lilocle@lilocle.jp（LILOCLE）', customer: 'contact@lilocle.jp（LILOCLE お客様窓口）' };
+  var LILO_SIGNATURE = '\n\n――――――――――――\nLILOCLE（リロクル）\nエシカルな暮らしと商品を提案する通販サイト\nhttps://lilocle.jp/\ncontact@lilocle.jp\n――――――――――――';
+  var FINANCIAL_JA = { AUTHORIZED: '仮押さえ（まだ確定していない）', PAID: '支払い済み', PENDING: '支払い待ち', PARTIALLY_PAID: '一部支払い済み', REFUNDED: '返金済み', PARTIALLY_REFUNDED: '一部返金済み', VOIDED: '取り消し済み', EXPIRED: '期限切れ' };
+  var FULFILL_JA = { UNFULFILLED: 'まだ発送していない', IN_PROGRESS: 'まだ発送していない（メーカー様に注文書を送った・処理中）', ON_HOLD: '保留中', SCHEDULED: '発送予定', FULFILLED: '発送済み', PARTIALLY_FULFILLED: '一部発送済み', IN_TRANSIT: '配送中', OUT_FOR_DELIVERY: '配達中', DELIVERED: '配達済み' };
+
+  function taskField(c, label) {
+    var m = new RegExp('^' + label + '：\\s*(.+)$', 'm').exec(c.desc.join('\n'));
+    return m ? m[1].trim() : '';
+  }
+  // LILOCLE の仕事で、中身に「注文番号：4634」があればその番号
+  function orderNoOf(card, c) {
+    if (businessOf(card) !== 'LILOCLE運営') return '';
+    var m = /(\d{3,})/.exec(taskField(c, '注文番号'));
+    return m ? m[1] : '';
+  }
+  var ordersLoading = {};
+  function orderStateOf(card, c) {
+    var n = orderNoOf(card, c);
+    if (!n || !window.__act) return null;
+    var hit = window.__act.orderCached(n);
+    if (!hit && !ordersLoading[n]) {
+      ordersLoading[n] = true;
+      window.__act.order(n).then(function () { delete ordersLoading[n]; renderSimpleTasks(); });
+    }
+    return { n: n, loading: !hit, order: hit && hit.order, error: hit ? hit.error : '' };
+  }
+  function itemsText(order) {
+    return (order.items || []).map(function (i) { return i.title + (i.variant ? '（' + i.variant + '）' : '') + ' ×' + i.quantity; }).join('、');
+  }
+  function orderBoxHtml(card, c) {
+    var os = orderStateOf(card, c);
+    if (!os) return '';
+    if (os.loading) return '<div class="s-order">🛒 Shopify の注文（' + esc(os.n) + '）を読んでいます…</div>';
+    if (!os.order) return '<div class="s-order" data-tone="warn"><b>🛒 Shopify の注文（' + esc(os.n) + '）が読めませんでした</b><span>' + esc(os.error) + '</span>' +
+      '<div class="s-actions"><button type="button" class="s-btn" data-s-order-reload="' + esc(os.n) + '">もう一度読む</button></div></div>';
+    var o = os.order;
+    var mail = taskField(c, 'メールアドレス').toLowerCase();
+    var warn = o.cancelledAt || o.shipped || (mail && o.email && mail !== String(o.email).toLowerCase());
+    return '<div class="s-order"' + (warn ? ' data-tone="warn"' : '') + '><b>🛒 Shopify の注文 ' + esc(o.name) + '</b>' +
+      '<span>商品：' + esc(itemsText(o)) + '</span>' +
+      '<span>金額：' + esc(Number(String(o.total).split(' ')[0]).toLocaleString('ja-JP')) + '円 ／ お支払い：' + esc(FINANCIAL_JA[o.financial] || o.financial) + '</span>' +
+      '<span>発送：<b>' + esc(o.cancelledAt ? 'キャンセル済み' : (FULFILL_JA[o.fulfillment] || o.fulfillment)) + '</b>' + (o.tracking && o.tracking.length ? '（追跡番号 ' + esc(o.tracking.map(function (t) { return t.number; }).join('・')) + '）' : '') + '</span>' +
+      (o.makers && o.makers.length ? '<span>メーカー様（発送元）：' + esc(o.makers.join('・')) + '</span>' : '') +
+      (mail && o.email && mail !== String(o.email).toLowerCase() ? '<span>⚠️ お問い合わせのメール（' + esc(mail) + '）と注文のメール（' + esc(o.email) + '）が違います。同じ方の注文か確かめてください</span>' : '') +
+      '<small>' + esc(new Date(o.createdAt).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })) + ' の注文。Shopify から今読んだ内容です</small></div>';
+  }
+  // キャンセルの依頼なのに、前の作り（チェックだけの手順）の仕事なら、キャンセルの手順に切り替えるボタンを出す
+  function cancelSwitchHtml(card, c, status) {
+    if (status === '完了' || !orderNoOf(card, c) || !window.__act || !window.__act.isCancelRequest(c.desc.join('\n'))) return '';
+    if (c.steps.some(function (s) { return s.action; })) return '';
+    return '<div class="s-order"><b>⚡ キャンセルのご依頼です</b><span>手順を、実行ボタン付きのキャンセルの手順（メーカー様へのお願い → 返事を読む → Shopify でキャンセル → お客様へのご連絡）に切り替えられます。</span>' +
+      '<div class="s-actions"><button type="button" class="s-btn s-primary" data-s-cancel-switch="' + jumpKeyOf(card) + '">⚡ キャンセルの手順にする</button></div></div>';
+  }
+  // 手順ごとに、押せるか・飛ばすか・どの文面にするかを決める
+  function actionStates(card, c, status) {
+    var os = orderStateOf(card, c);
+    var order = os && os.order;
+    var idx = function (a) { for (var i = 0; i < c.steps.length; i++) if (c.steps[i].action === a) return i; return -1; };
+    var a = idx('maker-stop'), b = idx('shopify-cancel');
+    var out = [], blocked = '';
+    c.steps.forEach(function (s, i) {
+      var st = {};
+      // 発送済み：止める・キャンセルの手順はなく、お客様にはお断りの返信を送る
+      if (order && order.shipped && a !== -1 && b !== -1 && i >= a && i <= b && !s.done) st.skip = '発送済みのため、この手順はありません';
+      else if (order && order.cancelledAt && s.action === 'shopify-cancel' && !s.done) st.skip = 'Shopify ではもうキャンセルされています';
+      if (s.action === 'customer-cancel') st.mode = order && order.shipped && !order.cancelledAt ? 'refuse' : 'cancel';
+      if (s.action && !s.done && !st.skip) {
+        if (status === '完了') st.why = 'この仕事は終わっています';
+        else if (blocked) st.why = blocked;
+        else if (ACTIONS[s.action].needsOrder && !order) st.why = os && os.loading ? 'Shopify の注文を読んでいます…' : 'Shopify の注文が読めていません（上の「もう一度読む」）';
+      }
+      out.push(st);
+      if (!s.done && !st.skip && !blocked) blocked = '前の手順（' + s.no + '）が終わると押せます';
+    });
+    return out;
+  }
+  function actionStepHtml(card, key, s, st) {
+    st = st || {};
+    var act = ACTIONS[s.action];
+    var label = act.label;
+    if (st.mode === 'refuse') label = '✉️ お断りの下書きを作って送る';
+    return '<li class="s-act"' + (s.done ? ' data-done' : '') + (st.skip ? ' data-skip' : '') + '><span>' + (s.done ? '✅ ' : '⚡ ') + linkify(s.text) + '</span>' +
+      (s.done ? '<b class="s-done-note">済み</b>' : st.skip ? '' :
+        '<button type="button" class="s-btn s-primary s-act-btn" data-s-act="' + esc(s.action) + '" data-s-act-key="' + key + '" data-s-act-line="' + s.line + '"' + (st.mode ? ' data-s-act-mode="' + st.mode + '"' : '') + (st.why ? ' disabled' : '') + '>' + label + '</button>') +
+      (st.skip ? '<span class="s-act-note">' + esc(st.skip) + '</span>' : st.why && !s.done ? '<span class="s-act-note">' + esc(st.why) + '</span>' : '') + '</li>';
+  }
 
   function parseTaskContent(card) {
     var lines = roleVal(card, 'content').split('\n');
@@ -4251,7 +4366,9 @@
       if (dm) { out.needsRep = !!dm[1]; out.draftNote = dm[2]; continue; }
       if (/^【手順】/.test(line.trim())) { inSteps = true; continue; }
       var m = inSteps && STEP_LINE.exec(line.trim());
-      if (m) out.steps.push({ line: i, done: !!m[1], no: m[2], text: m[3] });
+      // 「⚡[種類] 説明」の手順は実行ボタンにする（ACTIONS）
+      var am = m && ACTION_STEP.exec(m[3]);
+      if (m) out.steps.push({ line: i, done: !!m[1], no: m[2], text: am ? am[2] : m[3], action: am && ACTIONS[am[1]] ? am[1] : '' });
       else if (line.trim()) out.desc.push(line);
     }
     return out;
@@ -4310,11 +4427,16 @@
       var mf = manuals.filter(function (x) { return x.state === '正式' && x.business === businessOf(card) && x.category === roleVal(card, 'category'); })[0];
       if (mf) html += '<details class="s-manual"><summary>📘 この仕事のマニュアルを見る（' + esc(mf.title) + '）</summary><div class="s-draft-text">' + esc(mf.body) + '</div></details>';
     }
+    html += orderBoxHtml(card, c);
+    html += cancelSwitchHtml(card, c, status);
     if (c.steps.length) {
+      var actState = actionStates(card, c, status);
       html += '<div class="s-steps-head">やること <span class="tab-count">' + doneCount + ' / ' + c.steps.length + '</span></div><ol class="s-steps">' +
-        c.steps.map(function (s) {
+        c.steps.map(function (s, si) {
+          if (s.action) return actionStepHtml(card, key, s, actState[si]);
+          var st = actState[si] || {};
           return '<li' + (s.done ? ' data-done' : '') + '><label><input type="checkbox" data-step-key="' + key + '" data-step-line="' + s.line + '"' + (s.done ? ' checked' : '') + '>' +
-            '<span>' + linkify(s.text) + '</span></label></li>';
+            '<span>' + linkify(s.text) + (st.skip ? '<br><small class="s-act-note">' + esc(st.skip) + '</small>' : '') + '</span></label></li>';
         }).join('') + '</ol>';
     }
     var recur = recurOf(card);
@@ -4337,6 +4459,243 @@
     }
     return html;
   }
+
+  // ---- 実行ボタンを押したとき（2026-11-08）----
+  function makerContacts() {
+    return Array.prototype.slice.call(document.querySelectorAll('[data-list="contact"] > .card[data-kind="contact"]')).filter(function (c) {
+      return !c.hasAttribute('data-deleted') && /LILOCLE/.test(roleVal(c, 'business')) && /メーカー/.test(roleVal(c, 'side')) && /@/.test(roleVal(c, 'email'));
+    }).map(function (c) {
+      var m = /[\w.+-]+@[\w-]+(\.[\w-]+)+/.exec(roleVal(c, 'email'));
+      return { company: roleVal(c, 'company').trim(), name: roleVal(c, 'name').trim(), email: m ? m[0] : '' };
+    }).sort(function (x, y) { return x.company.localeCompare(y.company, 'ja'); });
+  }
+  function normName(s) { return String(s || '').toLowerCase().replace(/^(株式会社|有限会社|合同会社)|(株式会社|有限会社|合同会社)$/g, '').replace(/[^a-z0-9ぁ-んァ-ヶー一-龠]/g, ''); }
+  // Shopify の「配送元：JODAN.」と、連絡先の「株式会社ジョダン（…@jodan.jp）」は名前が違うので、メールのドメインでも探す
+  function findMaker(name) {
+    var n = normName(name);
+    if (n.length < 2) return null;
+    return makerContacts().filter(function (m) {
+      var dom = (m.email.split('@')[1] || '').split('.')[0].toLowerCase();
+      var cn = normName(m.company);
+      return (dom.length >= 3 && (dom.indexOf(n) !== -1 || n.indexOf(dom) !== -1)) || (cn.length >= 2 && (cn.indexOf(n) !== -1 || n.indexOf(cn) !== -1));
+    })[0] || null;
+  }
+  function stripSignature(text) { var i = String(text).indexOf(LILO_SIGNATURE.trim()); return i === -1 ? String(text) : String(text).slice(0, i).replace(/\s+$/, ''); }
+
+  var composeCtx = {};   // 仕事のキー → 開いているメールの欄の情報
+  function mailPlan(card, actionId, mode) {
+    var c = parseTaskContent(card);
+    var os = orderStateOf(card, c) || {};
+    var o = os.order;
+    var taskNo = card.getAttribute('data-item-id') || '';
+    var customer = (roleVal(card, 'requester') || 'お客様').replace(/(様|さん)$/, '') + '様';
+    var inquiry = c.desc.join('\n');
+    var orderLine = o ? '注文 ' + o.name + '：' + itemsText(o) + '／' + FINANCIAL_JA[o.financial] + '／' + (FULFILL_JA[o.fulfillment] || o.fulfillment) + '／商品ページ ' + ((o.items[0] || {}).url || '') : '';
+    var context = inquiry + (orderLine ? '\n\n' + orderLine : '');
+    if (actionId === 'maker-stop') {
+      var makerName = o && o.makers && o.makers[0] || '';
+      var m = findMaker(makerName);
+      return {
+        route: 'maker', kind: 'lilocle-maker', title: 'メーカー様への出荷停止のお願い', makerName: makerName, maker: m,
+        to: m ? m.email : '', subject: '【L-' + taskNo + '】ご注文 ' + (o ? o.name : '') + ' 出荷停止のお願い', sender: m ? m.company + ' ' + m.name : makerName,
+        instruction: 'メーカー様（' + (m ? m.company + '　' + m.name : makerName) + '）に、LILOCLE でいただいたご注文 ' + (o ? o.name + '（' + itemsText(o) + '）' : '') +
+          'について、お客様からキャンセルのご依頼があったため、出荷を止めていただくようお願いするメールを書く。' +
+          '書き出しは「' + (m ? m.company : makerName) + ' 様\n　' + (m && m.name ? m.name.replace(/[ 　]+/g, '・') : 'ご担当者') + '\n\nいつも大変お世話になっております。\nリロクル(株式会社ビジラボ)です。」の形にする（「様」を重ねない）。' +
+          'お手数をおかけすることへのお詫びを添える。もう発送の手配が進んでいて止められない場合は、そのことを教えていただくようお願いする。出荷を止められたかどうか、お返事をお願いする。' +
+          'お客様のお名前・住所・メールアドレスは書かない。署名は付けない。',
+        text: orderLine
+      };
+    }
+    var to = taskField(c, 'メールアドレス') || (o && o.email) || '';
+    var refuse = mode === 'refuse';
+    return {
+      route: 'customer', kind: 'lilocle', title: refuse ? 'お客様へのお断りのご連絡' : 'お客様へのキャンセル完了のご連絡',
+      to: to, subject: '【LILOCLE】ご注文（' + (o ? o.name : '') + '）のキャンセルについて', sender: customer,
+      instruction: refuse
+        ? 'お客様（' + customer + '）に、ご注文 ' + (o ? o.name + '（' + itemsText(o) + '）' : '') + 'はすでに発送済みのため、キャンセルをお受けできないことを丁寧にお伝えするメールを書く。お問い合わせへのお礼と、ご希望に沿えないお詫びを入れる。返品・交換などは、決まっていないので約束しない。署名は付けない。'
+        : 'お客様（' + customer + '）に、ご注文 ' + (o ? o.name + '（' + itemsText(o) + '）' : '') + 'のキャンセルが完了したことをお伝えするメールを書く。お問い合わせへのお礼を入れる。' +
+          (o && o.financial === 'AUTHORIZED' ? 'お支払いは確定前だったため、代金のご請求はないこと（カードの仮押さえは取り消されること）を伝える。' : '') +
+          'Shopify からもキャンセルのお知らせメールが届くことを添える。お問い合わせの内容に合わせて、ご希望の商品（色など）をお選びのうえ、商品ページ（' + ((o && o.items[0] || {}).url || '') + '）から改めてご注文いただけることをご案内する。署名は付けない。',
+      text: context
+    };
+  }
+  function composeHtml(card, key, line, actionId, mode, plan) {
+    var makers = plan.route === 'maker' ? makerContacts() : [];
+    // 先頭に手順の種類を入れる（openSimplePanel は先頭40文字で「同じ欄をもう一度押した＝閉じる」を見分けるため）
+    return '<div data-c-act="' + actionId + (mode ? '-' + mode : '') + '" class="s-compose" data-compose="' + key + '">' +
+      '<b>✉️ ' + esc(plan.title) + '</b>' +
+      '<div class="s-compose-from">送り元：' + esc(MAIL_FROM[plan.route]) + '（送ると、数分で Power Automate が送ります）</div>' +
+      (plan.route === 'maker' ? '<label>メーカー様' + (plan.maker ? '' : '（「' + esc(plan.makerName || '？') + '」が連絡先で見つかりません。選んでください）') +
+        '<select data-c-maker="' + key + '"><option value="">選んでください</option>' + makers.map(function (m) {
+          return '<option value="' + esc(m.email) + '"' + (plan.maker && plan.maker.email === m.email ? ' selected' : '') + '>' + esc(m.company + '（' + m.name + '）') + '</option>';
+        }).join('') + '</select></label>' : '') +
+      '<label>宛先<input type="email" data-c-to value="' + esc(plan.to) + '"></label>' +
+      '<label>件名<input type="text" data-c-subject value="' + esc(plan.subject) + '"></label>' +
+      '<label>本文<textarea data-c-body disabled>AI が下書きを作っています…（30秒ほど）</textarea></label>' +
+      '<div class="s-draft-note" data-c-note></div>' +
+      '<div class="s-revise"><input type="text" data-c-request placeholder="直してほしいことを一言（例：もっと短く／お詫びを先に）"><button type="button" class="s-btn" data-c-revise="' + key + '">🤖 AI に直してもらう</button></div>' +
+      '<small class="s-draft-hint">本文は、ここで手で直すこともできます</small>' +
+      '<div class="s-compose-err" data-c-err></div>' +
+      '<div class="s-actions"><button type="button" class="s-btn s-primary" data-c-send="' + key + '" disabled>📨 送る</button><button type="button" class="s-btn" data-c-close="' + key + '">やめる</button></div></div>';
+  }
+  function composeEls(key) {
+    var box = document.querySelector('[data-compose="' + key + '"]');
+    if (!box) return null;
+    return { box: box, to: box.querySelector('[data-c-to]'), subject: box.querySelector('[data-c-subject]'), body: box.querySelector('[data-c-body]'),
+      note: box.querySelector('[data-c-note]'), err: box.querySelector('[data-c-err]'), send: box.querySelector('[data-c-send]'), revise: box.querySelector('[data-c-revise]'), request: box.querySelector('[data-c-request]') };
+  }
+  function fillDraft(key, promise) {
+    var e = composeEls(key);
+    if (!e) return;
+    e.body.disabled = true; e.send.disabled = true; e.revise.disabled = true; e.err.textContent = '';
+    promise.then(function (d) {
+      var e2 = composeEls(key); if (!e2) return;
+      var ctx = composeCtx[key] || {};
+      e2.body.value = String(d.draft).trim() + (ctx.plan && ctx.plan.route === 'customer' ? LILO_SIGNATURE : '');
+      e2.note.textContent = (d.needsRep ? '⚠️ 代表に確認してから送ってください：' : '') + (d.note || '');
+      e2.body.disabled = false; e2.send.disabled = false; e2.revise.disabled = false;
+    }, function (err) {
+      var e2 = composeEls(key); if (!e2) return;
+      e2.body.disabled = false; e2.revise.disabled = false; e2.send.disabled = false;
+      if (!e2.body.value || /^AI が下書きを作っています/.test(e2.body.value)) e2.body.value = '';
+      e2.err.textContent = '下書きを作れませんでした（' + (err.message || err) + '）。本文を手で書いて送ることもできます';
+    });
+  }
+  function openAction(btn) {
+    var key = btn.getAttribute('data-s-act-key');
+    var card = jumpRegistry[key];
+    var actionId = btn.getAttribute('data-s-act');
+    var line = +btn.getAttribute('data-s-act-line');
+    var mode = btn.getAttribute('data-s-act-mode') || '';
+    if (!card || !ACTIONS[actionId] || !window.__act) return;
+    if (ACTIONS[actionId].kind === 'cancel') { runCancel(card, key, line); return; }
+    var plan = mailPlan(card, actionId, mode);
+    var panel = openSimplePanel(card, composeHtml(card, key, line, actionId, mode, plan));
+    if (!panel) { delete composeCtx[key]; return; }
+    composeCtx[key] = { card: card, line: line, actionId: actionId, mode: mode, plan: plan };
+    fillDraft(key, window.__act.draft({ kind: plan.kind, channel: 'メール', sender: plan.sender, instruction: plan.instruction, text: plan.text }));
+  }
+  // 実行した手順に ✓ を付け、履歴に残す。全部の手順が終わったら（飛ばした手順も含めて）完了にする
+  function completeActionStep(card, line, action, memo) {
+    var el = card.querySelector('[data-role="content"]');
+    if (!el) return;
+    var lines = textOf(el).split('\n');
+    var m = STEP_LINE.exec((lines[line] || '').trim());
+    if (!m) return;
+    if (!m[1]) lines[line] = '✓ ' + m[2] + '. ' + m[3];
+    el.textContent = lines.join('\n');
+    if (statusOf(card) === '未着手') setTaskStatus(card, '進行中');
+    addHistoryEntry(card, 'task', action, statusOf(card), null, memo);
+    el.dispatchEvent(userEvent('input'));
+    var c = parseTaskContent(card);
+    var st = actionStates(card, c, statusOf(card));
+    if (c.steps.length && c.steps.every(function (s, i) { return s.done || (st[i] && st[i].skip); })) {
+      setTaskStatus(card, '完了');
+      addHistoryEntry(card, 'task', '完了にする', '完了', null, '手順が全部終わったので完了にした');
+      if (window.__manualOps && window.__manualOps.onComplete) window.__manualOps.onComplete(card);
+    }
+    applyAll();
+  }
+  function sendCompose(key) {
+    var ctx = composeCtx[key], e = composeEls(key);
+    if (!ctx || !e) return;
+    var to = e.to.value.trim(), subject = e.subject.value.trim(), body = e.body.value.trim();
+    e.err.textContent = '';
+    if (!/^[\w.+-]+@[\w-]+(\.[\w-]+)+$/.test(to)) { e.err.textContent = '宛先のメールアドレスを確かめてください'; return; }
+    if (!subject || !body) { e.err.textContent = '件名と本文を入れてください'; return; }
+    var from = MAIL_FROM[ctx.plan.route];
+    if (!window.confirm('このメールを送ります。\n\n送り元：' + from + '\n宛先：' + to + '\n件名：' + subject + '\n\n本文の最初：\n' + body.slice(0, 120) + (body.length > 120 ? '…' : '') + '\n\n送ったあとは取り消せません。送ってよいですか？')) return;
+    var who = currentUser || ownerOf(ctx.card);
+    e.send.disabled = true; e.send.textContent = '送っています…';
+    window.__act.send({ route: ctx.plan.route, to: to, subject: subject, body: body, taskNo: ctx.card.getAttribute('data-item-id') || '', staff: who }).then(function () {
+      var label = ctx.actionId === 'maker-stop' ? 'メーカー様に出荷停止をお願いした' : (ctx.mode === 'refuse' ? 'お客様にお断りのご連絡を送った' : 'お客様にキャンセル完了のご連絡を送った');
+      closeSimplePanel(ctx.card);
+      delete composeCtx[key];
+      completeActionStep(ctx.card, ctx.line, label, (who ? who + 'さん：' : '') + from.split('（')[0] + ' から ' + to + ' へ「' + subject + '」（数分で送られます）');
+    }, function (err) {
+      var e2 = composeEls(key); if (!e2) return;
+      e2.send.disabled = false; e2.send.textContent = '📨 送る（もう一度）';
+      e2.err.textContent = '送れませんでした：' + (err.message || err);
+    });
+  }
+  function runCancel(card, key, line) {
+    var c = parseTaskContent(card);
+    var n = orderNoOf(card, c);
+    var who = currentUser || ownerOf(card);
+    // 押した時点の注文を Shopify から読み直してから確かめる（ほかの人が先に何かしていないか）
+    window.__act.order(n, true).then(function (hit) {
+      var o = hit && hit.order;
+      renderSimpleTasks();
+      if (!o) { alert('Shopify の注文が読めませんでした：' + ((hit && hit.error) || '')); return; }
+      if (o.cancelledAt) { alert('この注文は、Shopify ではもうキャンセルされています。'); return; }
+      if (o.shipped) { alert('この注文はもう発送されています。キャンセルはできません。お客様にはお断りのご連絡を送ってください。'); return; }
+      if (!window.confirm('Shopify で注文 ' + o.name + ' をキャンセルします。\n\n商品：' + itemsText(o) + '\n金額：' + Number(String(o.total).split(' ')[0]).toLocaleString('ja-JP') + '円（' + (FINANCIAL_JA[o.financial] || o.financial) + '）\n\n・Shopify からお客様に、キャンセルのお知らせメールが届きます\n・在庫は戻します\n\nキャンセルは元に戻せません。メーカー様の返事は確かめましたか？\nキャンセルしてよいですか？')) return;
+      window.__act.cancel({ number: n, orderId: o.id, staff: who, taskNo: card.getAttribute('data-item-id') || '' }).then(function () {
+        completeActionStep(card, line, 'Shopify で注文をキャンセルした', (who ? who + 'さん：' : '') + o.name + '（お客様に Shopify からお知らせ・在庫を戻した）');
+        window.__act.order(n, true).then(function () { renderSimpleTasks(); });
+      }, function (err) { alert('キャンセルできませんでした：' + (err.message || err) + '\n\n注文は変わっていません。もう一度押すか、代表に聞いてください。'); });
+    });
+  }
+  // 前の作りの仕事（チェックだけの手順）を、キャンセルの手順に入れ替える
+  function switchToCancelSteps(card) {
+    var el = card.querySelector('[data-role="content"]');
+    if (!el || !window.__act) return;
+    // 前の返信の下書き（「確かめて改めてご連絡します」）は外す。お客様へのメールは手順の中で作り直す
+    var inDraft = false;
+    var lines = textOf(el).replace(/\s+$/, '').split('\n').filter(function (l) {
+      if (/^【返信の下書き】/.test(l.trim())) { inDraft = true; return false; }
+      if (/^【下書きここまで】/.test(l.trim())) { inDraft = false; return false; }
+      return !inDraft && !/^【下書きのメモ】/.test(l.trim());
+    });
+    var at = -1;
+    for (var i = 0; i < lines.length; i++) if (/^【手順】/.test(lines[i].trim())) { at = i; break; }
+    var keep = [];
+    if (at !== -1) {
+      keep = lines.slice(0, at);
+      // 手順のあとに手順以外の行があれば残す
+      for (var j = at + 1; j < lines.length; j++) if (lines[j].trim() && !STEP_LINE.test(lines[j].trim())) keep.push(lines[j]);
+    } else keep = lines;
+    while (keep.length && !keep[keep.length - 1].trim()) keep.pop();
+    keep.push('', '【手順】');
+    window.__act.cancelSteps().forEach(function (s, k) { keep.push((k + 1) + '. ' + s); });
+    el.textContent = keep.join('\n');
+    addHistoryEntry(card, 'task', '手順をキャンセルの手順にした', statusOf(card), null, (currentUser ? currentUser + 'さん' : ''));
+    el.dispatchEvent(userEvent('input'));
+    applyAll();
+  }
+
+  document.body.addEventListener('click', function (e) {
+    var t = e.target.closest && e.target.closest('[data-s-act],[data-s-cancel-switch],[data-s-order-reload],[data-c-send],[data-c-revise],[data-c-close]');
+    if (!t || t.disabled) return;
+    if (t.hasAttribute('data-s-act')) { openAction(t); return; }
+    if (t.hasAttribute('data-s-cancel-switch')) {
+      var sc = jumpRegistry[t.getAttribute('data-s-cancel-switch')];
+      if (sc && window.confirm('手順を、キャンセルの手順（実行ボタン付き）に入れ替えます。よろしいですか？')) switchToCancelSteps(sc);
+      return;
+    }
+    if (t.hasAttribute('data-s-order-reload')) {
+      t.disabled = true; t.textContent = '読んでいます…';
+      window.__act.order(t.getAttribute('data-s-order-reload'), true).then(function () { renderSimpleTasks(); });
+      return;
+    }
+    if (t.hasAttribute('data-c-send')) { sendCompose(t.getAttribute('data-c-send')); return; }
+    if (t.hasAttribute('data-c-close')) { var cc = composeCtx[t.getAttribute('data-c-close')]; if (cc) closeSimplePanel(cc.card); delete composeCtx[t.getAttribute('data-c-close')]; return; }
+    if (t.hasAttribute('data-c-revise')) {
+      var rk = t.getAttribute('data-c-revise'), ctx = composeCtx[rk], el2 = composeEls(rk);
+      if (!ctx || !el2) return;
+      var req = el2.request.value.trim();
+      if (!req) { el2.err.textContent = '直してほしいことを一言入れてください'; el2.request.focus(); return; }
+      var cur = stripSignature(el2.body.value);
+      el2.body.value = 'AI が直しています…';
+      fillDraft(rk, window.__act.draft({ kind: ctx.plan.kind, channel: 'メール', sender: ctx.plan.sender, revise: { draft: cur, request: req }, text: ctx.plan.text }).then(function (d) { el2.request.value = ''; return d; }, function (err) { var e3 = composeEls(rk); if (e3) e3.body.value = cur + (ctx.plan.route === 'customer' ? LILO_SIGNATURE : ''); throw err; }));
+    }
+  });
+  document.body.addEventListener('change', function (e) {
+    var sel = e.target.closest && e.target.closest('[data-c-maker]');
+    if (!sel) return;
+    var el3 = composeEls(sel.getAttribute('data-c-maker'));
+    if (el3 && sel.value) el3.to.value = sel.value;
+  });
 
   function renderSimpleTasks() {
     document.querySelectorAll('.card[data-kind="task"]').forEach(function (card) {

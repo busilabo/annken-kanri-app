@@ -770,6 +770,14 @@
       "上の「返信の下書き」を読んで直し、contact@lilocle.jp から返信する（下書きがなければ「LILOCLE運営AIチーム」で作る。代表の確認はいりません）。履歴に「返信案ができた」と付いていれば、Claude のチャットで「LILOCLEの返信案を見せて」と頼み、確認して「返信して」と言えば送れます",
       "対応が終わったら「完了」にする"
     ],
+    // キャンセルの依頼（2026-11-08 代表と決めた流れ）。⚡[種類] の行は画面で「実行する」ボタンになる（index.html の ACTIONS）。
+    // メーカー様の返事を待ち、返事を読んで進めるかはスタッフが決める。発送済みなら、画面がお断りの返信に切り替える
+    liloCancel: [
+      "⚡[maker-stop] メーカー様に出荷を止めていただくようお願いする（lilocle@lilocle.jp から。件名に【L-番号】が入るので、返事はこの仕事に付きます）",
+      "メーカー様の返事を読む。「出荷を止めた」とあればチェックする（もう発送していた・止められなかったときは、チェックせずに代表に聞く）",
+      "⚡[shopify-cancel] Shopify で注文をキャンセルする（Shopify からお客様にキャンセルのお知らせが届きます）",
+      "⚡[customer-cancel] お客様にキャンセルの完了と、選び直してのご注文の案内を送る（contact@lilocle.jp から）"
+    ],
     liloSupplier: [
       "欠品・作れない → まず、すでに受けた注文の分は作れるかをメーカー様に確かめる（急ぎ・大事なことはメールだけでなく電話で。連絡先はマネージャーに聞く）。作れない分のお客様には連絡してキャンセル、遅れるだけならお客様に確かめてご了承いただく。これからの注文を止めるため、Shopify で販売不可にする（LILOCLE運営AIチームに頼める）",
       "価格改定・送料の変更 → 代表に確認してから Shopify を変える（たいてい1か月ほど先なので慌てない。代表の不在中は戻ってから）",
@@ -902,6 +910,89 @@
     var note = (d.needsRep ? "⚠️代表に確認 " : "") + String(d.note || "").replace(/\n/g, " ");
     return "\n\n【返信の下書き】\n" + String(d.draft).replace(/^【/gm, "［").trim() + "\n【下書きここまで】" + (note.trim() ? "\n【下書きのメモ】" + note : "");
   }
+
+  // ---- 実行ボタン（2026-11-08）----
+  // 手順の行の頭に「⚡[種類]」があると、画面はチェックではなく「実行する」ボタンを出す（index.html の ACTIONS）。
+  // ここはその裏側：Shopify の注文を見る・キャンセルする（Azure の shopify）、メールの下書き（Azure の draft）、メールを送る。
+  // 送るのは今ある Power Automate の仕組みに任せる（スタッフのサインインに送信の権限はいらない）：
+  //   メーカー様あて … SharePoint「LILOCLE自動化/メール送信キュー」に .bin（中身は JSON {to, subject, body(HTML)}）→ lilocle@lilocle.jp から送る
+  //   お客様あて ……… SharePoint「案件管理キュー/lilocle-reply/outbox」に JSON（status: queued）→ contact@lilocle.jp から送る
+  // どちらも送ったメールは送信済みアイテムに入るので、「⑥送った返信」の取り込み（drainMailSent）にも今までどおり乗る
+  var SHOPIFY_ENDPOINT = "https://busilabo-work-chat.azurewebsites.net/api/shopify";
+  var LILO_DRIVE = "b!wbAWUnf6KkGVCCMpzpid5mjD2eweyyFPkqQ-wGokg-I25eWJtTuGQ7bhpfZRHTvP";
+  var MAKER_MAIL_QUEUE = "01JXBRTLQYRMZ4LGEA5JA3SEEQ6CUVQUNO";   // メール送信キュー（lilocle@ から）
+  var CUSTOMER_OUTBOX = "01JXBRTLQUWM5MT7HPARFZ22LUOU4TUIKV";    // lilocle-reply/outbox（contact@ から）
+  async function callApi(url, req, timeoutMs) {
+    var token = await getToken();
+    var ctl = window.AbortController ? new AbortController() : null;
+    var timer = ctl ? setTimeout(function () { ctl.abort(); }, timeoutMs || 60000) : null;
+    try {
+      var res = await fetch(url, { method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify(req), signal: ctl ? ctl.signal : undefined });
+      var out = await res.json().catch(function () { return {}; });
+      if (!res.ok) throw new Error(out.error || ("つながりませんでした（" + res.status + "）"));
+      return out;
+    } catch (e) {
+      if (e.name === "AbortError") throw new Error("時間がかかりすぎたので止めました。もう一度押してください");
+      throw e;
+    } finally { if (timer) clearTimeout(timer); }
+  }
+  var orderCache = {};   // 注文番号 → { at, order, error }
+  async function shopifyOrder(number, fresh) {
+    var hit = orderCache[number];
+    if (!fresh && hit && Date.now() - hit.at < 60000) return hit;
+    try {
+      var out = await callApi(SHOPIFY_ENDPOINT, { action: "order", number: number }, 30000);
+      orderCache[number] = { at: Date.now(), order: out.order || null, error: out.order ? "" : "Shopify にこの番号の注文が見つかりません" };
+    } catch (e) { orderCache[number] = { at: Date.now(), order: null, error: e.message }; }
+    return orderCache[number];
+  }
+  async function shopifyCancel(req) {
+    var out = await callApi(SHOPIFY_ENDPOINT, Object.assign({ action: "cancel" }, req), 60000);
+    delete orderCache[req.number];
+    return out;
+  }
+  // 下書き：req = { kind, sender, instruction, text } か { kind, sender, revise: { draft, request }, text }
+  async function composeDraft(req) {
+    var out = await callApi(DRAFT_ENDPOINT, req, 90000);
+    if (!out || !out.draft) throw new Error("下書きを作れませんでした");
+    return out;
+  }
+  function htmlBody(text) {
+    return String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/https?:\/\/[^\s<]+/g, function (u) { return '<a href="' + u + '">' + u + "</a>"; })
+      .split(/\n{2,}/).map(function (p) { return "<p>" + p.replace(/\n/g, "<br>") + "</p>"; }).join("");
+  }
+  function fileStamp() {
+    var d = new Date();
+    return ymd(d).replace(/-/g, "") + "-" + String(d.getHours()).padStart(2, "0") + String(d.getMinutes()).padStart(2, "0") + String(d.getSeconds()).padStart(2, "0");
+  }
+  async function putFile(folderId, name, text, type) {
+    var token = await getToken();
+    var res = await fetch("https://graph.microsoft.com/v1.0/drives/" + LILO_DRIVE + "/items/" + folderId + ":/" + encodeURIComponent(name) + ":/content?@microsoft.graph.conflictBehavior=fail", {
+      method: "PUT", headers: { "Authorization": "Bearer " + token, "Content-Type": type }, body: text
+    });
+    if (!res.ok) throw new Error("送信の待ち行列に置けませんでした（" + res.status + "）");
+    return res.json().catch(function () { return {}; });
+  }
+  // mail = { route: "maker"|"customer", to, subject, body, taskNo, staff }
+  async function sendMail(mail) {
+    var to = String(mail.to || "").trim();
+    if (!/^[\w.+-]+@[\w-]+(\.[\w-]+)+$/.test(to)) throw new Error("宛先のメールアドレスが正しくありません");
+    if (!String(mail.subject || "").trim() || !String(mail.body || "").trim()) throw new Error("件名と本文を入れてください");
+    var stamp = fileStamp();
+    if (mail.route === "maker") {
+      // .json やテキストで置くとフローが読めない（base64ToString が Null。2026-11-06）。中身はそのままの JSON で、拡張子を .bin にする
+      return putFile(MAKER_MAIL_QUEUE, stamp + "_仕事管理_L-" + (mail.taskNo || "") + ".bin",
+        JSON.stringify({ to: to, subject: mail.subject, body: htmlBody(mail.body) }), "application/octet-stream");
+    }
+    return putFile(CUSTOMER_OUTBOX, "reply-" + stamp + "-app-L" + (mail.taskNo || "") + ".json", JSON.stringify({
+      type: "lilocleReply", id: stamp + "-L" + (mail.taskNo || ""), status: "queued", isTest: false,
+      kind: "app", source: "仕事管理アプリ", category: mail.category || "お客様対応",
+      to: to, bcc: "busilabo@busilabo.com", subject: mail.subject, body: mail.body,
+      approvedAt: new Date().toISOString(), approvedBy: (mail.staff || "スタッフ") + "（仕事管理アプリで確認して送信）"
+    }), "application/json");
+  }
+  window.__act = { order: shopifyOrder, orderCached: function (n) { return orderCache[n] || null; }, cancel: shopifyCancel, draft: composeDraft, send: sendMail, cancelSteps: function () { return STEPS.liloCancel.slice(); }, isCancelRequest: function (t) { return isCancelRequest(t, ""); } };
 
   function stepsText(steps) {
     if (!steps || !steps.length) return "";
@@ -1055,6 +1146,14 @@
       TAIKAI_WORD.test(String(data.subject || "") + " " + String(data.preview || "").slice(0, 200));
   }
 
+  // キャンセルの依頼か：注文番号があり、「キャンセル」「取り消し」と書いてある（「キャンセルしないで」などの打ち消しは除く）
+  var CANCEL_WORD = /キャンセル|取り消|取消/;
+  var CANCEL_NOT = /キャンセル(は|を)?(しない|せず|不要|なし)/;
+  function isCancelRequest(text, subject) {
+    var all = String(subject || "") + "\n" + String(text || "");
+    return /注文番号：\s*#?\s*\w*\d+/.test(all) && CANCEL_WORD.test(all) && !CANCEL_NOT.test(all);
+  }
+
   function mailProfile(data) {
     var from = String(data.fromAddress || "").trim();
     var subject = String(data.subject || "（件名なし）");
@@ -1093,6 +1192,10 @@
       return { title: "LILOCLEメーカー様：" + subject, business: "LILOCLE運営", category: "メーカー対応", steps: STEPS.liloSupplier };
     }
     if (mailbox.indexOf("contact@") === 0 || (business === "LILOCLE運営" && mailbox.indexOf("order@") !== 0)) {
+      // 注文番号の付いたキャンセルの依頼は、実行ボタンの手順にする。メールは手順の中で作るので、ここでは下書きを作らない（2026-11-08）
+      if (isCancelRequest(String(data.preview || ""), subject)) {
+        return { title: "LILOCLEお客様：" + subject, business: "LILOCLE運営", category: "お客様対応", priority: "高", steps: STEPS.liloCancel };
+      }
       return { title: "LILOCLEお客様：" + subject, business: "LILOCLE運営", category: "お客様対応", priority: "高", steps: STEPS.liloCustomer, draftKind: "lilocle", channel: "メール" };
     }
     if (business === "業務改善・DX支援") {
