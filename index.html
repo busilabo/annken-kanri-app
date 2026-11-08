@@ -4584,7 +4584,9 @@
     'lilo-receipt': { family: 'lilo', label: '領収書のご依頼', hint: '領収書・請求書を出してほしい', steps: [
       { id: 'make', type: 'site', site: 'claude', title: 'Claude で領収書を作る', help: '下の文をコピーして Claude に貼り付けます（スキル「LILOCLE 領収書作成」が PDF を作ります）', doneLabel: '✅ 作った',
         copy: function (x) { return '領収書を作って\n注文番号：' + (x.orderNo || '') + '\nお客様：' + x.who + '\nお問い合わせの内容：\n' + x.desc; } },
-      { id: 'send', type: 'site', site: 'outlook', end: true, title: '領収書の PDF を添付して、お客様に送る', help: 'いまはアプリから添付付きで contact@ から送れないので、Outlook で差出人を contact@lilocle.jp にして送ってください', doneLabel: '✅ 送った' }
+      { id: 'send', type: 'mail', to: 'requester', end: true, needFile: true, title: '領収書の PDF を添付して、お客様に送る', help: 'contact@ から送ります。送る欄の「📎 ファイルを付ける」で、作った領収書の PDF を選んでください',
+        instruction: function (x) { return 'お客様（' + x.who + '）に、ご依頼の' + orderLabel(x) + 'の領収書を PDF で添付してお送りするメールを書く。お問い合わせへのお礼を入れる。宛名・但し書きなどに直しが必要なら、このメールにご返信いただければ作り直すことを添える。署名は付けない。'; },
+        subject: function (x) { return '【LILOCLE】' + (x.o ? 'ご注文（' + x.o.name + '）' : 'ご注文') + 'の領収書をお送りします'; } }
     ] },
     'lilo-other': { family: 'lilo', label: 'そのほかのお問い合わせ', hint: '上のどれでもない質問・ご相談', steps: [
       { id: 'reply', type: 'mail', to: 'requester', useDraft: true, end: true, title: 'お客様にお返事する', help: 'AI の下書きを見て、直して送ります' }
@@ -4926,7 +4928,7 @@
     var p = flowMailPlan(d, x);
     var plan = { route: p.route, kind: p.kind, title: d.title, to: p.to, subject: p.subject, sender: p.sender, text: x.desc + (x.o ? '\n\n注文 ' + x.o.name + '：' + itemsText(x.o) : ''),
       maker: d.to === 'maker' ? x.maker : null, makerName: x.makerName, reply: !d.instruction, draft: d.useDraft ? x.draft : '', draftNote: (x.needsRep ? '⚠️ 代表に確認してから送ってください：' : '') + (x.draftNote || ''),
-      instruction: d.instruction ? d.instruction(x) : '', attachUrl: d.attach ? x.faxLink : '' };
+      instruction: d.instruction ? d.instruction(x) : '', attachUrl: d.attach ? x.faxLink : '', needFile: !!d.needFile };
     var panel = openSimplePanel(card, composeHtml(card, key, line, 'flow', d.id, plan));
     if (!panel) { delete composeCtx[key]; return; }
     composeCtx[key] = { card: card, line: line, actionId: 'flow', mode: '', plan: plan, flowStep: d };
@@ -5208,6 +5210,9 @@
       '<div class="s-draft-note" data-c-note></div>' +
       '<div class="s-revise"><input type="text" data-c-request placeholder="直してほしいことを一言（例：もっと短く／お詫びを先に）"><button type="button" class="s-btn" data-c-revise="' + key + '">🤖 AI に直してもらう</button></div>' +
       '<small class="s-draft-hint">本文は、ここで手で直すこともできます</small>' +
+      // 添付（2026-11-08）：本人のメールボックス・contact@ から送れる。lilocle@（メーカー様あて）は添付なし
+      (plan.route !== 'maker' || plan.chooseRoute ? '<label class="s-files">📎 ファイルを付ける' + (plan.needFile ? '（必ず付けてください）' : '（あれば。1つ3MBまで）') +
+        '<input type="file" multiple data-c-files accept=".pdf,image/*,.xlsx,.docx"></label>' : '') +
       '<div class="s-compose-err" data-c-err></div>' +
       '<div class="s-actions"><button type="button" class="s-btn s-primary" data-c-send="' + key + '" disabled>📨 送る</button><button type="button" class="s-btn" data-c-close="' + key + '">やめる</button></div></div>';
   }
@@ -5215,7 +5220,7 @@
     var box = document.querySelector('[data-compose="' + key + '"]');
     if (!box) return null;
     return { box: box, to: box.querySelector('[data-c-to]'), subject: box.querySelector('[data-c-subject]'), body: box.querySelector('[data-c-body]'),
-      note: box.querySelector('[data-c-note]'), err: box.querySelector('[data-c-err]'), send: box.querySelector('[data-c-send]'), revise: box.querySelector('[data-c-revise]'), request: box.querySelector('[data-c-request]') };
+      note: box.querySelector('[data-c-note]'), err: box.querySelector('[data-c-err]'), send: box.querySelector('[data-c-send]'), revise: box.querySelector('[data-c-revise]'), request: box.querySelector('[data-c-request]'), files: box.querySelector('[data-c-files]') };
   }
   function fillDraft(key, promise) {
     var e = composeEls(key);
@@ -5295,11 +5300,17 @@
     if (!subject || !body) { e.err.textContent = '件名と本文を入れてください'; return; }
     var route = routeOf(key);
     var from = fromLabel(route);
-    if (!window.confirm('このメールを送ります。\n\n送り元：' + from + '\n宛先：' + to + '\n件名：' + subject + '\n\n本文の最初：\n' + body.slice(0, 120) + (body.length > 120 ? '…' : '') + '\n\n送ったあとは取り消せません。送ってよいですか？')) return;
+    var files = e.files ? Array.prototype.slice.call(e.files.files || []) : [];
+    if (ctx.plan.needFile && !files.length) { e.err.textContent = '📎 で、送るファイル（領収書の PDF など）を選んでください'; return; }
+    if (files.length && route === 'maker') { e.err.textContent = 'この送り元からは添付を送れません。ファイルを外すか、送り元を変えてください'; return; }
+    var big = files.filter(function (f) { return f.size > 3 * 1024 * 1024; })[0];
+    if (big) { e.err.textContent = '「' + big.name + '」が大きすぎます（1つ3MBまで）'; return; }
+    var fileNames = files.map(function (f) { return f.name; }).join('、');
+    if (!window.confirm('このメールを送ります。\n\n送り元：' + from + '\n宛先：' + to + '\n件名：' + subject + (fileNames ? '\n添付：' + fileNames : '') + '\n\n本文の最初：\n' + body.slice(0, 120) + (body.length > 120 ? '…' : '') + '\n\n送ったあとは取り消せません。送ってよいですか？')) return;
     var who = currentUser || ownerOf(ctx.card);
     e.send.disabled = true; e.send.textContent = '送っています…';
-    window.__act.send({ route: route, to: to, subject: subject, body: body, taskNo: ctx.card.getAttribute('data-item-id') || '', staff: who, attachUrl: ctx.plan.attachUrl || '' }).then(function () {
-      var memo = (who ? who + 'さん：' : '') + from.split('（')[0] + ' から ' + to + ' へ「' + subject + '」' + (route === 'self' ? '' : '（数分で送られます）');
+    window.__act.send({ route: route, to: to, subject: subject, body: body, taskNo: ctx.card.getAttribute('data-item-id') || '', staff: who, attachUrl: ctx.plan.attachUrl || '', files: files }).then(function () {
+      var memo = (who ? who + 'さん：' : '') + from.split('（')[0] + ' から ' + to + ' へ「' + subject + '」' + (fileNames ? '（添付：' + fileNames + '）' : '') + (route === 'self' ? '' : '（数分で送られます）');
       closeSimplePanel(ctx.card);
       delete composeCtx[key];
       // 仕事の流れの手順：送ったら次へ（end の手順なら仕事が終わる）

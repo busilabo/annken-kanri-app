@@ -998,10 +998,37 @@
     for (var i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
     return { "@odata.type": "#microsoft.graph.fileAttachment", name: item.name, contentBytes: btoa(bin) };
   }
-  async function sendFromMe(to, subject, body, attachUrl) {
+  // パソコンから選んだファイル（領収書の PDF など）。3MB まで（Graph の sendMail は1通4MBまでのため）
+  var MAX_FILE = 3 * 1024 * 1024;
+  function checkFiles(files) {
+    files.forEach(function (f) { if (f.size > MAX_FILE) throw new Error("「" + f.name + "」が大きすぎます（1つ3MBまで）"); });
+  }
+  async function fileToAttachment(f) {
+    var buf = new Uint8Array(await f.arrayBuffer()), bin = "";
+    for (var i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
+    return { "@odata.type": "#microsoft.graph.fileAttachment", name: f.name, contentBytes: btoa(bin) };
+  }
+  // contact@ から送るときは、先に SharePoint の lilocle-reply/attachments に置き、outbox の JSON に場所を書く。
+  // Power Automate がそこから読んで添付する（2026-11-08 Cowork がフローを直し、テスト済み）
+  var CUSTOMER_ATTACH = "01JXBRTLWXJFXJRDXRD5G3RGJBIOT4HDMN";
+  var CUSTOMER_ATTACH_PATH = "/Shared Documents/案件管理キュー/lilocle-reply/attachments/";
+  async function uploadAttachment(stamp, f) {
+    var name = stamp + "_" + String(f.name).replace(/[\\\/:*?"<>|#%]/g, "_");
+    var token = await getToken();
+    var res = await fetch("https://graph.microsoft.com/v1.0/drives/" + LILO_DRIVE + "/items/" + CUSTOMER_ATTACH + ":/" + encodeURIComponent(name) + ":/content?@microsoft.graph.conflictBehavior=rename", {
+      method: "PUT", headers: { "Authorization": "Bearer " + token, "Content-Type": f.type || "application/octet-stream" }, body: f
+    });
+    if (!res.ok) throw new Error("添付のファイルを置けませんでした（" + res.status + "）");
+    var item = await res.json().catch(function () { return {}; });
+    return { name: f.name, path: CUSTOMER_ATTACH_PATH + (item.name || name) };
+  }
+  async function sendFromMe(to, subject, body, attachUrl, files) {
     var token = await getMailToken();
     var message = { subject: subject, body: { contentType: "Text", content: body }, toRecipients: [{ emailAddress: { address: to } }] };
-    if (attachUrl) message.attachments = [await attachmentFrom(attachUrl)];
+    var atts = [];
+    if (attachUrl) atts.push(await attachmentFrom(attachUrl));
+    for (var i = 0; i < (files || []).length; i++) atts.push(await fileToAttachment(files[i]));
+    if (atts.length) message.attachments = atts;
     var res = await fetch("https://graph.microsoft.com/v1.0/me/sendMail", {
       method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
       body: JSON.stringify({ message: message, saveToSentItems: true })
@@ -1014,20 +1041,28 @@
     var to = String(mail.to || "").trim();
     if (!/^[\w.+-]+@[\w-]+(\.[\w-]+)+$/.test(to)) throw new Error("宛先のメールアドレスが正しくありません");
     if (!String(mail.subject || "").trim() || !String(mail.body || "").trim()) throw new Error("件名と本文を入れてください");
-    if (mail.route === "self") return sendFromMe(to, mail.subject, mail.body, mail.attachUrl);
+    var files = Array.prototype.slice.call(mail.files || []);
+    checkFiles(files);
+    if (mail.route === "self") return sendFromMe(to, mail.subject, mail.body, mail.attachUrl, files);
     if (mail.attachUrl) throw new Error("この送り元からは添付を送れません（添付は本人のメールボックスからだけ）");
     var stamp = fileStamp();
     if (mail.route === "maker") {
+      if (files.length) throw new Error("lilocle@（メーカー様あて）からは添付を送れません");
       // .json やテキストで置くとフローが読めない（base64ToString が Null。2026-11-06）。中身はそのままの JSON で、拡張子を .bin にする
       return putFile(MAKER_MAIL_QUEUE, stamp + "_仕事管理_L-" + (mail.taskNo || "") + ".bin",
         JSON.stringify({ to: to, subject: mail.subject, body: htmlBody(mail.body) }), "application/octet-stream");
     }
-    return putFile(CUSTOMER_OUTBOX, "reply-" + stamp + "-app-L" + (mail.taskNo || "") + ".json", JSON.stringify({
+    var job = {
       type: "lilocleReply", id: stamp + "-L" + (mail.taskNo || ""), status: "queued", isTest: false,
       kind: "app", source: "仕事管理アプリ", category: mail.category || "お客様対応",
       to: to, bcc: "busilabo@busilabo.com", subject: mail.subject, body: mail.body,
       approvedAt: new Date().toISOString(), approvedBy: (mail.staff || "スタッフ") + "（仕事管理アプリで確認して送信）"
-    }), "application/json");
+    };
+    if (files.length) {
+      job.attachments = [];
+      for (var i = 0; i < files.length; i++) job.attachments.push(await uploadAttachment(stamp, files[i]));
+    }
+    return putFile(CUSTOMER_OUTBOX, "reply-" + stamp + "-app-L" + (mail.taskNo || "") + ".json", JSON.stringify(job), "application/json");
   }
   window.__act = { order: shopifyOrder, orderCached: function (n) { return orderCache[n] || null; }, cancel: shopifyCancel, draft: composeDraft, send: sendMail, cancelSteps: function () { return STEPS.liloCancel.slice(); }, isCancelRequest: function (t) { return isCancelRequest(t, ""); },
     me: function () { return (account && account.username) || ""; },
