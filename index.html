@@ -1438,6 +1438,11 @@
   .s-steps li.s-act[data-done] { background: var(--ok-soft); }
   .s-steps li.s-act[data-done] > span { color: var(--text-muted); text-decoration: line-through; }
   .s-steps li.s-act[data-skip] > span { color: var(--text-muted); }
+  .s-steps li.s-plain { background: var(--surface-2); }
+  .s-steps li.s-act[data-unneeded] { background: var(--surface-2); }
+  .s-steps li.s-act[data-unneeded] > span { color: var(--text-muted); text-decoration: line-through; }
+  .s-unneeded-note { font-weight: 700; color: var(--text-muted); }
+  .s-undo { padding: 4px 10px; font-size: 12.5px; font-weight: 400; }
   .s-act-btn { padding: 8px 14px; font-size: 14px; }
   .s-act-btn:disabled { opacity: .5; cursor: not-allowed; }
   .s-act-note { font-size: 12.5px; color: var(--text-muted); flex-basis: 100%; }
@@ -4255,7 +4260,9 @@
   // ---- 仕事のかんたん表示（スタッフ向け）----
   // 仕事の中身の「【手順】」の行をチェックリストにし、やることを3つのボタン（終わった／申し送りを書いて渡す／代表に聞く）に絞る。
   // チェックは中身の行頭に「✓ 」を付けて保存する（列を増やさずに、誰の画面でも同じに見えるように）
-  var STEP_LINE = /^(✓\s*)?(\d+)\.\s*(.*)$/;
+  // 手順の行の頭の印：「✓」＝実行した、「［不要］」＝やらなくてよいと決めた（2026-11-08 代表「チェックではなく、実行か不要かの判断ボタンに」）
+  var STEP_LINE = /^(✓\s*|［不要］\s*)?(\d+)\.\s*(.*)$/;
+  var STEP_UNNEEDED = '［不要］';
   // 実行ボタンの手順（2026-11-08）。手順の行が「⚡[種類] 説明」ならチェックではなく「実行する」ボタンを出す。
   // 押すと、メールなら下書き（AI）→ 直す → 確認のポップアップ → 送る、Shopify なら確認のポップアップ → 実行。済んだら手順に ✓ が付く。
   // 前の手順が終わるまでは押せない。種類を足すときは、ここと actionStates・openAction に足す（裏側は sync.js の window.__act）
@@ -4340,16 +4347,16 @@
     c.steps.forEach(function (s, i) {
       var st = {};
       // 発送済み：止める・キャンセルの手順はなく、お客様にはお断りの返信を送る
-      if (order && order.shipped && a !== -1 && b !== -1 && i >= a && i <= b && !s.done) st.skip = '発送済みのため、この手順はありません';
-      else if (order && order.cancelledAt && s.action === 'shopify-cancel' && !s.done) st.skip = 'Shopify ではもうキャンセルされています';
+      if (order && order.shipped && a !== -1 && b !== -1 && i >= a && i <= b && !s.decided) st.skip = '発送済みのため、この手順はありません';
+      else if (order && order.cancelledAt && s.action === 'shopify-cancel' && !s.decided) st.skip = 'Shopify ではもうキャンセルされています';
       if (s.action === 'customer-cancel') st.mode = order && order.shipped && !order.cancelledAt ? 'refuse' : 'cancel';
-      if (s.action && !s.done && !st.skip) {
+      if (s.action && !s.decided && !st.skip) {
         if (status === '完了') st.why = 'この仕事は終わっています';
         else if (blocked && ACTIONS[s.action].ordered) st.why = blocked;
         else if (ACTIONS[s.action].needsOrder && !order) st.why = os && os.loading ? 'Shopify の注文を読んでいます…' : 'Shopify の注文が読めていません（上の「もう一度読む」）';
       }
       out.push(st);
-      if (!s.done && !st.skip && !blocked) blocked = '前の手順（' + s.no + '）が終わると押せます';
+      if (!s.decided && !st.skip && !blocked) blocked = '前の手順（' + s.no + '）が終わると押せます';
     });
     return out;
   }
@@ -4358,10 +4365,23 @@
     var act = ACTIONS[s.action];
     var label = act.label;
     if (st.mode === 'refuse') label = '✉️ お断りの下書きを作って送る';
-    return '<li class="s-act"' + (s.done ? ' data-done' : '') + (st.skip ? ' data-skip' : '') + '><span>' + (s.done ? '✅ ' : '⚡ ') + linkify(s.text) + '</span>' +
-      (s.done ? '<b class="s-done-note">済み</b>' : st.skip ? '' :
+    var open = !s.decided && !st.skip;
+    return '<li class="s-act"' + (s.done ? ' data-done' : '') + (s.unneeded ? ' data-unneeded' : '') + (st.skip ? ' data-skip' : '') + '><span>' + (s.done ? '✅ ' : s.unneeded ? '➖ ' : '⚡ ') + linkify(s.text) + '</span>' +
+      (s.done ? '<b class="s-done-note">済み</b>' : s.unneeded ? '<b class="s-unneeded-note">不要</b>' + undoBtn(key, s) : st.skip ? '' :
         '<button type="button" class="s-btn s-primary s-act-btn" data-s-act="' + esc(s.action) + '" data-s-act-key="' + key + '" data-s-act-line="' + s.line + '"' + (st.mode ? ' data-s-act-mode="' + st.mode + '"' : '') + (st.why ? ' disabled' : '') + '>' + label + '</button>') +
-      (st.skip ? '<span class="s-act-note">' + esc(st.skip) + '</span>' : st.why && !s.done ? '<span class="s-act-note">' + esc(st.why) + '</span>' : '') + '</li>';
+      (open && st.why !== 'この仕事は終わっています' ? skipBtn(key, s) : '') +
+      (st.skip ? '<span class="s-act-note">' + esc(st.skip) + '</span>' : st.why && open ? '<span class="s-act-note">' + esc(st.why) + '</span>' : '') + '</li>';
+  }
+  function skipBtn(key, s) { return '<button type="button" class="s-btn s-act-btn" data-s-step-skip="' + key + '" data-s-step-line="' + s.line + '">➖ 不要</button>'; }
+  function undoBtn(key, s) { return '<button type="button" class="s-btn s-act-btn s-undo" data-s-step-undo="' + key + '" data-s-step-line="' + s.line + '">↩ 戻す</button>'; }
+  // ふつうの手順：「✅ 実行した」か「➖ 不要」で決める。決めたあとは「↩ 戻す」で取り消せる
+  function plainStepHtml(key, s, st, status) {
+    st = st || {};
+    var closed = status === '完了';
+    return '<li class="s-act s-plain"' + (s.done ? ' data-done' : '') + (s.unneeded ? ' data-unneeded' : '') + (st.skip ? ' data-skip' : '') + '><span>' + (s.done ? '✅ ' : s.unneeded ? '➖ ' : '') + linkify(s.text) + '</span>' +
+      (s.decided ? '<b class="' + (s.done ? 's-done-note' : 's-unneeded-note') + '">' + (s.done ? '済み' : '不要') + '</b>' + (closed ? '' : undoBtn(key, s))
+        : st.skip || closed ? '' : '<button type="button" class="s-btn s-primary s-act-btn" data-s-step-do="' + key + '" data-s-step-line="' + s.line + '">✅ 実行した</button>' + skipBtn(key, s)) +
+      (st.skip ? '<span class="s-act-note">' + esc(st.skip) + '</span>' : '') + '</li>';
   }
 
   function parseTaskContent(card) {
@@ -4380,7 +4400,8 @@
       var m = inSteps && STEP_LINE.exec(line.trim());
       // 「⚡[種類] 説明」の手順は実行ボタンにする（ACTIONS）
       var am = m && ACTION_STEP.exec(m[3]);
-      if (m) out.steps.push({ line: i, done: !!m[1], no: m[2], text: am ? am[2] : m[3], action: am && ACTIONS[am[1]] ? am[1] : '' });
+      // decided＝実行したか不要にしたか（どちらも「決めた」。次の手順・完了の判断はこれで見る）
+      if (m) out.steps.push({ line: i, done: !!m[1] && m[1].charAt(0) === '✓', unneeded: !!m[1] && m[1].charAt(0) === '［', decided: !!m[1], no: m[2], text: am ? am[2] : m[3], action: am && ACTIONS[am[1]] ? am[1] : '' });
       else if (line.trim()) out.desc.push(line);
     }
     return out;
@@ -4395,7 +4416,7 @@
     var bizI = BUSINESSES.indexOf(businessOf(card)) + 1;
     var originBox = card.querySelector('[data-teams-origin]');
     var origin = originBox && !originBox.hidden ? originBox.innerHTML : '';
-    var doneCount = c.steps.filter(function (s) { return s.done; }).length;
+    var doneCount = c.steps.filter(function (s) { return s.decided; }).length;
     var html = '<div class="s-head"' + (bizI ? ' data-biz-i="' + bizI + '"' : '') + '>' +
       '<span class="s-status" data-tone="' + toneForStatus('task', status) + '">' + esc(status) + '</span>' +
       '<b class="s-title">' + esc(c.title || '（名前のない仕事）') + '</b>' +
@@ -4450,9 +4471,7 @@
       html += '<div class="s-steps-head">やること <span class="tab-count">' + doneCount + ' / ' + c.steps.length + '</span></div><ol class="s-steps">' +
         c.steps.map(function (s, si) {
           if (s.action) return actionStepHtml(card, key, s, actState[si]);
-          var st = actState[si] || {};
-          return '<li' + (s.done ? ' data-done' : '') + '><label><input type="checkbox" data-step-key="' + key + '" data-step-line="' + s.line + '"' + (s.done ? ' checked' : '') + '>' +
-            '<span>' + linkify(s.text) + (st.skip ? '<br><small class="s-act-note">' + esc(st.skip) + '</small>' : '') + '</span></label></li>';
+          return plainStepHtml(key, s, actState[si], status);
         }).join('') + '</ol>';
     }
     var recur = recurOf(card);
@@ -4679,20 +4698,23 @@
       : { kind: plan.kind, channel: 'メール', sender: plan.sender, instruction: plan.instruction, text: plan.text }));
   }
   // 実行した手順に ✓ を付け、履歴に残す。全部の手順が終わったら（飛ばした手順も含めて）完了にする
-  function completeActionStep(card, line, action, memo) {
+  function completeActionStep(card, line, action, memo) { markStep(card, line, '✓', action, memo); }
+  // 手順の行の印を付け替える（'✓'＝実行した／STEP_UNNEEDED＝不要／''＝戻す）。決めたら全部決まったかを見て、決まっていれば完了にする
+  function markStep(card, line, mark, action, memo) {
     var el = card.querySelector('[data-role="content"]');
     if (!el) return;
     var lines = textOf(el).split('\n');
     var m = STEP_LINE.exec((lines[line] || '').trim());
     if (!m) return;
-    if (!m[1]) lines[line] = '✓ ' + m[2] + '. ' + m[3];
+    lines[line] = (mark ? mark + ' ' : '') + m[2] + '. ' + m[3];
     el.textContent = lines.join('\n');
-    if (statusOf(card) === '未着手') setTaskStatus(card, '進行中');
+    if (mark && statusOf(card) === '未着手') setTaskStatus(card, '進行中');
     addHistoryEntry(card, 'task', action, statusOf(card), null, memo);
     el.dispatchEvent(userEvent('input'));
+    if (!mark) { applyAll(); return; }
     var c = parseTaskContent(card);
     var st = actionStates(card, c, statusOf(card));
-    if (c.steps.length && c.steps.every(function (s, i) { return s.done || (st[i] && st[i].skip); })) {
+    if (c.steps.length && c.steps.every(function (s, i) { return s.decided || (st[i] && st[i].skip); })) {
       setTaskStatus(card, '完了');
       addHistoryEntry(card, 'task', '完了にする', '完了', null, '手順が全部終わったので完了にした');
       if (window.__manualOps && window.__manualOps.onComplete) window.__manualOps.onComplete(card);
@@ -4778,8 +4800,23 @@
   }
 
   document.body.addEventListener('click', function (e) {
-    var t = e.target.closest && e.target.closest('[data-s-act],[data-s-reply],[data-s-cancel-switch],[data-s-order-reload],[data-c-send],[data-c-revise],[data-c-close]');
+    var t = e.target.closest && e.target.closest('[data-s-act],[data-s-reply],[data-s-cancel-switch],[data-s-order-reload],[data-c-send],[data-c-revise],[data-c-close],[data-s-step-do],[data-s-step-skip],[data-s-step-undo]');
     if (!t || t.disabled) return;
+    // 手順を「実行した」「不要」に決める／戻す
+    var sk = t.getAttribute('data-s-step-do') || t.getAttribute('data-s-step-skip') || t.getAttribute('data-s-step-undo');
+    if (sk) {
+      var scard = jumpRegistry[sk];
+      if (!scard) return;
+      var sline = +t.getAttribute('data-s-step-line');
+      var sstep = parseTaskContent(scard).steps.filter(function (s) { return s.line === sline; })[0];
+      if (!sstep) return;
+      var swho = currentUser || ownerOf(scard);
+      var sname = '手順' + sstep.no + '（' + sstep.text.slice(0, 40) + (sstep.text.length > 40 ? '…' : '') + '）';
+      if (t.hasAttribute('data-s-step-do')) markStep(scard, sline, '✓', '手順を実行した', (swho ? swho + 'さん：' : '') + sname);
+      else if (t.hasAttribute('data-s-step-skip')) markStep(scard, sline, STEP_UNNEEDED, '手順を不要にした', (swho ? swho + 'さん：' : '') + sname);
+      else markStep(scard, sline, '', '手順を戻した', (swho ? swho + 'さん：' : '') + sname);
+      return;
+    }
     if (t.hasAttribute('data-s-act') || t.hasAttribute('data-s-reply')) { openAction(t); return; }
     if (t.hasAttribute('data-s-cancel-switch')) {
       var sc = jumpRegistry[t.getAttribute('data-s-cancel-switch')];

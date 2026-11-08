@@ -774,7 +774,7 @@
     // メーカー様の返事を待ち、返事を読んで進めるかはスタッフが決める。発送済みなら、画面がお断りの返信に切り替える
     liloCancel: [
       "⚡[maker-stop] メーカー様に出荷を止めていただくようお願いする（lilocle@lilocle.jp から。件名に【L-番号】が入るので、返事はこの仕事に付きます）",
-      "メーカー様の返事を読む。「出荷を止めた」とあればチェックする（もう発送していた・止められなかったときは、チェックせずに代表に聞く）",
+      "メーカー様の返事を読む。「出荷を止めた」とあれば「✅ 実行した」を押す（もう発送していた・止められなかったときは、押さずに代表に聞く）",
       "⚡[shopify-cancel] Shopify で注文をキャンセルする（Shopify からお客様にキャンセルのお知らせが届きます）",
       "⚡[customer-cancel] お客様にキャンセルの完了と、選び直してのご注文の案内を送る（contact@lilocle.jp から）"
     ],
@@ -1775,7 +1775,7 @@
           var d = dates[j], ds = ymd(d);
           // ひな形を作る前の回は作らない（金曜に「毎週月曜」を作ったとき、過ぎた月曜の分を作らない）
           if (d < today && since && d < since) continue;
-          var content = textOf(getRoleEl(c, "content")).split("\n").map(function (l) { return l.replace(/^✓\s*/, ""); }).join("\n");
+          var content = textOf(getRoleEl(c, "content")).split("\n").map(function (l) { return l.replace(/^(✓|［不要］)\s*/, ""); }).join("\n");
           var owner = (getRoleEl(c, "owner") || {}).value || "未定";
           await createTaskOnce("recurinst:" + id + ":" + ds, {
             Title: (content.split("\n")[0] || label).slice(0, 60),
