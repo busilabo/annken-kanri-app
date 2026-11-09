@@ -1198,7 +1198,7 @@
   // 自動の通知・お知らせ（返事のいらないもの）
   var NOT_WORK_SUBJECT = /^(自動返信|Automatic reply|不在|Out of Office|配信停止|Undeliverable|配信不能|Delivery Status Notification)/i;
   // 仕事にしない相手（代表の指定）。迷惑メールではないが、返事も対応もいらない一斉のお知らせ。やり取りログへの記録だけ
-  var NOT_WORK_SENDER = /@(alhambrainc\.jp|waphyto\.com)$/i;   // THERA・Waphyto（お取引先あての一斉案内。販売終了・新商品 2026-11-06 代表「不要」）
+  var NOT_WORK_SENDER = /@(alhambrainc\.jp|waphyto\.com|judge\.me)$/i;   // THERA・Waphyto（お取引先あての一斉案内。販売終了・新商品 2026-11-06 代表「不要」）・Judge.me（Shopify のレビューアプリのお知らせ 2026-11-09 代表「仕事に入れない」）
   var NOT_WORK_DROP = "仕事にしない相手のメールとして片付ける";
   // contact@ に届くが、お客様ではなく作り手（メーカー様・取り扱い候補）の相手
   var LILO_MAKER_AT_CONTACT = /@(chocoreko\.com)$/i;   // ChocoReko（2026-11-06 代表の指定）
