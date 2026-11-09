@@ -949,7 +949,34 @@
   async function shopifyCancel(req) {
     var out = await callApi(SHOPIFY_ENDPOINT, Object.assign({ action: "cancel" }, req), 60000);
     delete orderCache[req.number];
+    // キャンセルできたら、メーカー様との共有エクセルから行と注文書シートを消す（2026-11-09 代表の指定）。消せなくてもキャンセルは済んでいる
+    try { out.excel = await removeFromMakerExcel(out.order); } catch (e) { out.excel = { error: e.message }; }
     return out;
+  }
+  // 共有エクセルは「{メーカーID} ○{メーカー名}専用LILOCLE(リロクル)発注・発送報告.xlsx」。メーカーID は SKU の頭（D0033-18 → D0033、自社発送の L〜 は L0000）。
+  // 送信キューに {fileId, orders:{delete:[注文番号]}} を置くと、クラウドフロー「LILOCLE 注文書送付（送信キュー）」が行と注文書シートを消す
+  var MAKER_EXCEL_FOLDER = "General/リロクル資料(管理者)/LILOCLE";
+  var EXCEL_QUEUE = "01JXBRTLSVJKF5J6K5GZAYSLWOAHPV7U4G";   // 送信キュー
+  async function removeFromMakerExcel(order) {
+    if (!order || !order.name) return { done: [], missing: [] };
+    var ids = [];
+    (order.items || []).forEach(function (it) {
+      var m = /^([DL])(\d{4})/i.exec(String(it.sku || "").trim());
+      var id = m ? (m[1].toUpperCase() === "L" ? "L0000" : "D" + m[2]) : "";
+      if (id && ids.indexOf(id) === -1) ids.push(id);
+    });
+    if (!ids.length) return { done: [], missing: ["SKU が分からない"] };
+    var list = await graph("/drives/" + LILO_DRIVE + "/root:/" + encodeURI(MAKER_EXCEL_FOLDER) + ":/children?$select=id,name&$top=200");
+    var files = (list.value || []).filter(function (f) { return /\.xlsx$/i.test(f.name); });
+    var done = [], missing = [];
+    for (var i = 0; i < ids.length; i++) {
+      var file = files.filter(function (f) { return f.name.indexOf(ids[i] + " ") === 0; })[0];
+      if (!file) { missing.push(ids[i]); continue; }
+      await putFile(EXCEL_QUEUE, ymd(new Date()) + "_キャンセル削除_" + ids[i] + "_" + order.name + "_" + fileStamp() + ".json",
+        JSON.stringify({ fileId: file.id, orders: { delete: [order.name] } }), "application/json");
+      done.push(ids[i]);
+    }
+    return { done: done, missing: missing };
   }
   // 下書き：req = { kind, sender, instruction, text } か { kind, sender, revise: { draft, request }, text }
   async function composeDraft(req) {

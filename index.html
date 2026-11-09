@@ -4562,7 +4562,7 @@
         subject: function (x) { return '【L-' + x.no + '】' + (x.o ? 'ご注文 ' + x.o.name + ' ' : '') + '出荷停止のお願い'; } },
       { id: 'wait', type: 'choose', title: 'メーカー様の返事を待つ', help: '返事が届くと、ここに出ます。読んで選んでください', waitFor: /メーカー様から返事が届いた/, skipWhen: shipped,
         choices: [{ label: '✅ 止められた', go: 'next' }, { label: '📦 もう発送していた', go: 'refuse' }, { label: '🙋 分からない・相談したい', go: 'rep' }] },
-      { id: 'cancel', type: 'cancel', title: 'Shopify で注文をキャンセルする', help: 'Shopify からお客様にキャンセルのお知らせが届きます。キャンセルは元に戻せません', skipWhen: shipped },
+      { id: 'cancel', type: 'cancel', title: 'Shopify で注文をキャンセルする', help: 'Shopify からお客様にキャンセルのお知らせが届きます。メーカー様との共有エクセルからも消します。キャンセルは元に戻せません', skipWhen: shipped },
       { id: 'done', type: 'mail', to: 'requester', end: true, title: 'お客様に、キャンセルの完了と選び直しの案内を送る', help: 'contact@ から送ります', skipWhen: shipped,
         instruction: function (x) { return 'お客様（' + x.who + '）に、' + orderLabel(x) + 'のキャンセルが完了したことをお伝えするメールを書く。お問い合わせへのお礼を入れる。' + (x.o && x.o.financial === 'AUTHORIZED' ? 'お支払いは確定前だったため、代金のご請求はないこと（カードの仮押さえは取り消されること）を伝える。' : '') + 'Shopify からもキャンセルのお知らせメールが届くことを添える。お問い合わせの内容に合わせて、ご希望の商品（色など）をお選びのうえ、' + (x.url ? '商品ページ（' + x.url + '）' : '商品ページ') + 'から改めてご注文いただけることをご案内する。署名は付けない。'; },
         subject: function (x) { return '【LILOCLE】' + (x.o ? 'ご注文（' + x.o.name + '）' : 'ご注文') + 'のキャンセルについて'; } },
@@ -5342,10 +5342,15 @@
       if (!o) { alert('Shopify の注文が読めませんでした：' + ((hit && hit.error) || '')); return; }
       if (o.cancelledAt) { alert('この注文は、Shopify ではもうキャンセルされています。'); return; }
       if (o.shipped) { alert('この注文はもう発送されています。キャンセルはできません。お客様にはお断りのご連絡を送ってください。'); return; }
-      if (!window.confirm('Shopify で注文 ' + o.name + ' をキャンセルします。\n\n商品：' + itemsText(o) + '\n金額：' + Number(String(o.total).split(' ')[0]).toLocaleString('ja-JP') + '円（' + (FINANCIAL_JA[o.financial] || o.financial) + '）\n\n・Shopify からお客様に、キャンセルのお知らせメールが届きます\n・在庫は戻します\n\nキャンセルは元に戻せません。メーカー様の返事は確かめましたか？\nキャンセルしてよいですか？')) return;
-      window.__act.cancel({ number: n, orderId: o.id, staff: who, taskNo: card.getAttribute('data-item-id') || '' }).then(function () {
-        if (parseTaskContent(card).flow) finishFlowStep(card, line, 'next', o.name + ' をキャンセルした（お客様に Shopify からお知らせ・在庫を戻した）', 'Shopify で注文をキャンセルした');
-        else completeActionStep(card, line, 'Shopify で注文をキャンセルした', (who ? who + 'さん：' : '') + o.name + '（お客様に Shopify からお知らせ・在庫を戻した）');
+      if (!window.confirm('Shopify で注文 ' + o.name + ' をキャンセルします。\n\n商品：' + itemsText(o) + '\n金額：' + Number(String(o.total).split(' ')[0]).toLocaleString('ja-JP') + '円（' + (FINANCIAL_JA[o.financial] || o.financial) + '）\n\n・Shopify からお客様に、キャンセルのお知らせメールが届きます\n・在庫は戻します\n・メーカー様との共有エクセルから、この注文の行と注文書シートを消します\n\nキャンセルは元に戻せません。メーカー様の返事は確かめましたか？\nキャンセルしてよいですか？')) return;
+      window.__act.cancel({ number: n, orderId: o.id, staff: who, taskNo: card.getAttribute('data-item-id') || '' }).then(function (res) {
+        // メーカー様との共有エクセルの片付け（sync.js が送信キューに置く）。できなかった分は手で消してもらう
+        var ex = (res && res.excel) || {};
+        var exNote = (ex.done && ex.done.length ? '・共有エクセル（' + ex.done.join('・') + '）から消すよう頼んだ' : '') +
+          (ex.error || (ex.missing && ex.missing.length) ? '・共有エクセルは手で消してください（' + (ex.error || ex.missing.join('・') + ' が見つからない') + '）' : '');
+        if (ex.error || (ex.missing && ex.missing.length)) alert('キャンセルはできました。\n\nメーカー様との共有エクセルからは自動で消せませんでした（' + (ex.error || ex.missing.join('・') + ' が見つからない') + '）。\n' + o.name + ' の行と注文書シートを手で消してください。');
+        if (parseTaskContent(card).flow) finishFlowStep(card, line, 'next', o.name + ' をキャンセルした（お客様に Shopify からお知らせ・在庫を戻した' + exNote + '）', 'Shopify で注文をキャンセルした');
+        else completeActionStep(card, line, 'Shopify で注文をキャンセルした', (who ? who + 'さん：' : '') + o.name + '（お客様に Shopify からお知らせ・在庫を戻した' + exNote + '）');
         window.__act.order(n, true).then(function () { renderSimpleTasks(); });
       }, function (err) { alert('キャンセルできませんでした：' + (err.message || err) + '\n\n注文は変わっていません。もう一度押すか、代表に聞いてください。'); });
     });
