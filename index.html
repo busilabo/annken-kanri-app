@@ -6745,7 +6745,25 @@
     if (field) setTimeout(function () { field.focus(); }, 400);
   }
 
-  function activateTab(target) {
+  // 画面を切り替えるたびにブラウザの履歴に残し、「戻る」で前の画面（とそのときの位置）に戻れるようにする
+  var currentTab = "today";
+  if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+  history.replaceState({ tab: currentTab }, "");
+  window.addEventListener('popstate', function (e) {
+    // 印の無い最初の履歴（サインインの戻りでアドレスを整えたとき等）は「今日」
+    var st = e.state || { tab: "today" };
+    if (!PANEL_SECTION[st.tab]) return;
+    activateTab(st.tab, true);
+    var y = st.scrollY || 0;
+    setTimeout(function () { window.scrollTo(0, y); }, 0);
+  });
+
+  function activateTab(target, fromHistory) {
+    if (!fromHistory && target !== currentTab) {
+      history.replaceState({ tab: currentTab, scrollY: window.scrollY }, "");
+      history.pushState({ tab: target }, "");
+    }
+    currentTab = target;
     var section = PANEL_SECTION[target] || "work";
     lastTabOf[section] = target;
     document.querySelectorAll('.section-btn').forEach(function (b) {
