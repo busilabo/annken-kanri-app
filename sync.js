@@ -957,26 +957,113 @@
   // 送信キューに {fileId, orders:{delete:[注文番号]}} を置くと、クラウドフロー「LILOCLE 注文書送付（送信キュー）」が行と注文書シートを消す
   var MAKER_EXCEL_FOLDER = "General/リロクル資料(管理者)/LILOCLE";
   var EXCEL_QUEUE = "01JXBRTLSVJKF5J6K5GZAYSLWOAHPV7U4G";   // 送信キュー
-  async function removeFromMakerExcel(order) {
-    if (!order || !order.name) return { done: [], missing: [] };
+  function makerIdsOf(order) {
     var ids = [];
     (order.items || []).forEach(function (it) {
       var m = /^([DL])(\d{4})/i.exec(String(it.sku || "").trim());
       var id = m ? (m[1].toUpperCase() === "L" ? "L0000" : "D" + m[2]) : "";
       if (id && ids.indexOf(id) === -1) ids.push(id);
     });
-    if (!ids.length) return { done: [], missing: ["SKU が分からない"] };
+    return ids;
+  }
+  async function makerExcelFiles() {
     var list = await graph("/drives/" + LILO_DRIVE + "/root:/" + encodeURI(MAKER_EXCEL_FOLDER) + ":/children?$select=id,name&$top=200");
-    var files = (list.value || []).filter(function (f) { return /\.xlsx$/i.test(f.name); });
+    return (list.value || []).filter(function (f) { return /\.xlsx$/i.test(f.name); });
+  }
+  function excelOf(files, id) { return files.filter(function (f) { return f.name.indexOf(id + " ") === 0; })[0]; }
+  async function removeFromMakerExcel(order) {
+    if (!order || !order.name) return { done: [], missing: [] };
+    var ids = makerIdsOf(order);
+    if (!ids.length) return { done: [], missing: ["SKU が分からない"] };
+    var files = await makerExcelFiles();
     var done = [], missing = [];
     for (var i = 0; i < ids.length; i++) {
-      var file = files.filter(function (f) { return f.name.indexOf(ids[i] + " ") === 0; })[0];
+      var file = excelOf(files, ids[i]);
       if (!file) { missing.push(ids[i]); continue; }
       await putFile(EXCEL_QUEUE, ymd(new Date()) + "_キャンセル削除_" + ids[i] + "_" + order.name + "_" + fileStamp() + ".json",
         JSON.stringify({ fileId: file.id, orders: { delete: [order.name] } }), "application/json");
       done.push(ids[i]);
     }
     return { done: done, missing: missing };
+  }
+
+  // ---- 最終チェック（2026-11-09 代表の指定）----
+  // 仕事が終わったら、アプリでやったことを本物で確かめ（Shopify の注文・共有エクセル・メールの送信の待ち行列）、
+  // その事実と仕事の中身・履歴を Claude（Azure の verify）に読ませて、やり残しや食い違いがないかを見る。
+  // 事実の ⚠️ はそれだけで「直すことあり」。⏳（フローがまだ処理していない）は、しばらくしてもう一度確かめる
+  var VERIFY_ENDPOINT = "https://busilabo-work-chat.azurewebsites.net/api/verify";
+  var MAKER_MAIL_DONE = "01JXBRTLV47WYQALKNTJBLQCCA6N6NSRAO";   // メール送信キュー/処理済（失敗したものは「失敗_」が付く）
+  var CUSTOMER_SENT = "01JXBRTLQGMG5DQTASMRHJTNWIHFWWICSW";     // lilocle-reply/sent
+  var CHECK_WAIT_MIN = 20;   // フローが処理するまで待つ時間（これを過ぎて残っていたら止まっている）
+  async function folderFiles(folderId) {
+    var out = await graph("/drives/" + LILO_DRIVE + "/items/" + folderId + "/children?$select=name,createdDateTime&$top=999");
+    return out.value || [];
+  }
+  function minutesSince(iso) { var t = new Date(iso).getTime(); return isNaN(t) ? 0 : (Date.now() - t) / 60000; }
+  // p = { taskNo, orderNo, cancelRecorded, cancelAt(ms) }
+  async function checkFacts(p) {
+    var facts = [], hard = [], wait = false;
+    function ok(t) { facts.push("✅ " + t); }
+    function ng(t) { facts.push("⚠️ " + t); hard.push(t); }
+    function later(t) { facts.push("⏳ " + t); wait = true; }
+    if (p.orderNo) {
+      var hit = await shopifyOrder(p.orderNo, true);
+      var o = hit && hit.order;
+      if (!o) facts.push("（Shopify の注文 " + p.orderNo + " は読めませんでした：" + ((hit && hit.error) || "") + "）");
+      else {
+        if (p.cancelRecorded) {
+          if (o.cancelledAt) ok("Shopify：" + o.name + " はキャンセルされています");
+          else ng("Shopify：" + o.name + " はキャンセルされていません（アプリでは「キャンセルした」になっています）");
+        } else ok("Shopify：" + o.name + " は" + (o.cancelledAt ? "キャンセル済み" : (o.shipped ? "発送済み" : "まだ発送前")) + "（支払い：" + o.financial + "）");
+        // キャンセル済みなら、メーカー様との共有エクセルからも消えているはず
+        if (o.cancelledAt) {
+          var ids = makerIdsOf(o), files = ids.length ? await makerExcelFiles() : [];
+          for (var i = 0; i < ids.length; i++) {
+            var f = excelOf(files, ids[i]);
+            if (!f) { ng("共有エクセル：" + ids[i] + " のエクセルが見つかりません（手で消したか確かめてください）"); continue; }
+            var r = await graph("/drives/" + LILO_DRIVE + "/items/" + f.id + "/workbook/worksheets('" + encodeURIComponent("追跡番号記入") + "')/range(address='F1:F1500')?$select=values");
+            var left = (r.values || []).some(function (row) { return String(row[0]).trim() === o.name; });
+            var since = p.cancelAt ? (Date.now() - p.cancelAt) / 60000 : CHECK_WAIT_MIN + 1;
+            if (!left) ok("共有エクセル（" + ids[i] + "）：" + o.name + " の行は消えています");
+            else if (since < CHECK_WAIT_MIN) later("共有エクセル（" + ids[i] + "）：" + o.name + " の行を消すのを待っています");
+            else ng("共有エクセル（" + ids[i] + "）：" + o.name + " の行がまだ残っています");
+          }
+        }
+      }
+    }
+    if (p.taskNo) {
+      // この仕事から送ったメール（メーカー様あて …_仕事管理_L-番号.bin／お客様あて reply-…-app-L番号.json）
+      var mk = "_仕事管理_L-" + p.taskNo + ".bin", cu = "-app-L" + p.taskNo + ".json";
+      var lists = await Promise.all([folderFiles(MAKER_MAIL_QUEUE), folderFiles(MAKER_MAIL_DONE), folderFiles(CUSTOMER_OUTBOX), folderFiles(CUSTOMER_SENT)]);
+      var mine = function (a, s) { return a.filter(function (f) { return f.name.slice(-s.length) === s; }); };
+      var waiting = mine(lists[0], mk).concat(mine(lists[2], cu));
+      var failed = mine(lists[1], mk).filter(function (f) { return /^失敗_/.test(f.name); });
+      var sent = mine(lists[1], mk).length - failed.length + mine(lists[3], cu).length;
+      if (sent) ok("この仕事から送ったメール " + sent + " 通は、送信済みです");
+      failed.forEach(function (f) { ng("メーカー様あてのメールが送れていません（" + f.name + "）"); });
+      waiting.forEach(function (f) {
+        if (minutesSince(f.createdDateTime) < CHECK_WAIT_MIN) later("メールの送信を待っています（" + f.name + "）");
+        else ng("メールが送信の待ち行列に残ったままです（" + Math.round(minutesSince(f.createdDateTime)) + " 分。" + f.name + "）");
+      });
+    }
+    return { facts: facts, hard: hard, wait: wait };
+  }
+  // req = { taskNo, orderNo, cancelRecorded, cancelAt, title, business, category, flow, content, history: [..] }
+  // → { verdict: "ok"|"ng"|"wait", lines: [..], fix }
+  async function finalCheck(req) {
+    var f;
+    try { f = await checkFacts(req); } catch (e) { f = { facts: ["（本物を確かめられませんでした：" + e.message + "）"], hard: [], wait: false }; }
+    var ai = null;
+    try { ai = await callApi(VERIFY_ENDPOINT, Object.assign({}, req, { facts: f.facts }), 60000); } catch (e) { log("verify failed: " + e.message); }
+    var problems = f.hard.slice();
+    if (ai) (ai.problems || []).forEach(function (t) { if (problems.indexOf(t) === -1) problems.push(t); });
+    var verdict = problems.length || (ai && ai.ok === false) ? "ng" : (f.wait ? "wait" : "ok");
+    var lines = f.facts.slice();
+    if (ai) {
+      (ai.problems || []).forEach(function (t) { lines.push("⚠️ " + t); });
+      (ai.notes || []).forEach(function (t) { lines.push("💬 " + t); });
+    } else lines.push("（Claude の確認はできませんでした。本物の確認だけです）");
+    return { verdict: verdict, lines: lines, fix: (ai && ai.fix) || (f.hard[0] || "") };
   }
   // 下書き：req = { kind, sender, instruction, text } か { kind, sender, revise: { draft, request }, text }
   async function composeDraft(req) {
@@ -1091,7 +1178,7 @@
     }
     return putFile(CUSTOMER_OUTBOX, "reply-" + stamp + "-app-L" + (mail.taskNo || "") + ".json", JSON.stringify(job), "application/json");
   }
-  window.__act = { order: shopifyOrder, orderCached: function (n) { return orderCache[n] || null; }, cancel: shopifyCancel, draft: composeDraft, send: sendMail, cancelSteps: function () { return STEPS.liloCancel.slice(); }, isCancelRequest: function (t) { return isCancelRequest(t, ""); },
+  window.__act = { order: shopifyOrder, orderCached: function (n) { return orderCache[n] || null; }, cancel: shopifyCancel, finalCheck: finalCheck, draft: composeDraft, send: sendMail, cancelSteps: function () { return STEPS.liloCancel.slice(); }, isCancelRequest: function (t) { return isCancelRequest(t, ""); },
     me: function () { return (account && account.username) || ""; },
     // 仕事の流れ（index.html の FLOWS）が、前の作りの手順を見分けるのに使う
     steps: function () { return STEPS; },
@@ -2481,6 +2568,9 @@
     setInterval(loadManuals, 10 * 60 * 1000);
     await drainQueue();
     setInterval(drainQueue, QUEUE_DRAIN_MS);
+    // 最終チェック：終わった仕事でまだ確かめていないもの・待ちのものを、5分ごとに確かめる（index.html の finalCheckSweep）
+    setTimeout(function () { if (window.__app && window.__app.finalCheckSweep) window.__app.finalCheckSweep(); }, 60 * 1000);
+    setInterval(function () { if (window.__app && window.__app.finalCheckSweep) window.__app.finalCheckSweep(); }, 5 * 60 * 1000);
   }
 
   // ---- 新しい版に自動で切り替える（2026-10-19）----

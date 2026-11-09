@@ -1463,6 +1463,12 @@
   .f-wait { font-size: 14px; background: var(--warn-soft); border-radius: 8px; padding: 8px 10px; }
   .f-next { font-size: 13px; color: var(--text-muted); border-top: 1px dashed var(--border); padding-top: 8px; }
   .f-finished { border-color: var(--ok); }
+  .f-check { border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; background: var(--neutral-soft); }
+  .f-check[data-tone="ok"] { background: var(--ok-soft); }
+  .f-check[data-tone="warn"] { background: var(--warn-soft); border: 2px solid var(--warn); }
+  .f-check small { color: var(--text-muted); font-size: 12.5px; }
+  .f-check ul { margin: 0; padding-left: 4px; list-style: none; display: flex; flex-direction: column; gap: 3px; line-height: 1.55; overflow-wrap: anywhere; }
+  .f-check-fix { font-weight: 700; }
   .s-act-btn { padding: 8px 14px; font-size: 14px; }
   .s-act-btn:disabled { opacity: .5; cursor: not-allowed; }
   .s-act-note { font-size: 12.5px; color: var(--text-muted); flex-basis: 100%; }
@@ -4510,6 +4516,7 @@
     }
     if (status !== '完了') html += '<button type="button" class="s-add" data-s-addstep="' + key + '">＋ 手順を足す</button>';
     }
+    html += finalCheckHtml(card, key, status);
     var recur = recurOf(card);
     var handover = roleVal(card, 'handover');
     if (handover) html += '<div class="s-handover"><b>申し送り</b>' + linkify(handover) + '<small>' + esc(roleVal(card, 'handoverBy')) + '</small></div>';
@@ -4534,6 +4541,124 @@
     }
     return html;
   }
+
+  // ======== 最終チェック（2026-11-09 代表の指定）========
+  // 仕事が終わったら、Claude が本当に終わっているかを確かめる（ORDER4634：アプリでは「キャンセルした」なのに Shopify ではキャンセルされていなかった）。
+  // 本物の確認（Shopify・共有エクセル・メールの送信）は sync.js の finalCheck、読んで判断するのは Azure の verify。
+  // 結果は履歴「🔍 最終チェック：問題なし／直すことあり／待ち」に残す。直すことがあれば仕事を「進行中」に戻し、直したらもう一度チェックする。
+  // 終わったときに自動で動き、5分ごとに sync.js が finalCheckSweep を呼んで、まだのもの・待ちのものを確かめる
+  var FINAL_CHECK = '🔍 最終チェック';
+  var CHECK_LABEL = { ok: '問題なし', ng: '直すことあり', wait: '待ち' };
+  var CHECK_SKIP = /仕事にしない|迷惑メール|確認をやめた|片付け|振り分け/;   // 中身のない片付けは確かめない
+  var checkingNow = {};   // 仕事の番号 → 確かめている最中（Promise）
+  function historyEntries(card) {
+    var now = new Date();
+    function part(e, sel) { var x = e.querySelector(sel); return x ? (x.textContent || '').trim() : ''; }
+    return Array.prototype.map.call(card.querySelectorAll('[data-history] .history-entry'), function (e) {
+      var t = part(e, '.history-time');
+      var m = /^(\d{1,2})\/(\d{1,2})\s+(\d{1,2}):(\d{2})/.exec(t);
+      var at = m ? new Date(now.getFullYear(), +m[1] - 1, +m[2], +m[3], +m[4]) : null;
+      if (at && at - now > 86400000) at.setFullYear(at.getFullYear() - 1);
+      return { at: at, time: t, action: part(e, '.history-action'), status: part(e, '.history-status'), memo: part(e, '.history-memo') };
+    });
+  }
+  function isCheckEntry(h) { return h.action.indexOf(FINAL_CHECK) === 0; }
+  function lastCheckOf(card) {
+    var h = historyEntries(card).filter(isCheckEntry)[0];
+    if (!h) return null;
+    var verdict = /直すことあり/.test(h.action) ? 'ng' : (/待ち/.test(h.action) ? 'wait' : 'ok');
+    return { verdict: verdict, at: h.at, time: h.time, action: h.action, lines: h.memo ? h.memo.split('\n').filter(Boolean) : [] };
+  }
+  function doneAtOf(card) {
+    var h = historyEntries(card).filter(function (x) { return x.status === '完了' && !isCheckEntry(x); })[0];
+    return h && h.at;
+  }
+  function checkable(card) {
+    if (recurOf(card)) return false;
+    var c = parseTaskContent(card);
+    if (!c.flow && !c.steps.length) return false;
+    return !historyEntries(card).some(function (h) { return CHECK_SKIP.test(h.action); });
+  }
+  function runFinalCheck(card) {
+    if (!card || !window.__act || !window.__act.finalCheck) return Promise.resolve();
+    var no = card.getAttribute('data-item-id') || '';
+    if (checkingNow[no]) return checkingNow[no];
+    var c = parseTaskContent(card);
+    var hist = historyEntries(card);
+    var cancel = hist.filter(function (h) { return /Shopify で注文をキャンセルした/.test(h.action); })[0];
+    var req = {
+      taskNo: no, orderNo: orderNoOf(card, c) || '', cancelRecorded: !!cancel, cancelAt: cancel && cancel.at ? cancel.at.getTime() : 0,
+      title: c.title, business: businessOf(card), category: roleVal(card, 'category'), flow: c.flow && FLOWS[c.flow] ? FLOWS[c.flow].label : '',
+      content: textOf(card.querySelector('[data-role="content"]')),
+      history: hist.filter(function (h) { return !isCheckEntry(h); }).slice(0, 40).map(function (h) { return h.time + ' ' + h.action + ' → ' + h.status + (h.memo ? '：' + h.memo : ''); })
+    };
+    var before = lastCheckOf(card);
+    var p = window.__act.finalCheck(req).then(function (r) {
+      delete checkingNow[no];
+      // 確かめているあいだに読み直しでカードが作り直されることがあるので、番号で探し直す
+      if (!document.body.contains(card)) card = liveCards('task').filter(function (x) { return x.getAttribute('data-item-id') === no; })[0];
+      if (!card) return;
+      var lines = r.lines.slice();
+      if (r.verdict === 'ng' && r.fix) lines.unshift('👉 ' + r.fix);
+      var st = statusOf(card);
+      // 直すことがあれば「進行中」に戻す。直したあとのチェックで問題がなければ、完了に戻す
+      if (r.verdict === 'ng' && st === '完了') setTaskStatus(card, '進行中');
+      if (r.verdict === 'ok' && st !== '完了' && before && before.verdict === 'ng') setTaskStatus(card, '完了');
+      addHistoryEntry(card, 'task', FINAL_CHECK + '：' + CHECK_LABEL[r.verdict], statusOf(card), null, lines.join('\n'));
+      // 履歴を足しただけでは保存されない（状態が変わらないとき）。保存を頼む（setTaskStatus と同じ合図）
+      var stEl = card.querySelector('[data-role="status"]');
+      if (stEl) stEl.dispatchEvent(userEvent('change'));
+      applyAll();
+    }, function (e) { delete checkingNow[no]; renderSimpleTasks(); console.warn('final check failed', e); });
+    checkingNow[no] = p;
+    renderSimpleTasks();
+    return p;
+  }
+  // 終わったとき（手順が全部済んだ・「終わった」を押した）。保存が先に走るよう少し待つ
+  function finalCheckSoon(card) { setTimeout(function () { if (statusOf(card) === '完了' && checkable(card)) runFinalCheck(card); }, 1500); }
+  // 5分ごと：3日以内に終わった仕事で、終わったあとにまだ確かめていないもの・待ちのもの。
+  // 二重にならないよう、担当の人の画面で確かめる（担当の画面が開いていなければ、30分たったらほかの人の画面で）
+  function finalCheckSweep() {
+    var now = Date.now();
+    liveCards('task').forEach(function (card) {
+      var no = card.getAttribute('data-item-id') || '';
+      if (checkingNow[no] || statusOf(card) !== '完了' || !checkable(card)) return;
+      var doneAt = doneAtOf(card);
+      if (!doneAt || now - doneAt > 3 * 86400000) return;
+      var lc = lastCheckOf(card);
+      var need = !lc || (lc.at && lc.at < doneAt) || (lc.verdict === 'wait' && lc.at && now - lc.at > 10 * 60000);
+      if (!need) return;
+      if (ownerOf(card) !== currentUser && now - doneAt < 30 * 60000) return;
+      runFinalCheck(card);
+    });
+  }
+  function finalCheckHtml(card, key, status) {
+    var no = card.getAttribute('data-item-id') || '';
+    if (checkingNow[no]) return '<div class="f-check"><b>🔍 最終チェックをしています…</b><small>Shopify・共有エクセル・メールを確かめて、Claude が読んでいます</small></div>';
+    var lc = lastCheckOf(card);
+    if (status !== '完了' && !(lc && lc.verdict === 'ng')) return '';
+    if (!checkable(card) && !lc) return '';
+    if (!lc) return '<div class="f-check"><b>🔍 最終チェックはまだです</b><div class="s-actions"><button type="button" class="s-btn" data-f-check="' + key + '">🔍 最終チェックする</button></div></div>';
+    var head = { ok: '✅ 最終チェック：問題なし', ng: '⚠️ 最終チェック：直すことがあります', wait: '⏳ 最終チェック：処理を待っています（しばらくして、もう一度確かめます）' }[lc.verdict];
+    var tone = { ok: 'ok', ng: 'warn', wait: 'neutral' }[lc.verdict];
+    var fixing = lc.verdict === 'ng' && status !== '完了';
+    return '<div class="f-check" data-tone="' + tone + '"><b>' + head + '</b><small>' + esc(lc.time) + ' に確かめました</small>' +
+      (lc.lines.length ? '<ul>' + lc.lines.map(function (l) { return '<li' + (/^👉/.test(l) ? ' class="f-check-fix"' : '') + '>' + esc(l) + '</li>'; }).join('') + '</ul>' : '') +
+      '<div class="s-actions">' + (fixing
+        ? '<button type="button" class="s-btn s-primary" data-f-check="' + key + '">🔍 直したので、もう一度チェック</button><button type="button" class="s-btn" data-f-check-ok="' + key + '">これでよい（完了にする）</button>'
+        : '<button type="button" class="s-btn s-mini" data-f-check="' + key + '">🔍 もう一度チェックする</button>') + '</div></div>';
+  }
+  document.body.addEventListener('click', function (e) {
+    var t = e.target.closest && e.target.closest('[data-f-check],[data-f-check-ok]');
+    if (!t || t.disabled) return;
+    var card = jumpRegistry[t.getAttribute('data-f-check') || t.getAttribute('data-f-check-ok')];
+    if (!card) return;
+    if (t.hasAttribute('data-f-check')) { runFinalCheck(card); return; }
+    if (!window.confirm('最終チェックで見つかったことは、直さなくてよいですか？\n（この仕事を完了にします）')) return;
+    addHistoryEntry(card, 'task', FINAL_CHECK + '：問題なしとした', '完了', null, (currentUser ? currentUser + 'さんが' : '') + '「これでよい」を押した');
+    setTaskStatus(card, '完了');
+    applyAll();
+  });
 
   // ======== 仕事の流れ（2026-11-08 代表「一から見直して、ものすごく分かりやすく。簡単な仕事はこの中で完結。ボタンと動きを連動」）========
   // 仕事を開くと「いまやること」が1つだけ大きく出る。ボタンを押すと本当に動く（メールを送る・Shopify でキャンセル・代表に質問・外のサイトを開く）。
@@ -4842,6 +4967,7 @@
       setTaskStatus(card, '完了');
       addHistoryEntry(card, 'task', '完了にする', '完了', null, 'ぜんぶ済んだので完了にした');
       if (window.__manualOps && window.__manualOps.onComplete) window.__manualOps.onComplete(card);
+      finalCheckSoon(card);
     }
     closeSimplePanel(card);
     applyAll();
@@ -4877,7 +5003,8 @@
     if (dones.length) html += '<div class="f-done"><b>✔ やったこと</b><ul>' + dones.map(function (e) {
       return '<li>' + esc(e.d ? e.d.title : e.s.text) + (e.s.memo ? '<small>' + esc(e.s.memo) + '</small>' : '') + '</li>';
     }).join('') + '</ul>' + (status !== '完了' || dones.length ? '<button type="button" class="s-btn s-mini" data-f-undo="' + key + '">↩ ひとつ戻す</button>' : '') + '</div>';
-    if (fs.allDone || status === '完了') return html + '<div class="f-now f-finished"><b>✅ この仕事は終わりました</b></div>';
+    // 最終チェックで直すことが見つかって「進行中」に戻ったあいだは、「終わりました」を出さない（下の最終チェックの箱で直す）
+    if (fs.allDone || status === '完了') return status === '完了' ? html + '<div class="f-now f-finished"><b>✅ この仕事は終わりました</b></div>' : html;
     var cur = fs.cur;
     if (!cur) return html;
     var d = cur.d, s = cur.s;
@@ -5059,7 +5186,7 @@
       finishFlowStep(card, line, ch.go, '選んだ：' + ch.label.replace(/^\S+\s/, ''), d.title);
     }
     else if (act === 'rep') openFlowAsk(card, key, line, '「' + d.title + '」が分からないので教えてください。\n\n' + x.title, false);
-    else if (act === 'skip') { if (window.confirm('「' + d.title + '」はしないことにしますか？')) { setStepMarks(card, [{ line: line, mark: STEP_UNNEEDED }]); addHistoryEntry(card, 'task', 'この手順はしない', statusOf(card), null, (currentUser ? currentUser + 'さん：' : '') + d.title); var fs2 = flowState(card, parseTaskContent(card)); if (fs2.allDone) { setTaskStatus(card, '完了'); addHistoryEntry(card, 'task', '完了にする', '完了', null, 'ぜんぶ済んだので完了にした'); } applyAll(); } }
+    else if (act === 'skip') { if (window.confirm('「' + d.title + '」はしないことにしますか？')) { setStepMarks(card, [{ line: line, mark: STEP_UNNEEDED }]); addHistoryEntry(card, 'task', 'この手順はしない', statusOf(card), null, (currentUser ? currentUser + 'さん：' : '') + d.title); var fs2 = flowState(card, parseTaskContent(card)); if (fs2.allDone) { setTaskStatus(card, '完了'); addHistoryEntry(card, 'task', '完了にする', '完了', null, 'ぜんぶ済んだので完了にした'); finalCheckSoon(card); } applyAll(); } }
   });
 
   // ---- 実行ボタンを押したとき（2026-11-08）----
@@ -5582,6 +5709,7 @@
       applyAll();
       // その種類のマニュアルが無ければ下書き、あれば直したほうがよい点を書き足す（裏で動く）
       if (window.__manualOps && window.__manualOps.onComplete) window.__manualOps.onComplete(card);
+      finalCheckSoon(card);
       // 終わったら最初の画面（今日）に戻る
       activateTab('today');
       window.scrollTo(0, 0);
@@ -5762,7 +5890,9 @@
     var rows = [];
     open.forEach(function (c) {
       var owner = ownerOf(c), status = statusOf(c) || '未着手', idle = daysSince(lastTouched(c));
-      if (isOverdue(c)) rows.push({ card: c, why: '期限切れ（' + roleVal(c, 'due').slice(5).replace('-', '/') + '）', tone: 'crit' });
+      var lc = lastCheckOf(c);
+      if (lc && lc.verdict === 'ng') rows.push({ card: c, why: '最終チェックで直すことが見つかった', tone: 'crit' });
+      else if (isOverdue(c)) rows.push({ card: c, why: '期限切れ（' + roleVal(c, 'due').slice(5).replace('-', '/') + '）', tone: 'crit' });
       else if (owner === UNASSIGNED && idle !== null && idle >= 2) rows.push({ card: c, why: idle + '日間だれも受け取っていない', tone: 'warn' });
       else if (owner !== UNASSIGNED && status === '進行中' && idle !== null && idle >= 3) rows.push({ card: c, why: owner + 'さん：' + idle + '日間動きがない', tone: 'warn' });
       else if (owner !== UNASSIGNED && status === '進行中' && !hasHandover(c)) rows.push({ card: c, why: owner + 'さん：申し送りがない', tone: 'neutral' });
@@ -7251,6 +7381,7 @@
     setRepSchedule: setRepSchedule,
     someoneWorksToday: someoneWorksToday,
     setTaskStatus: setTaskStatus,
+    finalCheckSweep: finalCheckSweep,
     spamReason: spamReason,
     chatSnapshot: chatSnapshot,
     staff: STAFF
