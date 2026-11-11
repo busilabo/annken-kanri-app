@@ -7005,7 +7005,7 @@
       addHistoryEntry(mvCard, mvCard.getAttribute('data-kind'), SPAM_MOVE, statusOf(mvCard), null, currentUser ? currentUser + 'さんが振り分けた' : '');
       setTaskStatus(mvCard, statusOf(mvCard));   // 状態は変えずに、履歴を保存する
       // 仕事を開いた画面から押したときは、閉じて今日の画面に戻る
-      if (moveBtn.closest('[data-simple-panel]')) { closeSimplePanel(mvCard); activateTab('today'); }
+      if (moveBtn.closest('[data-simple]')) { closeSimplePanel(mvCard); activateTab('today'); window.scrollTo(0, 0); }
       applyAll();
       return;
     }
