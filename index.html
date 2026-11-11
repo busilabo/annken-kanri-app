@@ -4426,6 +4426,8 @@
       var fm = /^【流れ】\s*([\w-]+)/.exec(line.trim());
       if (fm) { out.flow = FLOWS[fm[1]] ? fm[1] : ''; out.flowBy = (/（(.+)）\s*$/.exec(line.trim()) || [])[1] || ''; continue; }
       if (/^【手順】/.test(line.trim())) { inSteps = true; continue; }
+      // 問い合わせの控え（案件管理に入れるときに使う。sync.js INQ_HOLD）は画面に出さない
+      if (/^【問い合わせの控え】/.test(line.trim())) continue;
       var m = inSteps && STEP_LINE.exec(line.trim());
       // 「⚡[種類] 説明」の手順は実行ボタンにする（ACTIONS／流れの手順は FLOWS）。「｜メモ：…」はその手順で書いたこと
       var body = m ? m[3] : '', memo = '';
@@ -4479,6 +4481,13 @@
     var mkey = roleVal(card, 'teamsMessageId');
     var manuals = window.__manuals || [];
     var mm = /^manual:(\d+)/.exec(mkey);
+    // 問い合わせ：案件管理に入れるかは人が決める（2026-11-12 代表の指定）
+    var inqHold = /^inquiry:/.test(mkey) && window.__inquiryOps ? window.__inquiryOps.hold(card) : null;
+    if (inqHold) {
+      var inCase = inqHold.srcId && document.querySelector('.card[data-kind="inquiry"][data-src-id="' + inqHold.srcId + '"]');
+      html += '<div class="s-actions">' + (inCase ? '<span class="s-done-note">📁 案件管理に入っています</span>' :
+        '<button type="button" class="s-btn" data-s-promote="' + key + '" title="できるAIチーム＋の見込みのお客様なら、案件管理の問い合わせに入れます">📁 案件管理に入れる</button>') + '</div>';
+    }
     if (/^manual-review:/.test(mkey) && reviewRe) {
       // 1件ずつ：何のマニュアルを、どう直したか（一言）→ 全体は開いたときだけ → これでよい／いらない
       var items = c.desc.map(function (l) { return reviewRe.exec(l.trim()); }).filter(Boolean);
@@ -5657,6 +5666,15 @@
     // 受け取る人を選んだら、選ぶ欄を閉じる（受け取りの処理そのものは今日のボードと同じ assignCard）
     var picked = e.target.closest && e.target.closest('[data-simple-panel] [data-assign-key]');
     if (picked) { var pc = picked.closest('.card'); setTimeout(function () { closeSimplePanel(pc); }, 0); return; }
+    var pm = e.target.closest && e.target.closest('[data-s-promote]');
+    if (pm) {
+      var pmCard = jumpRegistry[pm.getAttribute('data-s-promote')];
+      pm.disabled = true; pm.textContent = '案件管理に入れています…';
+      if (pmCard) window.__inquiryOps.promote(pmCard).then(function () { applyAll(); }, function (err) {
+        pm.disabled = false; pm.textContent = '📁 案件管理に入れる（もう一度）'; alert('案件管理に入れられませんでした：' + (err.message || err));
+      });
+      return;
+    }
     var rv = e.target.closest && e.target.closest('[data-s-review-ok],[data-s-review-drop]');
     if (rv) {
       var rvCard = jumpRegistry[rv.getAttribute('data-s-review-card')];

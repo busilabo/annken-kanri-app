@@ -493,6 +493,7 @@
     }
     try { await ensureDailyTasks(); } catch (e) { log("daily task failed: " + e.message); }
     try { if (window.__manuals) await migrateManualReviews(); } catch (e) { log("manual review merge failed: " + e.message); }
+    try { await restoreDroppedInquiries(); } catch (e) { log("restore dropped inquiries failed: " + e.message); }
     try { await ensureRecurring(); } catch (e) { log("recurring task failed: " + e.message); }
     try { await drainInbox(); } catch (e) { log("inbox failed: " + e.message); }
   }
@@ -566,24 +567,56 @@
     if (data.type) { log("unknown queue type, skipped: " + data.type + " (" + file.name + ")"); return; }
     var srcId = data.srcId || "";
     var already = srcId && document.querySelector('.card[data-src-id="' + srcId + '"]');
-    // 案件管理は「できるAIチーム＋」のお客様になりうる問い合わせだけ（2026-10-19 代表の指定）
-    var route = already ? "skip" : await inquiryRoute(data);
-    if (route === "task") {
-      // Instagram・Facebook の DM は案件管理に入れず、仕事だけ作る
-      await createTaskOnce("inquiry:" + srcId, inquiryTaskFields(data), "メッセージが届いた", "");
-    } else if (route === "other") {
-      // 売り込み・営業などは、案件管理にも仕事にも入れない（やり取りの記録にだけ残す）
-      postActivity({
-        Title: "問い合わせ（案件管理の対象外）：" + (data.company || data.contactName || "名前なし"),
-        OccurredAt: data.receivedAt ? new Date(data.receivedAt).toISOString() : new Date().toISOString(),
-        Channel: "問い合わせ（対象外）", Business: "業務改善・DX支援", Direction: "受信",
-        Customer: data.company || "", CustomerId: "", Staff: "",
-        Subject: String(data.content || "").split("\n")[0].slice(0, 200),
-        Summary: (data._reason ? "対象外とした理由：" + data._reason + "\n\n" : "") + String(data.content || "").slice(0, 2000),
-        SourceLink: "", SourceId: "inquiry-other:" + srcId
-      });
+    // 問い合わせは、まず仕事管理にだけ入れる。案件管理に入れるかは人が決める（仕事の「📁 案件管理に入れる」ボタン）。
+    // 売り込み・営業は仕事の画面で迷惑メール振分け分に入る（2026-11-12 代表の指定。以前は Azure の仕分けで、
+    // 家電の卸の新規取引の相談まで「対象外」として落としていた）
+    if (!already) {
+      var made = await createTaskOnce("inquiry:" + srcId, inquiryTaskFields(data), "問い合わせが届いた", "");
+      if (made === null && !taskCards().some(function (c) { return taskKeyOf(c) === "inquiry:" + srcId; }) && !(await remoteTaskExists("inquiry:" + srcId))) return;   // 入れられなかったら次の取り込みでもう一度
     }
-    if (route === "case") {
+    await moveToProcessed(file, "queue");
+  }
+
+  // 「📁 案件管理に入れる」（仕事のかんたん表示のボタン）。仕事に残した問い合わせの控えから、案件管理の問い合わせを作る
+  var INQ_HOLD = "【問い合わせの控え】";
+  function inquiryHoldOf(card) {
+    var line = roleValS(card, "content").split("\n").filter(function (l) { return l.indexOf(INQ_HOLD) === 0; })[0];
+    if (!line) return null;
+    try { return JSON.parse(line.slice(INQ_HOLD.length)); } catch (e) { return null; }
+  }
+  async function promoteInquiry(card) {
+    var data = inquiryHoldOf(card);
+    if (!data) throw new Error("問い合わせの控えが見つかりません");
+    if (data.srcId && document.querySelector('.card[data-kind="inquiry"][data-src-id="' + data.srcId + '"]')) throw new Error("もう案件管理に入っています");
+    await createInquiryItem(data);
+    addNote(card, "案件管理に入れた", (data.company || data.contactName || "") + "を案件管理の問い合わせに入れました");
+  }
+  // 以前「対象外」として仕事にも入れなかった問い合わせ（やり取りログ Channel「問い合わせ（対象外）」）を、30日分さかのぼって仕事にする。
+  // 目印 inquiry:<SrcId> で二重にしない。売り込みは画面で迷惑メール振分け分に入る（2026-11-12 株式会社JOK の卸の相談が落ちていた）
+  var droppedRestored = false;
+  async function restoreDroppedInquiries() {
+    if (droppedRestored || !activityListId || !listIds.task) return;
+    droppedRestored = true;
+    var res = await graph("/sites/" + siteId + "/lists/" + activityListId + "/items?$expand=fields&$top=200&$filter=" + encodeURIComponent("fields/Channel eq '問い合わせ（対象外）'"), {
+      headers: { "Prefer": "HonorNonIndexedQueriesWarningMayFailRandomly" }
+    });
+    var since = Date.now() - 30 * 86400000;
+    var items = (res.value || []).filter(function (it) { var t = new Date((it.fields || {}).OccurredAt || it.createdDateTime).getTime(); return t >= since; });
+    for (var i = 0; i < items.length; i++) {
+      var f = items[i].fields || {};
+      var srcId = String(f.SourceId || "").replace(/^inquiry-other:/, "");
+      if (!srcId) continue;
+      var content = String(f.Summary || "").replace(/^対象外とした理由：[^\n]*\n+/, "");
+      var who = f.Customer || String(f.Title || "").replace(/^問い合わせ（案件管理の対象外）：/, "");
+      var at = String(f.OccurredAt || "").slice(0, 10);
+      await createTaskOnce("inquiry:" + srcId, inquiryTaskFields({ srcId: srcId, company: who === "名前なし" ? "" : who, content: content, receivedAt: at }),
+        "問い合わせが届いた", "以前は「対象外」として仕事にしていなかった分（" + at + " 受付）");
+    }
+  }
+
+  async function createInquiryItem(data) {
+    var srcId = data.srcId || "";
+    {
       var fields = {
         Title: data.company || "無題",
         SrcId: srcId,
@@ -602,21 +635,16 @@
         History: "[]",
         Deleted: false
       };
-      if (data.receivedAt) fields.ReceivedAt = data.receivedAt + "T00:00:00.000Z";
-      var created;
-      try {
-        created = await graph("/sites/" + siteId + "/lists/" + listIds.inquiry + "/items", { method: "POST", body: { fields: fields } });
-      } catch (e) { log("queue create failed (" + file.name + "): " + e.message); return; }
+      if (data.receivedAt) fields.ReceivedAt = String(data.receivedAt).slice(0, 10) + "T00:00:00.000Z";
+      var created = await graph("/sites/" + siteId + "/lists/" + listIds.inquiry + "/items", { method: "POST", body: { fields: fields } });
       applying = true;
       var card = buildCardFromItem("inquiry", { id: created.id, fields: fields });
       var list = document.querySelector('[data-list="inquiry"]');
       if (card && list) list.appendChild(card);
       applying = false;
       window.__app.applyAll();
-      // 問い合わせが来たら、スタッフが内容を確かめて代表に報告する仕事も入れる
-      await createTaskOnce("inquiry:" + srcId, inquiryTaskFields(data), "問い合わせが届いた", "");
+      return card;
     }
-    await moveToProcessed(file, "queue");
   }
 
   // ---- Teams からの依頼（「ビジラボ」チームの「一般」チャネル）----
@@ -815,7 +843,8 @@
       "返信したら「完了」にする"
     ],
     inquiry: [
-      "案件管理の「問い合わせ」で内容を確認する",
+      "上の内容を確認する（営業・売り込みなら、カードの「📭 迷惑メールへ」で振り分ける）",
+      "できるAIチーム＋の見込みのお客様なら、代表と相談のうえ「📁 案件管理に入れる」を押す（家電の卸・LILOCLE の相談は入れなくてよい）",
       "Teams の「一般」チャネルに、会社名と内容の要点を投稿して代表に報告する",
       "代表の返事を待つ（待っている間は、申し送りに「代表の回答待ち」と書く）",
       "代表が決めた内容で、staff@busilabo.com からお客様に返信する",
@@ -835,26 +864,9 @@
     ]
   };
 
-  // 問い合わせの行き先：case＝案件管理（＋確認の仕事）／task＝仕事だけ（SNS の DM）／other＝どちらにも入れない
-  var CLASSIFY_ENDPOINT = "https://busilabo-work-chat.azurewebsites.net/api/classify";
-  // 協業・提携の誘い。Azure の仕分けは「迷ったら案件管理」なので、相手が自分の事業を持ちかけてくるものはここで外す
-  // （2026-11-06 代表の指定。AI 会社からの「地域連携の可能性を相談したい」が案件管理と仕事に入った）。index.html の SPAM_STRONG にも同じ言葉がある
-  var PARTNER_PITCH = /連携の可能性|協業|業務提携|資本提携|代理店|パートナーシップ|共同事業/;
-  async function inquiryRoute(data) {
-    var memo = String(data.memo || "");
-    if (/Instagram|Facebook|Messenger|Meta/i.test(memo)) return "task";
-    if (data.source === "資料DL") return "case";   // できるAIチーム＋の資料請求
-    if (PARTNER_PITCH.test(String(data.content || ""))) { data._reason = "協業・提携のお誘い"; return "other"; }
-    try {
-      var token = await getToken();
-      var res = await fetch(CLASSIFY_ENDPOINT, { method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
-        body: JSON.stringify({ company: data.company || "", contactName: data.contactName || "", memo: memo, content: data.content || "" }) });
-      if (!res.ok) return "case";   // 仕分けできないときは取りこぼさないよう案件管理へ
-      var j = await res.json();
-      if (j.target === false) { data._reason = j.reason || ""; return "other"; }
-      return "case";
-    } catch (e) { log("classify failed: " + e.message); return "case"; }
-  }
+  // 問い合わせの行き先は、以前は Azure の仕分け（classify）で案件管理・仕事だけ・対象外に分けていたが、
+  // 2026-11-12 からは全部まず仕事管理に入れ、案件管理に入れるかは人が決める（drainOne・promoteInquiry）。
+  // 売り込み・協業の誘いは、仕事の画面の迷惑メール振分け（index.html の SPAM_STRONG）で分ける
 
   // 問い合わせから入れる仕事。Instagram・Facebook の DM（問い合わせチェックのルーティンが Meta の通知メールから拾ったもの。
   // memo が「[自動反映: Instagram DM…]」「[自動反映: Facebook Messenger…]」）は、事業に合わせた手順にする（代表の指定 2026-10-15）
@@ -875,14 +887,27 @@
         Content: title + "\n" + String(data.content || "").slice(0, 300) + stepsText(lilo ? STEPS.snsLilo : STEPS.snsDx)
       };
     }
+    // 案件管理には入れていないので、問い合わせの中身は仕事に全部書く。事業は言葉から決める（家電の卸の取引の相談も来る 2026-11-12）
+    var all = [data.company, data.content, data.memo].join(" ");
+    var biz = /日立|パナソニック|家電|卸|JAN|型番|仕入/.test(all) ? "家電の卸販売" : /lilocle|リロクル/i.test(all) ? "LILOCLE運営" : "業務改善・DX支援";
+    var info = [
+      data.company ? "会社：" + data.company : "",
+      data.contactName ? "お名前：" + data.contactName : "",
+      data.contact ? "メール：" + data.contact : "",
+      data.companyPhone ? "電話：" + data.companyPhone : "",
+      data.website ? "ホームページ：" + data.website : ""
+    ].filter(Boolean).join("\n");
+    var hold = JSON.stringify({ srcId: data.srcId || "", source: data.source || "", company: data.company || "", contactName: data.contactName || "", contact: data.contact || "",
+      address: data.address || "", companyPhone: data.companyPhone || "", website: data.website || "", content: String(data.content || "").slice(0, 3000),
+      industry: data.industry || "", companyResearch: String(data.companyResearch || "").slice(0, 1500), memo: data.memo || "", receivedAt: data.receivedAt || "" });
     return {
       Title: "問い合わせの確認と報告：" + who,
       Priority: "高",
-      Business: "業務改善・DX支援",
+      Business: biz,
       Category: "問い合わせ・営業",
       Related: data.company || "",
       Requester: data.source === "資料DL" ? "資料ダウンロード" : "お問い合わせフォーム",
-      Content: "問い合わせの確認と報告：" + who + "\n" + String(data.content || "").slice(0, 300) + stepsText(STEPS.inquiry)
+      Content: "問い合わせの確認と報告：" + who + "\n" + (info ? info + "\n" : "") + String(data.content || "").slice(0, 1500) + stepsText(STEPS.inquiry) + "\n" + INQ_HOLD + hold
     };
   }
 
@@ -2806,6 +2831,7 @@
   };
   // onComplete は「✅ 終わった」とチャットの「完了にする」から呼ぶ
   window.__manualOps = { save: saveManual, manualFor: manualFor, onComplete: manualOnComplete, review: reviewManual, reviewLine: REVIEW_LINE };
+  window.__inquiryOps = { hold: inquiryHoldOf, promote: promoteInquiry, HOLD: INQ_HOLD };
 
   async function boot() {
     await msalApp.initialize();
