@@ -4485,8 +4485,11 @@
     var inqHold = /^inquiry:/.test(mkey) && window.__inquiryOps ? window.__inquiryOps.hold(card) : null;
     if (inqHold) {
       var inCase = inqHold.srcId && document.querySelector('.card[data-kind="inquiry"][data-src-id="' + inqHold.srcId + '"]');
+      // 横に「📭 迷惑メールへ」「✅ 完了にする」も並べる（2026-11-12 代表の指定。どれにするかをここで決められるように）
       html += '<div class="s-actions">' + (inCase ? '<span class="s-done-note">📁 案件管理に入っています</span>' :
-        '<button type="button" class="s-btn" data-s-promote="' + key + '" title="できるAIチーム＋の見込みのお客様なら、案件管理の問い合わせに入れます">📁 案件管理に入れる</button>') + '</div>';
+        '<button type="button" class="s-btn" data-s-promote="' + key + '" title="できるAIチーム＋の見込みのお客様なら、案件管理の問い合わせに入れます">📁 案件管理に入れる</button>') +
+        (status !== '完了' && spamMovable(card) && !spamExempt(card) ? '<button type="button" class="s-btn" data-spam-move="' + key + '" title="営業・迷惑メールなら、迷惑メール振分け分に移します">📭 迷惑メールへ</button>' : '') +
+        (status !== '完了' ? '<button type="button" class="s-btn" data-s-done="' + key + '">✅ 完了にする</button>' : '') + '</div>';
     }
     if (/^manual-review:/.test(mkey) && reviewRe) {
       // 1件ずつ：何のマニュアルを、どう直したか（一言）→ 全体は開いたときだけ → これでよい／いらない
@@ -7001,6 +7004,8 @@
       if (!mvCard) return;
       addHistoryEntry(mvCard, mvCard.getAttribute('data-kind'), SPAM_MOVE, statusOf(mvCard), null, currentUser ? currentUser + 'さんが振り分けた' : '');
       setTaskStatus(mvCard, statusOf(mvCard));   // 状態は変えずに、履歴を保存する
+      // 仕事を開いた画面から押したときは、閉じて今日の画面に戻る
+      if (moveBtn.closest('[data-simple-panel]')) { closeSimplePanel(mvCard); activateTab('today'); }
       applyAll();
       return;
     }
