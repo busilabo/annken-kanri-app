@@ -548,7 +548,8 @@
   }
 
   async function drainOne(file) {
-    var data;
+    var data = sentWaiting[file.id];
+    if (data) { await drainMailSent(file, data); return; }
     try {
       data = await graph("/drives/" + QUEUE_DRIVE_ID + "/items/" + file.id + "/content");
     } catch (e) { log("queue read failed (" + file.name + "): " + e.message); return; }
@@ -1510,6 +1511,9 @@
   // 返信のあとにも手順が続く種類（発注・納期／不良対応／メーカー対応）と、セラーセントラルから返す Amazon は、履歴に残すだけ（2026-11-06）
   // mailSent: { mailbox, to: "a@x.jp;b@y.jp", subject, sentAt, link }
   var SENT_DONE_CATEGORIES = ["お客様対応", "代表の確認", "問い合わせ・営業"];
+  var SENT_WAIT_MS = 24 * 60 * 60 * 1000;
+  // 待っている返信の中身（15秒ごとに読み直さないよう、この画面で一度読んだものを覚えておく）
+  var sentWaiting = {};
 
   // 履歴の「M/DD HH:MM」を日付にする（年は書いていないので、今より先なら去年とみなす）
   function historyTime(text) {
@@ -1547,6 +1551,10 @@
       keys.push("mail:taikai:" + a);         // 退会希望も、お客様のメールごとの仕事
     });
     var cards = taskCards().filter(function (c) { return isOpenTask(c) && keys.indexOf(taskKeyOf(c)) !== -1; });
+    // 結び付く仕事がまだ無いときは、24時間は取り込み口に残して待つ。相手のメールが仕事になるのが返信より遅れることがある
+    // （2026-11-11：綿半様の見積依頼。12:11 に返信、仕事ができたのは 13:09 で、返信が先に処理済みになっていた）
+    if (!cards.length && Date.now() - sentAt.getTime() < SENT_WAIT_MS) { sentWaiting[file.id] = data; return; }
+    delete sentWaiting[file.id];
     cards.forEach(function (c) {
       // 仕事ができる前の返信（同じ件名の前のやり取り）は数えない。取り込みが遅れることがあるので1日の余裕を見る。
       // 一度だけのフローが送信済みアイテムを50件さかのぼって置くため（2026-11-06）
