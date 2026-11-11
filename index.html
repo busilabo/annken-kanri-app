@@ -6335,9 +6335,11 @@
     "virtuousepics",   // 飾り文字のメールを番号を変えて何度も送ってくる gmail（virtuousepics011・063… 2026-11-06）
     // LILOCLE（contact@）に届く出店・広告・売り込み（2026-11-06 代表の指定「このような営業メール全て」）
     // chocoreko.com は外した（LILOCLE から送ったメールへのお返事で、やり取りのある相手だった 2026-11-06）
-    "shop.tiktok.com", "arcwld.com", "bizmiseru.jp", "plus-shipping.net", "hiyaku-inc.com", "risingsun-assist.com"];
+    "shop.tiktok.com", "arcwld.com", "bizmiseru.jp", "plus-shipping.net", "hiyaku-inc.com", "risingsun-assist.com",
+    "knowlinear.com"];   // TikTok 広告代行の英語メール（2026-11-11）
   // 迷惑メールによく使われる海外のドメイン。お客様・取引先は使わない（2026-11-06）
-  var SPAM_FOREIGN_DOMAIN = /\.(cn|ru|top|xyz|icu|buzz|cfd|sbs)$/i;   // Shopify アプリ BON Loyalty のお知らせ（2026-11-06 代表の指定）
+  var SPAM_FOREIGN_DOMAIN = /\.(cn|ru|top|xyz|icu|buzz|cfd|sbs)$/i;
+  var SPAM_EN_PITCH = /\b(ads|advertising|marketing|seo|leads|traffic|roi|influencers?|ugc|agency|campaigns?)\b/i;   // Shopify アプリ BON Loyalty のお知らせ（2026-11-06 代表の指定）
   var SPAM_SENDER_REASON = "営業メールの相手";
   var SPAM_FANCY_LETTERS = /\uD835[\uDC00-\uDFFF]/;   // U+1D400〜1D7FF（𝐀 𝚊 𝙸 など）
   var SPAM_TINY_LETTERS = /[ᴬ-ᵪᶛ-ᶿʰ-ʸˠ-ˤ⁰-ₜ]/g;   // 上付き・下付きの英字（ᵃ ʷ ˡ ⁿ など 2026-11-06）
@@ -6363,6 +6365,10 @@
     var sender = SPAM_SENDERS.filter(function (w) { w = w.toLowerCase(); return from.indexOf(w) !== -1 || t.indexOf(w) !== -1; });
     if (sender.length) return SPAM_SENDER_REASON + "（" + sender[0] + "）";
     if (SPAM_FOREIGN_DOMAIN.test(from.split("@").pop())) return "「海外の迷惑メールのドメイン」";
+    // 日本語がひとつもない、広告・マーケティングの英語のメールは売り込み（2026-11-11 TikTok 広告代行の英語メール）。
+    // 頭の「LILOCLEお客様：」などアプリが付けた見出しは除いて見る
+    var raw = String(text || "").replace(/^[^\n：]{0,30}：/, "");
+    if (!/[぀-ヿ一-鿿]/.test(raw) && SPAM_EN_PITCH.test(raw)) return "「英語の売り込み」";
     // 𝚊𝚖 𝙸 のような飾り文字（数学用の英字）で書いたメールは、迷惑メールの書き方（2026-11-06 代表の指定。お客様は使わない）
     // ᶜᵃⁿ ʷᵉ のような小さい上付きの英字も同じ（記号の ˆ ˜ などがたまに入るので、3文字以上のときだけ）
     if (SPAM_FANCY_LETTERS.test(String(text || "")) || (String(text || "").match(SPAM_TINY_LETTERS) || []).length >= 3) return "「飾り文字の英語」";
