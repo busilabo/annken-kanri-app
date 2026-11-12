@@ -1015,6 +1015,24 @@
     if (m) { var d = new Date(new Date().getFullYear(), +m[1] - 1, +m[2]); if (d > new Date()) d.setFullYear(d.getFullYear() - 1); return d; }
     return null;
   }
+  // ---- Amazon の様子（LILOCLE の様子の下。2026-11-12 代表の指定）----
+  // 毎朝7時の「毎朝Amazonチェック」（定時実行。手順5b）が SharePoint「案件管理キュー/status」に amazon-status-yyyyMMdd.json を置く。
+  // いちばん新しいものを読んで画面へ渡す（売れた台数・在庫・健全性・返品）。お問い合わせの件数は画面が仕事から数える
+  var STATUS_FOLDER = "01JXBRTLXQZF2225NG5RBLOHUYMUJJDJBU";
+  async function loadAmazonStatus() {
+    if (!window.__app || !window.__app.setAmzStatus) return;
+    try {
+      var list = await graph("/drives/" + LILO_DRIVE + "/items/" + STATUS_FOLDER + "/children?$select=id,name&$top=200");
+      var f = (list.value || []).filter(function (x) { return /^amazon-status-\d{8}\.json$/.test(x.name); }).sort(function (a, b) { return a.name < b.name ? 1 : -1; })[0];
+      if (!f) { window.__app.setAmzStatus({ loaded: false, error: "まだ数字が届いていません（毎朝7時の Amazon チェックが置きます）" }); return; }
+      var data = await graph("/drives/" + LILO_DRIVE + "/items/" + f.id + "/content");
+      window.__app.setAmzStatus({ loaded: true, data: data });
+    } catch (e) {
+      log("amazon status failed: " + e.message);
+      window.__app.setAmzStatus({ loaded: false, error: "読めませんでした（" + e.message.slice(0, 60) + "）" });
+    }
+  }
+
   async function loadLiloStatus() {
     if (liloBusy || !window.__app || !window.__app.setLiloStatus) return;
     liloBusy = true;
@@ -2702,6 +2720,8 @@
     loadLiloStatus();
     setInterval(loadLiloStatus, LILO_REFRESH_MS);
     window.__lilo = { refresh: loadLiloStatus };
+    loadAmazonStatus();
+    setInterval(loadAmazonStatus, LILO_REFRESH_MS);
     await drainQueue();
     setInterval(drainQueue, QUEUE_DRAIN_MS);
     // 最終チェック：終わった仕事でまだ確かめていないもの・待ちのものを、5分ごとに確かめる（index.html の finalCheckSweep）

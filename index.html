@@ -1666,6 +1666,8 @@
   <section class="panel" data-panel="today">
     <!-- LILOCLE の様子（信号と一言。開くたびに最新。sync.js loadLiloStatus）。代表の予定の上に大きく（2026-11-12 代表の指定） -->
     <div class="lilo-status" data-lilo-status></div>
+    <!-- Amazon の様子（毎朝7時の Amazon チェックの数字＋お問い合わせは開くたびに数える。sync.js loadAmazonStatus） -->
+    <div class="lilo-status" data-amz-status></div>
     <!-- 代表の予定。今日の報告はページのいちばん下（2026-10-18 代表の指定） -->
     <div class="top-info">
       <section class="info-block" aria-label="代表の予定">
@@ -6105,6 +6107,62 @@
       (list.length ? '<ul class="lilo-issues">' + list.map(function (i) { return '<li>' + LILO_LIGHT[i.tone] + ' ' + (i.order ? '<b>' + esc(i.order) + '</b> ' : '') + (i.maker ? '<span class="lilo-maker">' + esc(i.maker) + '</span> ' : '') + '<span class="lilo-cat">［' + esc(CAT[i.cat] || '') + '］</span> ' + esc(i.text) + '</li>'; }).join('') + '</ul>' : '') +
       '<div class="lilo-foot">' + refresh + '<span>まだ終わっていない注文 ' + s.total + ' 件を見ています（Shopify と作り手さんのエクセル）</span></div></div></details>';
   }
+  // ---- Amazon の様子（2026-11-12 代表の指定：LILOCLE の様子の下に、昨日・今月売れた台数、お問い合わせ、在庫、健全性・返品）----
+  var amzState = { loading: true };
+  function setAmzStatus(state) { amzState = state || {}; renderAmzStatus(); }
+  // 返事をしていない Amazon の購入者メッセージ（仕事）。24時間以内に返信が要るので、20時間を過ぎたら赤
+  function amzInquiries() {
+    return liveCards('task').filter(function (c) {
+      return !isDone(c) && businessOf(c) === 'Amazon販売' && /^mail:marketplace\.amazon/.test(roleVal(c, 'teamsMessageId'));
+    }).map(function (c) {
+      var d = addedOn(c), created = new Date(c.getAttribute('data-created') || '');
+      var hours = !isNaN(created.getTime()) ? (Date.now() - created.getTime()) / 3600000 : (d ? (Date.now() - d.getTime()) / 3600000 : 0);
+      return { title: cardTitle(c).replace(/^Amazon購入者：/, ''), hours: hours };
+    });
+  }
+  function renderAmzStatus() {
+    var box = document.querySelector('[data-amz-status]');
+    if (!box) return;
+    var inq = amzInquiries();
+    var inqTone = !inq.length ? 'ok' : inq.some(function (q) { return q.hours >= 20; }) ? 'bad' : 'warn';
+    var tiles = [], issues = [];
+    tiles.push({ label: 'お問い合わせ', tone: inqTone, text: inq.length ? '返事待ち ' + inq.length + ' 件' : '返事待ちはありません' });
+    inq.forEach(function (q) { issues.push({ tone: q.hours >= 20 ? 'bad' : 'warn', text: '［お問い合わせ］' + q.title + '（' + Math.floor(q.hours) + '時間前。24時間以内に返信）' }); });
+    var a = amzState.data;
+    if (amzState.loaded && a) {
+      var gen = new Date(a.generatedAt || ''), old = isNaN(gen.getTime()) || (Date.now() - gen.getTime()) > 36 * 3600000;
+      var y = a.yesterday || {}, m = a.month || {};
+      var num = function (v) { return v === null || v === undefined ? '－' : v; };
+      tiles.unshift({ label: '売れた台数', tone: old ? 'warn' : 'ok',
+        text: '昨日 ' + num(y.units) + ' 台' + (y.partial ? '（途中まで）' : '') + '・今月 ' + num(m.units) + ' 台' + (m.lastMonthSameDay !== null && m.lastMonthSameDay !== undefined ? '（先月この日まで ' + m.lastMonthSameDay + ' 台）' : '') });
+      if (old) issues.push({ tone: 'warn', text: '［売れた台数］数字が古いままです（' + (isNaN(gen.getTime()) ? '不明' : (gen.getMonth() + 1) + '/' + gen.getDate()) + ' のもの）。毎朝の Amazon チェックが止まっているかもしれません' });
+      var low = a.lowStock || [];
+      var lowTone = !low.length ? 'ok' : low.some(function (s) { return s.available === 0 || s.daysLeft <= 7; }) ? 'bad' : 'warn';
+      tiles.push({ label: '在庫', tone: lowTone, text: low.length ? '少ない商品 ' + low.length + ' 件' : '少ない商品はありません' });
+      low.forEach(function (s) { issues.push({ tone: (s.available === 0 || s.daysLeft <= 7) ? 'bad' : 'warn', text: '［在庫］' + (s.sku || '') + ' ' + (s.name || '') + '：あと約' + num(s.daysLeft) + '日分（販売できる ' + num(s.available) + ' 台・輸送中 ' + num(s.inbound) + ' 台）' }); });
+      var h = a.health || {}, r = a.returns || {};
+      var hrTone = h.ok === false || r.serious ? 'bad' : (r.count7d > 0 ? 'warn' : 'ok');
+      tiles.push({ label: '健全性・返品', tone: hrTone, text: (h.ok === false ? '健全性に注意' : '健全性は良好') + '・返品 ' + num(r.count7d) + ' 件（7日）' });
+      if (h.ok === false || h.note) issues.push({ tone: h.ok === false ? 'bad' : 'warn', text: '［健全性］' + (h.note || h.status || '') });
+      if (r.count7d > 0) issues.push({ tone: r.serious ? 'bad' : 'warn', text: '［返品］' + (r.note || '7日で ' + r.count7d + ' 件') });
+    } else {
+      var msg = amzState.loading ? '読んでいます…' : (amzState.error || '読めませんでした');
+      tiles.unshift({ label: '売れた台数', tone: 'warn', text: msg });
+      tiles.push({ label: '在庫', tone: 'warn', text: msg });
+      tiles.push({ label: '健全性・返品', tone: 'warn', text: msg });
+    }
+    var bad = issues.filter(function (i) { return i.tone === 'bad'; }).length, warn = issues.filter(function (i) { return i.tone === 'warn'; }).length;
+    var tone = bad ? 'bad' : (warn || tiles.some(function (t) { return t.tone === 'warn'; })) ? 'warn' : 'ok';
+    var sum = bad ? '見てほしいことが ' + bad + ' 件あります' : warn ? '気をつけたいことが ' + warn + ' 件あります' : (amzState.loaded ? 'ちゃんと回っています' : '数字はまだ届いていません');
+    var at = a && a.generatedAt ? (function (g) { return isNaN(g.getTime()) ? '' : (g.getMonth() + 1) + '/' + g.getDate() + ' ' + g.getHours() + ':' + pad2(g.getMinutes()) + ' の数字'; })(new Date(a.generatedAt)) : '';
+    box.setAttribute('data-tone', tone);
+    box.innerHTML = '<details' + (bad ? ' open' : '') + '><summary class="lilo-head"><b>📦 Amazon の様子</b><span class="lilo-sum">' + LILO_LIGHT[tone] + ' ' + esc(sum) + '</span>' +
+      '<span class="lilo-lights">' + tiles.map(function (t) { return '<span class="lilo-light"><span class="lilo-dot">' + LILO_LIGHT[t.tone] + '</span>' + esc(t.label) + '<small>' + esc(t.text) + '</small></span>'; }).join('') + '</span>' +
+      '<small class="lilo-at">' + esc(at) + '（お問い合わせは今の件数）</small></summary>' +
+      '<div class="lilo-body">' + (issues.length ? '<ul class="lilo-issues">' + issues.map(function (i) { return '<li>' + LILO_LIGHT[i.tone] + ' ' + esc(i.text) + '</li>'; }).join('') + '</ul>' : '<div>気になることはありません。</div>') +
+      '<div class="lilo-foot"><span>売れた台数・在庫・健全性・返品は、毎朝7時の Amazon チェックの数字です（Amazon の注文データは約1.5日遅れて届くので、「昨日」は途中までのことがあります）</span></div></div></details>';
+  }
+
   document.addEventListener('click', function (e) {
     var b = e.target.closest && e.target.closest('[data-lilo-refresh]');
     if (!b) return;
@@ -6620,6 +6678,7 @@
   }
 
   function renderToday() {
+    try { renderAmzStatus(); } catch (e) { console.log("amazon status render failed: " + e.message); }   // お問い合わせの件数は仕事が変わるたびに数え直す
     var now = new Date(todayStr + "T00:00:00");
     var dateEl = document.querySelector('[data-today-date]');
     if (dateEl) dateEl.innerHTML = '<span class="today-md">' + (now.getMonth() + 1) + '/' + now.getDate() + '</span><span class="today-dow">' + WEEKDAYS[now.getDay()] + '曜日</span>';
@@ -7509,6 +7568,7 @@
     setReports: setReports,
     setRepSchedule: setRepSchedule,
     setLiloStatus: setLiloStatus,
+    setAmzStatus: setAmzStatus,
     someoneWorksToday: someoneWorksToday,
     setTaskStatus: setTaskStatus,
     finalCheckSweep: finalCheckSweep,
