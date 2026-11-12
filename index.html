@@ -1418,7 +1418,7 @@
   details.s-manual summary { cursor: pointer; font-weight: 700; }
   .s-manual a.s-btn { text-decoration: none; display: inline-flex; align-items: center; }
   .s-review { display: flex; flex-direction: column; gap: 10px; }
-  .s-review-what { font-size: 15px; line-height: 1.6; }
+  .s-review-what { font-size: 17px; font-weight: 700; line-height: 1.6; }   /* ひとこと。これだけ読んで決められるように大きく（2026-11-13） */
   .s-review-item details summary { cursor: pointer; color: var(--text-muted); font-size: 13px; }
   .s-handover { font-size: 13.5px; line-height: 1.55; background: var(--warn-soft); border-radius: 8px; padding: 8px 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
   .s-handover b { display: block; font-size: 12px; margin-bottom: 2px; }
@@ -4515,7 +4515,7 @@
         var md = manuals.filter(function (x) { return x.id === r[1]; })[0];
         return '<div class="s-manual s-review-item"><b>📘 ' + esc(r[2]) + '</b> <span class="row-badge" data-tone="neutral">' + esc(r[3]) + '</span>' +
           '<div class="s-review-what">' + esc(r[4]) + '</div>' +
-          (md ? '<details><summary>マニュアル全体を読む' + (md.state !== '正式' ? '（まだ下書き）' : '') + '</summary><div class="s-draft-text">' + esc(md.body) + '</div></details>' : '<div class="s-draft-note">（このマニュアルは見つかりませんでした。「いらない」で消せます）</div>') +
+          (md ? '<details><summary>くわしく読む（読まなくても決められます）' + (md.state !== '正式' ? '・まだ下書き' : '') + '</summary><div class="s-draft-text">' + esc(md.body) + '</div></details>' : '<div class="s-draft-note">（このマニュアルは見つかりませんでした。「いらない」で消せます）</div>') +
           (status !== '完了' ? '<div class="s-actions"><button type="button" class="s-btn s-primary" data-s-review-ok="' + esc(r[1]) + '" data-s-review-card="' + key + '">✅ これでよい</button>' +
             '<button type="button" class="s-btn" data-s-review-drop="' + esc(r[1]) + '" data-s-review-card="' + key + '">🗑 いらない</button></div>' : '') +
           '</div>';

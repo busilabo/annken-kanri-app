@@ -2714,7 +2714,7 @@
       var src = "仕事 " + card.getAttribute("data-item-id") + "：" + roleValS(card, "content").split("\n")[0].slice(0, 60);
       if (!existing && out.body) {
         var id = await saveManual(null, { Title: business + "／" + category, Business: business, Category: category, Body: out.body, State: "下書き", SourceTask: src, Updater: "マネージャー" });
-        await addManualReview(id, business + "／" + category, "新しく作った", "「" + roleValS(card, "content").split("\n")[0].slice(0, 30) + "」の仕事から、やり方を書き起こしました");
+        await addManualReview(id, business + "／" + category, "新しく作った", out.oneLine || "「" + roleValS(card, "content").split("\n")[0].slice(0, 30) + "」の仕事から、やり方を書き起こしました");
       } else if (existing && out.changed && out.body) {
         // 終わった仕事から、マニュアルを書き直す（2026-10-18 代表の指定「随時更新」）。
         // 正式のマニュアルも書き直し、代表に「何を直したか」を知らせる（前の版は SharePoint の版の履歴から戻せる）
@@ -2724,7 +2724,8 @@
           Body: out.body, Updater: "マネージャー（" + src + "）",
           Suggestion: ((existing.suggestion ? existing.suggestion + "\n" : "") + "・" + stamp + " 更新（" + src + "）\n" + changes).slice(-4000)
         });
-        await addManualReview(existing.id, business + "／" + category, existing.state === "正式" ? "直した" : "下書きを直した", plainChanges(changes));
+        // 「ひとこと」（小学生でも分かる一文。Azure manual が書く 2026-11-13）があればそれ、なければ変更点の1つ目を短く
+        await addManualReview(existing.id, business + "／" + category, existing.state === "正式" ? "直した" : "下書きを直した", out.oneLine || plainChanges(changes));
       }
     } catch (e) { log("manual on complete failed: " + e.message); }
     finally { manualBusy[mk] = false; }
