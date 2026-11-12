@@ -997,6 +997,103 @@
     return (list.value || []).filter(function (f) { return /\.xlsx$/i.test(f.name); });
   }
   function excelOf(files, id) { return files.filter(function (f) { return f.name.indexOf(id + " ") === 0; })[0]; }
+
+  // ---- LILOCLE の様子（今日の画面の上の段。2026-11-13 代表の指定「正しく運用されているかをパッと見て分かるように」）----
+  // 開くたびに最新：Shopify のまだ終わっていない注文（Azure shopify の open）と、作り手さんの共有エクセル（追跡番号記入）をつき合わせ、
+  // 「注文の報告」「作り手さんの確認」「発送」「支払いの確定」を信号（ok・warn・bad）と一言にする。
+  // 共有エクセル：A 受注状況（未確認→処理中→発送完了）・B 発送日・C 運送業者・D 追跡番号・F 注文番号・L 商品番号・U 発送通知済（4行目から）
+  var LILO_REFRESH_MS = 10 * 60 * 1000;
+  var liloBusy = false;
+  function daysSince(iso) { var t = new Date(iso).getTime(); return isNaN(t) ? 0 : (Date.now() - t) / 86400000; }
+  function excelDate(v) {
+    if (typeof v === "number" && v > 30000) return new Date(Date.UTC(1899, 11, 30) + v * 86400000);
+    var m = /(\d{4})[\/\-年](\d{1,2})[\/\-月](\d{1,2})/.exec(String(v || ""));
+    if (m) return new Date(+m[1], +m[2] - 1, +m[3]);
+    m = /^(\d{1,2})\/(\d{1,2})$/.exec(String(v || "").trim());
+    if (m) { var d = new Date(new Date().getFullYear(), +m[1] - 1, +m[2]); if (d > new Date()) d.setFullYear(d.getFullYear() - 1); return d; }
+    return null;
+  }
+  async function loadLiloStatus() {
+    if (liloBusy || !window.__app || !window.__app.setLiloStatus) return;
+    liloBusy = true;
+    window.__app.setLiloStatus({ loading: true });
+    try {
+      var out = await callApi(SHOPIFY_ENDPOINT, { action: "open" }, 60000);
+      var orders = out.orders || [];
+      // 作り手さん（D〜）のエクセルを読む。自社発送（L〜）は作り手さんの確認がないので外す
+      var files = await makerExcelFiles();
+      var need = {};
+      orders.forEach(function (o) { makerIdsOf(o).forEach(function (id) { if (id !== "L0000") need[id] = true; }); });
+      var rowsByMaker = {}, excelErr = [];
+      await Promise.all(Object.keys(need).map(async function (id) {
+        var f = excelOf(files, id);
+        if (!f) { excelErr.push(id); return; }
+        try {
+          var r = await graph("/drives/" + LILO_DRIVE + "/items/" + f.id + "/workbook/worksheets('" + encodeURIComponent("追跡番号記入") + "')/range(address='A4:U800')?$select=values");
+          rowsByMaker[id] = (r.values || []).filter(function (v) { return String(v[5] || "").trim(); });
+        } catch (e) { excelErr.push(id); }
+      }));
+      var issues = [], counts = { waitReport: 0, unshipped: 0 };
+      var add = function (cat, tone, o, text) { issues.push({ cat: cat, tone: tone, order: o.name, maker: (o.makers || []).join("・"), text: text }); };
+      orders.forEach(function (o) {
+        var age = daysSince(o.createdAt);
+        var dItems = (o.items || []).filter(function (it) { return /^D\d{4}/i.test(String(it.sku || "")); });
+        if (!o.shipped) counts.unshipped++;
+        // 1. 注文の報告：作り手さんの明細が OPEN のまま（報告は注文から12時間後、10・14・18・22時）
+        var openFo = (o.fulfillmentOrders || []).filter(function (f) { return f.status === "OPEN" && f.skus.some(function (s) { return /^D\d{4}/i.test(s); }); });
+        if (openFo.length && !o.shipped) {
+          if (age * 24 >= 30) add("report", "bad", o, "作り手さんへの注文の報告が、まだされていません（注文から" + Math.floor(age) + "日）");
+          else counts.waitReport++;
+        }
+        // 2・3. 作り手さんのエクセル
+        makerIdsOf(o).filter(function (id) { return id !== "L0000"; }).forEach(function (id) {
+          // 分けて発送した注文は「ORDER4629-2」のように後ろに番号が付く。1つの注文が何行かに分かれていることもあるので、全部の行を見る
+          var rows = (rowsByMaker[id] || []).filter(function (v) { return String(v[5]).trim().replace(/-\d+$/, "") === o.name; });
+          if (!rowsByMaker[id]) return;
+          if (!rows.length) {
+            if (!openFo.length && !o.shipped && age >= 1) add("confirm", "bad", o, "報告したことになっていますが、作り手さん（" + id + "）のエクセルに注文がありません");
+            return;
+          }
+          var sts = rows.map(function (v) { return String(v[0] || "").trim(); });
+          var st = sts.indexOf("未確認") !== -1 ? "未確認" : sts.indexOf("処理中") !== -1 ? "処理中" : sts[0];
+          var sent = rows.filter(function (v) { return String(v[3] || "").trim(); });
+          var shipDate = sent.length ? excelDate(sent[0][1]) : null, tracking = sent.length ? String(sent[0][3]).trim() : "";
+          var notified = sent.length && sent.every(function (v) { return String(v[20] || "").trim(); }) ? "済" : "";
+          if (st === "未確認" && !o.shipped) {
+            if (age >= 5) add("confirm", "bad", o, "作り手さんが" + Math.floor(age) + "日たっても確認していません（未確認のまま）");
+            else if (age >= 2) add("confirm", "warn", o, "作り手さんがまだ確認していません（" + Math.floor(age) + "日）");
+          }
+          if (tracking && !o.shipped && shipDate && daysSince(shipDate) >= 1) add("ship", "bad", o, "作り手さんは発送済み（追跡番号あり）なのに、Shopify に発送が登録されていません");
+          else if (!tracking && !o.shipped && st !== "未確認") {
+            if (age >= 14) add("ship", "bad", o, "注文から" + Math.floor(age) + "日たっても発送されていません");
+            else if (age >= 10) add("ship", "warn", o, "注文から" + Math.floor(age) + "日、まだ発送されていません");
+          }
+          if (o.shipped && !notified && tracking && shipDate && daysSince(shipDate) >= 1) add("ship", "warn", o, "発送の登録は済みですが、エクセルの「発送通知済」が空です（お礼メールが抜けているかも）");
+        });
+        // 4. 支払いの確定：カードは7日、PayPal は29日、そのほかは約30日で確定できなくなる（Shopify Flow がカードは4日目に確定する）
+        if (o.financial === "AUTHORIZED") {
+          var card = (o.gateways || []).some(function (g) { return /shopify_payments/i.test(g); });
+          var limit = card ? 7 : (o.gateways || []).some(function (g) { return /paypal/i.test(g); }) ? 29 : 30;
+          var left = limit - age;
+          if (left <= 1) add("pay", "bad", o, "支払いを確定できる期限まで、あと1日もありません。管理画面で「支払いを確定する」を押してください");
+          else if (left <= 2.5) add("pay", "warn", o, "支払いを確定できる期限が近づいています（あと" + Math.floor(left) + "日）");
+        }
+      });
+      excelErr.forEach(function (id) { issues.push({ cat: "confirm", tone: "warn", order: "", maker: id, text: "作り手さん（" + id + "）のエクセルが読めませんでした" }); });
+      var worst = function (cat) { var t = issues.filter(function (i) { return i.cat === cat; }).map(function (i) { return i.tone; }); return t.indexOf("bad") !== -1 ? "bad" : t.indexOf("warn") !== -1 ? "warn" : "ok"; };
+      var n = function (cat) { return issues.filter(function (i) { return i.cat === cat; }).length; };
+      var checks = [
+        { key: "report", label: "注文の報告", tone: worst("report"), text: n("report") ? "報告されていない注文が " + n("report") + " 件" : (counts.waitReport ? "全部報告済み（これから報告：" + counts.waitReport + " 件）" : "全部報告済み") },
+        { key: "confirm", label: "作り手さんの確認", tone: worst("confirm"), text: n("confirm") ? "確認されていない注文が " + n("confirm") + " 件" : "全部確認済み" },
+        { key: "ship", label: "発送", tone: worst("ship"), text: (n("ship") ? "気をつけたい注文が " + n("ship") + " 件・" : "遅れなし・") + "発送待ち " + counts.unshipped + " 件" },
+        { key: "pay", label: "支払いの確定", tone: worst("pay"), text: n("pay") ? "期限が近い注文が " + n("pay") + " 件" : "期限が近い注文はありません" }
+      ];
+      window.__app.setLiloStatus({ loaded: true, at: new Date(), checks: checks, issues: issues, total: orders.length });
+    } catch (e) {
+      log("lilo status failed: " + e.message);
+      window.__app.setLiloStatus({ loaded: false, error: e.message });
+    } finally { liloBusy = false; }
+  }
   async function removeFromMakerExcel(order) {
     if (!order || !order.name) return { done: [], missing: [] };
     var ids = makerIdsOf(order);
@@ -2600,6 +2697,9 @@
     try { await ensureManualList(); await loadManuals(); } catch (e) { log("manuals failed: " + e.message); }
     watchNewVersion();
     setInterval(loadManuals, 10 * 60 * 1000);
+    loadLiloStatus();
+    setInterval(loadLiloStatus, LILO_REFRESH_MS);
+    window.__lilo = { refresh: loadLiloStatus };
     await drainQueue();
     setInterval(drainQueue, QUEUE_DRAIN_MS);
     // 最終チェック：終わった仕事でまだ確かめていないもの・待ちのものを、5分ごとに確かめる（index.html の finalCheckSweep）

@@ -1417,6 +1417,20 @@
   .s-manual { border: 1px solid var(--line, #d0d7e2); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
   details.s-manual summary { cursor: pointer; font-weight: 700; }
   .s-manual a.s-btn { text-decoration: none; display: inline-flex; align-items: center; }
+  /* LILOCLE の様子（今日の画面の上の段） */
+  .lilo-status { border-radius: 10px; margin: 8px 0; background: var(--ok-soft); border: 1px solid transparent; }
+  .lilo-status[data-tone="warn"] { background: var(--warn-soft); }
+  .lilo-status[data-tone="bad"] { background: var(--crit-soft); border-color: var(--crit); }
+  .lilo-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 8px 12px; cursor: pointer; list-style: none; }
+  .lilo-head::-webkit-details-marker { display: none; }
+  .lilo-sum { font-weight: 700; font-size: 15px; }
+  .lilo-lights { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 13px; }
+  .lilo-at { color: var(--text-muted); margin-left: auto; }
+  .lilo-body { padding: 0 12px 10px; font-size: 13.5px; }
+  .lilo-checks, .lilo-issues { margin: 4px 0; padding-left: 4px; list-style: none; display: flex; flex-direction: column; gap: 3px; }
+  .lilo-issues { border-top: 1px solid rgba(127,127,127,.25); padding-top: 6px; }
+  .lilo-cat, .lilo-maker { color: var(--text-muted); font-size: 12.5px; }
+  .lilo-foot { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; color: var(--text-muted); font-size: 12.5px; margin-top: 6px; }
   .s-review { display: flex; flex-direction: column; gap: 10px; }
   .s-review-what { font-size: 17px; font-weight: 700; line-height: 1.6; }   /* ひとこと。これだけ読んで決められるように大きく（2026-11-13） */
   .s-review-item details summary { cursor: pointer; color: var(--text-muted); font-size: 13px; }
@@ -1655,6 +1669,8 @@
       <div class="today-date" data-today-date></div>
       <div class="roster" data-roster></div>
     </div>
+    <!-- LILOCLE の様子（信号と一言。開くたびに最新。sync.js loadLiloStatus） -->
+    <div class="lilo-status" data-lilo-status></div>
     <div class="biz-switch" data-biz-switch></div>
     <div class="biz-contacts" data-biz-contacts></div>
     <div class="today-kpis" data-today-kpis></div>
@@ -6052,6 +6068,44 @@
 
   function renderTopInfo() { renderReports(); renderRepSchedule(); }
 
+  // ---- LILOCLE の様子（2026-11-13 代表の指定：今日の画面の上に1段、信号＋一言、開くたびに最新）----
+  var liloState = { loading: true };
+  var LILO_LIGHT = { ok: "🟢", warn: "🟡", bad: "🔴" };
+  function setLiloStatus(state) {
+    // 読み直し中は、前の結果を出したまま「読んでいます」だけ付ける
+    liloState = state && state.loading && liloState.loaded ? Object.assign({}, liloState, { loading: true }) : (state || {});
+    renderLiloStatus();
+  }
+  function renderLiloStatus() {
+    var box = document.querySelector('[data-lilo-status]');
+    if (!box) return;
+    var s = liloState;
+    var refresh = '<button type="button" class="link-inline" data-lilo-refresh>' + (s.loading ? '読んでいます…' : '🔄 今の様子を読む') + '</button>';
+    if (!s.loaded) {
+      box.innerHTML = '<div class="lilo-head"><b>🌿 LILOCLE の様子</b><span class="lilo-sum">' + (s.loading ? 'Shopify と作り手さんのエクセルを読んでいます…' : '⚠️ 読めませんでした（' + esc(s.error || '') + '）') + '</span>' + refresh + '</div>';
+      return;
+    }
+    var bad = s.issues.filter(function (i) { return i.tone === 'bad'; }).length, warn = s.issues.filter(function (i) { return i.tone === 'warn'; }).length;
+    var tone = bad ? 'bad' : warn ? 'warn' : 'ok';
+    var sum = bad ? '見てほしい注文が ' + bad + ' 件あります' : warn ? '気をつけたい注文が ' + warn + ' 件あります' : 'ちゃんと回っています';
+    var at = s.at ? s.at.getHours() + ':' + pad2(s.at.getMinutes()) : '';
+    var CAT = { report: '注文の報告', confirm: '作り手さんの確認', ship: '発送', pay: '支払いの確定' };
+    var list = s.issues.slice().sort(function (a, b) { return (a.tone === 'bad' ? 0 : 1) - (b.tone === 'bad' ? 0 : 1); });
+    box.setAttribute('data-tone', tone);
+    box.innerHTML = '<details' + (bad ? ' open' : '') + '><summary class="lilo-head"><b>🌿 LILOCLE の様子</b><span class="lilo-sum">' + LILO_LIGHT[tone] + ' ' + esc(sum) + '</span>' +
+      '<span class="lilo-lights">' + s.checks.map(function (c) { return '<span class="lilo-light" title="' + esc(c.label + '：' + c.text) + '">' + LILO_LIGHT[c.tone] + ' ' + esc(c.label) + '</span>'; }).join('') + '</span>' +
+      '<small class="lilo-at">' + esc(at) + ' 現在</small></summary>' +
+      '<div class="lilo-body"><ul class="lilo-checks">' + s.checks.map(function (c) { return '<li>' + LILO_LIGHT[c.tone] + ' <b>' + esc(c.label) + '</b>：' + esc(c.text) + '</li>'; }).join('') + '</ul>' +
+      (list.length ? '<ul class="lilo-issues">' + list.map(function (i) { return '<li>' + LILO_LIGHT[i.tone] + ' ' + (i.order ? '<b>' + esc(i.order) + '</b> ' : '') + (i.maker ? '<span class="lilo-maker">' + esc(i.maker) + '</span> ' : '') + '<span class="lilo-cat">［' + esc(CAT[i.cat] || '') + '］</span> ' + esc(i.text) + '</li>'; }).join('') + '</ul>' : '') +
+      '<div class="lilo-foot">' + refresh + '<span>まだ終わっていない注文 ' + s.total + ' 件を見ています（Shopify と作り手さんのエクセル）</span></div></div></details>';
+  }
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest && e.target.closest('[data-lilo-refresh]');
+    if (!b) return;
+    e.preventDefault();
+    if (window.__lilo) window.__lilo.refresh();
+  });
+
   // 「AIに聞く」チャットに渡す今日の様子（出勤・代表の予定・今日の報告）
   function chatSnapshot() {
     return {
@@ -7448,6 +7502,7 @@
     setOutlookShifts: setOutlookShifts,
     setReports: setReports,
     setRepSchedule: setRepSchedule,
+    setLiloStatus: setLiloStatus,
     someoneWorksToday: someoneWorksToday,
     setTaskStatus: setTaskStatus,
     finalCheckSweep: finalCheckSweep,
