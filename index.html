@@ -654,7 +654,7 @@
   .card[data-deleted] .memo-prompt,
   .card[data-deleted] .meeting-panel,
   .card[data-deleted] .plan-panel { display: none !important; }
-  .history-memo.editable { min-height: 26px; font-size: 12.5px; padding: 5px 8px; }
+  .history-memo.editable { min-height: 26px; font-size: 12.5px; padding: 5px 8px; white-space: pre-wrap; }   /* 送ったメールの本文の改行を残す（2026-11-13） */
   .research-note.editable { min-height: 100px; white-space: pre-wrap; }
   .verify-result.editable { min-height: 24px; white-space: pre-wrap; font-size: 12.5px; }
   .editable {
@@ -4497,6 +4497,7 @@
     var mkey = roleVal(card, 'teamsMessageId');
     var manuals = window.__manuals || [];
     var mm = /^manual:(\d+)/.exec(mkey);
+    html += sentMailsHtml(card);
     // 問い合わせ：案件管理に入れるかは人が決める（2026-11-12 代表の指定）
     var inqHold = /^inquiry:/.test(mkey) && window.__inquiryOps ? window.__inquiryOps.hold(card) : null;
     if (inqHold) {
@@ -5078,7 +5079,8 @@
     var p = { kind: 'busilabo', route: 'self', to: '', subject: '', sender: x.who };
     if (d.to === 'maker') { p.route = 'maker'; p.kind = 'lilocle-maker'; p.to = x.maker ? x.maker.email : ''; p.sender = x.makerLabel; }
     else if (/^fixed:/.test(d.to)) { p.route = 'self'; p.to = d.to.slice(6); }
-    else { p.route = ri.route || 'self'; p.kind = ri.kind || 'busilabo'; p.to = ri.to || taskField(x.c, 'メールアドレス') || ''; p.subject = ri.subject || ''; }
+    // 「メール：」は 11/12〜11/13 に入ったお問い合わせの書き方（宛先が空になっていた）。問い合わせの控えにもアドレスがある
+    else { p.route = ri.route || 'self'; p.kind = ri.kind || 'busilabo'; p.to = ri.to || taskField(x.c, 'メールアドレス') || taskField(x.c, 'メール') || ((window.__inquiryOps && window.__inquiryOps.hold(x.card)) || {}).contact || ''; p.subject = ri.subject || ''; }
     if (d.subject) p.subject = d.subject(x);
     if (x.c && businessOf(x.card) === 'LILOCLE運営' && p.route === 'self' && d.to === 'requester') { p.route = 'customer'; p.kind = 'lilocle'; }
     return p;
@@ -5451,6 +5453,20 @@
     }
     applyAll();
   }
+  var SENT_MAIL_ACTION = "送ったメール";
+  // 仕事を開いたときに出す「✉️ 送ったメール」（履歴に残した本文。新しい順）
+  function sentMailsHtml(card) {
+    var out = [];
+    card.querySelectorAll('[data-history] .history-entry').forEach(function (h) {
+      if (((h.querySelector('.history-action') || {}).textContent || '').trim() !== SENT_MAIL_ACTION) return;
+      var t = ((h.querySelector('.history-time') || {}).textContent || '').trim();
+      var memo = textOf(h.querySelector('.history-memo'));
+      var to = (/^宛先：(.*)$/m.exec(memo) || [])[1] || '';
+      var sub = (/^件名：(.*)$/m.exec(memo) || [])[1] || '';
+      out.push('<details class="s-manual"><summary>✉️ 送ったメール（' + esc(t) + '　' + esc(to) + '「' + esc(sub) + '」）</summary><div class="s-draft-text">' + esc(memo) + '</div></details>');
+    });
+    return out.join('');
+  }
   function sendCompose(key) {
     var ctx = composeCtx[key], e = composeEls(key);
     if (!ctx || !e) return;
@@ -5471,6 +5487,9 @@
     e.send.disabled = true; e.send.textContent = '送っています…';
     window.__act.send({ route: route, to: to, subject: subject, body: body, taskNo: ctx.card.getAttribute('data-item-id') || '', staff: who, attachUrl: ctx.plan.attachUrl || '', files: files }).then(function () {
       var memo = (who ? who + 'さん：' : '') + from.split('（')[0] + ' から ' + to + ' へ「' + subject + '」' + (fileNames ? '（添付：' + fileNames + '）' : '') + (route === 'self' ? '' : '（数分で送られます）');
+      // 送ったメールの本文を履歴に残す。仕事を開くと「✉️ 送ったメール」で見返せる（2026-11-13 代表「送ったメールを見れなかった」）
+      addHistoryEntry(ctx.card, 'task', SENT_MAIL_ACTION, statusOf(ctx.card), null,
+        '送り元：' + from + '\n宛先：' + to + '\n件名：' + subject + (fileNames ? '\n添付：' + fileNames : '') + '\n\n' + body.slice(0, 4000));
       closeSimplePanel(ctx.card);
       delete composeCtx[key];
       // 仕事の流れの手順：送ったら次へ（end の手順なら仕事が終わる）

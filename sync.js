@@ -893,7 +893,7 @@
     var info = [
       data.company ? "会社：" + data.company : "",
       data.contactName ? "お名前：" + data.contactName : "",
-      data.contact ? "メール：" + data.contact : "",
+      data.contact ? "メールアドレス：" + data.contact : "",   // 返信の画面がこの行から宛先を読む（index.html flowMailPlan）
       data.companyPhone ? "電話：" + data.companyPhone : "",
       data.website ? "ホームページ：" + data.website : ""
     ].filter(Boolean).join("\n");
