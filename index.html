@@ -4364,14 +4364,30 @@
       '<div class="s-actions"><button type="button" class="s-btn s-primary" data-s-cancel-switch="' + jumpKeyOf(card) + '">⚡ キャンセルの手順にする</button></div></div>';
   }
   // 手順ごとに、押せるか・飛ばすか・どの文面にするかを決める
+  // 代表（坂中さん）が持っている仕事では、代表あての手順（代表に報告・代表の返事を待つ など）はない（2026-11-12 代表の指定）。
+  // 画面に出さず、完了の判断でも済んだものとみなす。ほかの手順の中の「代表に確認してから」なども消して見せる（repStepText）
+  var REP_ONLY_STEP = /^(Teams の「一般」チャネルに.*代表に報告する|代表の返事を待つ|代表が内容を確認する)/;
+  function repStepText(text) {
+    return String(text || "")
+      .replace(/（[^（）]*代表[^（）]*）/g, "")
+      .replace(/代表と相談のうえ/g, "")
+      .replace(/代表に確認してから\s*/g, "")
+      .replace(/代表が決めた内容で、/g, "")
+      .replace(/代表あての「([^」]+)」仕事を追加(する)?/g, "$1")
+      .replace(/載せるかどうかは代表が決める。/g, "載せるかどうかを決める。")
+      .replace(/代表に(聞く|回す)/g, "自分で判断する")
+      .trim();
+  }
   function actionStates(card, c, status) {
     var os = orderStateOf(card, c);
     var order = os && os.order;
     var idx = function (a) { for (var i = 0; i < c.steps.length; i++) if (c.steps[i].action === a) return i; return -1; };
     var a = idx('maker-stop'), b = idx('shopify-cancel');
     var out = [], blocked = '';
+    var repOwns = ownerOf(card) === REP;
     c.steps.forEach(function (s, i) {
       var st = {};
+      if (repOwns && !s.decided && !s.action && REP_ONLY_STEP.test(s.text)) { st.skip = '代表が担当'; st.repHide = true; out.push(st); return; }
       // 発送済み：止める・キャンセルの手順はなく、お客様にはお断りの返信を送る
       if (order && order.shipped && a !== -1 && b !== -1 && i >= a && i <= b && !s.decided) st.skip = '発送済みのため、この手順はありません';
       else if (order && order.cancelledAt && s.action === 'shopify-cancel' && !s.decided) st.skip = 'Shopify ではもうキャンセルされています';
@@ -4520,8 +4536,12 @@
     html += cancelSwitchHtml(card, c, status);
     if (c.steps.length) {
       var actState = actionStates(card, c, status);
-      html += '<div class="s-steps-head">やること <span class="tab-count">' + doneCount + ' / ' + c.steps.length + '</span></div><ol class="s-steps">' +
+      var repOwns = owner === REP;
+      var shown = c.steps.filter(function (s, si) { return !(actState[si] && actState[si].repHide); });
+      html += '<div class="s-steps-head">やること <span class="tab-count">' + shown.filter(function (s) { return s.decided; }).length + ' / ' + shown.length + '</span></div><ol class="s-steps">' +
         c.steps.map(function (s, si) {
+          if (actState[si] && actState[si].repHide) return '';
+          if (repOwns) s = Object.assign({}, s, { text: repStepText(s.text) });
           if (s.action) return actionStepHtml(card, key, s, actState[si]);
           return plainStepHtml(key, s, actState[si], status);
         }).join('') + '</ol>';
@@ -4544,12 +4564,13 @@
     } else if (c.flow) {
       // 流れのある仕事は、最後の手順が済むと自動で完了。ここは申し送り・代表に聞くだけ（「終わった」は流れを飛ばすときだけ小さく）
       html += '<div class="s-actions"><button type="button" class="s-btn" data-s-pass="' + key + '">🏃 申し送りを書いて渡す</button>' +
-        '<button type="button" class="s-btn" data-s-ask="' + key + '">❓ 代表に聞く</button>' +
+        (owner === REP ? '' : '<button type="button" class="s-btn" data-s-ask="' + key + '">❓ 代表に聞く</button>') +
         '<button type="button" class="s-btn s-mini" data-s-done="' + key + '">手順を飛ばして終わりにする</button></div>';
     } else {
+      // 代表が持っている仕事に「代表に聞く」は出さない（2026-11-12）
       html += '<div class="s-actions"><button type="button" class="s-btn s-primary" data-s-done="' + key + '">✅ 終わった</button>' +
         '<button type="button" class="s-btn" data-s-pass="' + key + '">🏃 申し送りを書いて渡す</button>' +
-        '<button type="button" class="s-btn" data-s-ask="' + key + '">❓ 代表に聞く</button></div>';
+        (owner === REP ? '' : '<button type="button" class="s-btn" data-s-ask="' + key + '">❓ 代表に聞く</button>') + '</div>';
     }
     return html;
   }
@@ -5046,7 +5067,7 @@
     else if (d.type === 'ask') html += '<button type="button" class="s-btn s-primary f-big" data-f-act="ask" ' + b + '>🙋 代表に聞く</button>';
     else if (d.type === 'task') html += '<button type="button" class="s-btn s-primary f-big" data-f-act="task" ' + b + '>📋 代表に頼む</button>';
     html += '</div>';
-    html += '<div class="f-now-sub">' + (d.type !== 'ask' && !(d.type === 'choose' && d.choices.some(function (ch) { return ch.go === 'rep'; })) ? '<button type="button" class="s-btn s-mini" data-f-act="rep" ' + b + '>🙋 分からないので代表に聞く</button>' : '') +
+    html += '<div class="f-now-sub">' + (ownerOf(card) !== REP && d.type !== 'ask' && !(d.type === 'choose' && d.choices.some(function (ch) { return ch.go === 'rep'; })) ? '<button type="button" class="s-btn s-mini" data-f-act="rep" ' + b + '>🙋 分からないので代表に聞く</button>' : '') +
       '<button type="button" class="s-btn s-mini" data-f-act="skip" ' + b + '>この手順はしない</button></div>';
     if (rest.length) html += '<div class="f-next">このあと：' + rest.map(function (e) { return esc(e.d.title.replace(/（.*?）/g, '')); }).join(' → ') + '</div>';
     return html + '</div>';
