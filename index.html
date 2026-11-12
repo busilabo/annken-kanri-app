@@ -654,7 +654,7 @@
   .card[data-deleted] .memo-prompt,
   .card[data-deleted] .meeting-panel,
   .card[data-deleted] .plan-panel { display: none !important; }
-  .history-memo.editable { min-height: 26px; font-size: 12.5px; padding: 5px 8px; white-space: pre-wrap; }   /* 送ったメールの本文の改行を残す（2026-11-13） */
+  .history-memo.editable { min-height: 26px; font-size: 12.5px; padding: 5px 8px; white-space: pre-wrap; }   /* 送ったメールの本文の改行を残す（2026-11-12） */
   .research-note.editable { min-height: 100px; white-space: pre-wrap; }
   .verify-result.editable { min-height: 24px; white-space: pre-wrap; font-size: 12.5px; }
   .editable {
@@ -1432,7 +1432,7 @@
   .lilo-cat, .lilo-maker { color: var(--text-muted); font-size: 12.5px; }
   .lilo-foot { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; color: var(--text-muted); font-size: 12.5px; margin-top: 6px; }
   .s-review { display: flex; flex-direction: column; gap: 10px; }
-  .s-review-what { font-size: 17px; font-weight: 700; line-height: 1.6; }   /* ひとこと。これだけ読んで決められるように大きく（2026-11-13） */
+  .s-review-what { font-size: 17px; font-weight: 700; line-height: 1.6; }   /* ひとこと。これだけ読んで決められるように大きく（2026-11-12） */
   .s-review-item details summary { cursor: pointer; color: var(--text-muted); font-size: 13px; }
   .s-handover { font-size: 13.5px; line-height: 1.55; background: var(--warn-soft); border-radius: 8px; padding: 8px 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
   .s-handover b { display: block; font-size: 12px; margin-bottom: 2px; }
@@ -5503,7 +5503,7 @@
     e.send.disabled = true; e.send.textContent = '送っています…';
     window.__act.send({ route: route, to: to, subject: subject, body: body, taskNo: ctx.card.getAttribute('data-item-id') || '', staff: who, attachUrl: ctx.plan.attachUrl || '', files: files }).then(function () {
       var memo = (who ? who + 'さん：' : '') + from.split('（')[0] + ' から ' + to + ' へ「' + subject + '」' + (fileNames ? '（添付：' + fileNames + '）' : '') + (route === 'self' ? '' : '（数分で送られます）');
-      // 送ったメールの本文を履歴に残す。仕事を開くと「✉️ 送ったメール」で見返せる（2026-11-13 代表「送ったメールを見れなかった」）
+      // 送ったメールの本文を履歴に残す。仕事を開くと「✉️ 送ったメール」で見返せる（2026-11-12 代表「送ったメールを見れなかった」）
       addHistoryEntry(ctx.card, 'task', SENT_MAIL_ACTION, statusOf(ctx.card), null,
         '送り元：' + from + '\n宛先：' + to + '\n件名：' + subject + (fileNames ? '\n添付：' + fileNames : '') + '\n\n' + body.slice(0, 4000));
       closeSimplePanel(ctx.card);
@@ -6068,7 +6068,7 @@
 
   function renderTopInfo() { renderReports(); renderRepSchedule(); }
 
-  // ---- LILOCLE の様子（2026-11-13 代表の指定：今日の画面の上に1段、信号＋一言、開くたびに最新）----
+  // ---- LILOCLE の様子（2026-11-12 代表の指定：今日の画面の上に1段、信号＋一言、開くたびに最新）----
   var liloState = { loading: true };
   var LILO_LIGHT = { ok: "🟢", warn: "🟡", bad: "🔴" };
   function setLiloStatus(state) {

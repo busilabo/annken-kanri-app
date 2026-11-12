@@ -998,7 +998,7 @@
   }
   function excelOf(files, id) { return files.filter(function (f) { return f.name.indexOf(id + " ") === 0; })[0]; }
 
-  // ---- LILOCLE の様子（今日の画面の上の段。2026-11-13 代表の指定「正しく運用されているかをパッと見て分かるように」）----
+  // ---- LILOCLE の様子（今日の画面の上の段。2026-11-12 代表の指定「正しく運用されているかをパッと見て分かるように」）----
   // 開くたびに最新：Shopify のまだ終わっていない注文（Azure shopify の open）と、作り手さんの共有エクセル（追跡番号記入）をつき合わせ、
   // 「注文の報告」「作り手さんの確認」「発送」「支払いの確定」を信号（ok・warn・bad）と一言にする。
   // 共有エクセル：A 受注状況（未確認→処理中→発送完了）・B 発送日・C 運送業者・D 追跡番号・F 注文番号・L 商品番号・U 発送通知済（4行目から）
@@ -2824,7 +2824,7 @@
           Body: out.body, Updater: "マネージャー（" + src + "）",
           Suggestion: ((existing.suggestion ? existing.suggestion + "\n" : "") + "・" + stamp + " 更新（" + src + "）\n" + changes).slice(-4000)
         });
-        // 「ひとこと」（小学生でも分かる一文。Azure manual が書く 2026-11-13）があればそれ、なければ変更点の1つ目を短く
+        // 「ひとこと」（小学生でも分かる一文。Azure manual が書く 2026-11-12）があればそれ、なければ変更点の1つ目を短く
         await addManualReview(existing.id, business + "／" + category, existing.state === "正式" ? "直した" : "下書きを直した", out.oneLine || plainChanges(changes));
       }
     } catch (e) { log("manual on complete failed: " + e.message); }
