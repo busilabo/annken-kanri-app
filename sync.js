@@ -867,6 +867,8 @@
   // 問い合わせの行き先は、以前は Azure の仕分け（classify）で案件管理・仕事だけ・対象外に分けていたが、
   // 2026-11-12 からは全部まず仕事管理に入れ、案件管理に入れるかは人が決める（drainOne・promoteInquiry）。
   // 売り込み・協業の誘いは、仕事の画面の迷惑メール振分け（index.html の SPAM_STRONG）で分ける
+  // 仕分けの口そのものは、仕事の流れを決める classifyFlow がまだ使う（2026-11-12 これを消して、仕事が全部出なくなった）
+  var CLASSIFY_ENDPOINT = "https://busilabo-work-chat.azurewebsites.net/api/classify";
 
   // 問い合わせから入れる仕事。Instagram・Facebook の DM（問い合わせチェックのルーティンが Meta の通知メールから拾ったもの。
   // memo が「[自動反映: Instagram DM…]」「[自動反映: Facebook Messenger…]」）は、事業に合わせた手順にする（代表の指定 2026-10-15）
