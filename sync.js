@@ -1475,7 +1475,8 @@
     if (!data.threadKey && isTaikai(data)) data = Object.assign({}, data, { threadKey: "mail:taikai:" + String(data.fromAddress || "").trim().toLowerCase() });
     // 「東中 様」→「東中様」。英字の名前（LA PORTE BLEUE）の空白は残す
     var from = (data.fromName || data.fromAddress || "").trim().replace(/([^\x00-\x7F])\s+(?=[^\x00-\x7F])/g, "$1");
-    var preview = teamsText(data.preview || "").slice(0, 400);
+    // 以前は 400 文字で切っていて、お客様のメッセージが見切れていた（2026-11-12 Amazon の初期不良の相談）
+    var preview = teamsText(data.preview || "").slice(0, 2000);
     var firstLine = from + "：" + preview.split("\n")[0].slice(0, 120);
 
     // 件名に【L-12】があれば、12番の仕事への返事
