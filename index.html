@@ -1432,6 +1432,7 @@
   .lilo-light small { font-size: 12.5px; font-weight: 400; color: var(--text-muted); }
   @media (max-width: 700px) { .lilo-lights { grid-template-columns: repeat(2, minmax(0, 1fr)); } .lilo-sum { font-size: 18px; } }
   .lilo-at { color: var(--text-muted); margin-left: auto; font-size: 13px; }
+  .lilo-sec { width: 100%; font-size: 13.5px; font-weight: 800; color: var(--text-muted); margin-bottom: -4px; }   /* 「運用」「マーケティング」の段の見出し（2026-11-15） */
   .lilo-body { padding: 0 18px 14px; font-size: 14.5px; }
   .lilo-checks, .lilo-issues { margin: 4px 0; padding-left: 4px; list-style: none; display: flex; flex-direction: column; gap: 3px; }
   .lilo-issues { border-top: 1px solid rgba(127,127,127,.25); padding-top: 6px; }
@@ -1664,12 +1665,13 @@
   <!-- 今日（仕事管理のトップ）。全員が同じ画面を見る「リレーボード」。サインインした人には依存しない
        （同じアカウントを共用していても使えるように）。誰の仕事かは顔アイコンで見分ける -->
   <section class="panel" data-panel="today">
+    <!-- 様子はビジラボ・LILOCLE・Amazon の3つ。それぞれ「運用」と「マーケティング」の信号を出す（2026-11-15 代表の指定） -->
+    <!-- ビジラボの様子（運用：問い合わせ・商談・お客様への仕事はカードから今数える。マーケティング：sync.js loadMarketingStatus） -->
+    <div class="lilo-status" data-biz-status></div>
     <!-- LILOCLE の様子（信号と一言。開くたびに最新。sync.js loadLiloStatus）。代表の予定の上に大きく（2026-11-12 代表の指定） -->
     <div class="lilo-status" data-lilo-status></div>
     <!-- Amazon の様子（毎朝7時の Amazon チェックの数字＋お問い合わせは開くたびに数える。sync.js loadAmazonStatus） -->
     <div class="lilo-status" data-amz-status></div>
-    <!-- マーケティングの様子（SNS の投稿・反応、コラム、ホームページ。sync.js loadMarketingStatus。2026-11-15 代表の指定） -->
-    <div class="lilo-status" data-mkt-status></div>
     <!-- 代表の予定。今日の報告はページのいちばん下（2026-10-18 代表の指定） -->
     <div class="top-info">
       <section class="info-block" aria-label="代表の予定">
@@ -6079,35 +6081,61 @@
   function renderTopInfo() { renderReports(); renderRepSchedule(); }
 
   // ---- LILOCLE の様子（2026-11-12 代表の指定：今日の画面の上に1段、信号＋一言、開くたびに最新）----
+  // 2026-11-15 代表の指定：様子はビジラボ・LILOCLE・Amazon の3つに分け、それぞれ「運用」と「マーケティング」を出す。
+  // LILOCLE のマーケティング（Instagram・反応・メルマガ・読みもの・メーカー紹介）は mktChecks の biz:'lilocle' の分
   var liloState = { loading: true };
-  var LILO_LIGHT = { ok: "🟢", warn: "🟡", bad: "🔴" };
+  var LILO_LIGHT = { ok: "🟢", warn: "🟡", bad: "🔴", off: "⚪" };
   function setLiloStatus(state) {
     // 読み直し中は、前の結果を出したまま「読んでいます」だけ付ける
     liloState = state && state.loading && liloState.loaded ? Object.assign({}, liloState, { loading: true }) : (state || {});
     renderLiloStatus();
   }
+  // 信号のマスを並べる（運用・マーケティングの段ごと）
+  function statusLightsHtml(label, tiles) {
+    return '<span class="lilo-sec">' + esc(label) + '</span>' +
+      '<span class="lilo-lights">' + tiles.map(function (t) { return '<span class="lilo-light" title="' + esc(t.label + '：' + t.text) + '"><span class="lilo-dot">' + LILO_LIGHT[t.tone] + '</span>' + esc(t.label) + '<small>' + esc(t.text) + '</small></span>'; }).join('') + '</span>';
+  }
+  // tone は箱の色。知らせがなくても🟡のとき（数字がまだ届いていないなど）は「回っています」と言わない
+  function statusSum(bad, warn, fallback, tone) {
+    return bad ? '見てほしいことが ' + bad + ' 件あります' : warn ? '気をつけたいことが ' + warn + ' 件あります' : tone === 'warn' ? 'まだ読めていない数字があります' : fallback;
+  }
+  function worstTone(list) {
+    return list.indexOf('bad') !== -1 ? 'bad' : list.indexOf('warn') !== -1 ? 'warn' : 'ok';
+  }
+  function mktIssueHtml(i) { return '<li>' + LILO_LIGHT[i.tone] + ' ' + esc(i.text) + (i.task ? ' <small>→ 仕事に入れました（だれでも受け取れます）</small>' : '') + '</li>'; }
   function renderLiloStatus() {
     var box = document.querySelector('[data-lilo-status]');
     if (!box) return;
     var s = liloState;
+    var m = mktPart('lilocle');
     var refresh = '<button type="button" class="link-inline" data-lilo-refresh>' + (s.loading ? '読んでいます…' : '🔄 今の様子を読む') + '</button>';
-    if (!s.loaded) {
-      box.innerHTML = '<div class="lilo-head"><b>🌿 LILOCLE の様子</b><span class="lilo-sum">' + (s.loading ? 'Shopify と作り手さんのエクセルを読んでいます…' : '⚠️ 読めませんでした（' + esc(s.error || '') + '）') + '</span>' + refresh + '</div>';
-      return;
-    }
-    var bad = s.issues.filter(function (i) { return i.tone === 'bad'; }).length, warn = s.issues.filter(function (i) { return i.tone === 'warn'; }).length;
-    var tone = bad ? 'bad' : warn ? 'warn' : 'ok';
-    var sum = bad ? '見てほしい注文が ' + bad + ' 件あります' : warn ? '気をつけたい注文が ' + warn + ' 件あります' : 'ちゃんと回っています';
-    var at = s.at ? s.at.getHours() + ':' + pad2(s.at.getMinutes()) : '';
     var CAT = { report: '注文の報告', confirm: '作り手さんの確認', ship: '発送', pay: '支払いの確定' };
-    var list = s.issues.slice().sort(function (a, b) { return (a.tone === 'bad' ? 0 : 1) - (b.tone === 'bad' ? 0 : 1); });
+    var opsTiles, opsIssues = [], opsBad = 0, opsWarn = 0, opsTone;
+    if (s.loaded) {
+      opsTiles = s.checks;
+      opsIssues = s.issues.slice().sort(function (a, b) { return (a.tone === 'bad' ? 0 : 1) - (b.tone === 'bad' ? 0 : 1); });
+      opsBad = opsIssues.filter(function (i) { return i.tone === 'bad'; }).length;
+      opsWarn = opsIssues.filter(function (i) { return i.tone === 'warn'; }).length;
+      opsTone = opsBad ? 'bad' : opsWarn ? 'warn' : 'ok';
+    } else {
+      var msg = s.loading ? 'Shopify と作り手さんのエクセルを読んでいます…' : '⚠️ 読めませんでした（' + (s.error || '') + '）';
+      opsTiles = [{ label: '注文', tone: 'warn', text: msg }];
+      opsTone = 'warn';
+    }
+    var bad = opsBad + m.bad, warn = opsWarn + m.warn;
+    var tone = worstTone([opsTone, m.tone]);
+    var at = s.at ? s.at.getHours() + ':' + pad2(s.at.getMinutes()) : '';
     box.setAttribute('data-tone', tone);
-    box.innerHTML = '<details' + (bad ? ' open' : '') + '><summary class="lilo-head"><b>🌿 LILOCLE の様子</b><span class="lilo-sum">' + LILO_LIGHT[tone] + ' ' + esc(sum) + '</span>' +
-      '<span class="lilo-lights">' + s.checks.map(function (c) { return '<span class="lilo-light" title="' + esc(c.label + '：' + c.text) + '"><span class="lilo-dot">' + LILO_LIGHT[c.tone] + '</span>' + esc(c.label) + '<small>' + esc(c.text) + '</small></span>'; }).join('') + '</span>' +
-      '<small class="lilo-at">' + esc(at) + ' 現在</small></summary>' +
-      '<div class="lilo-body">' + (list.length ? '' : '<div>気になる注文はありません。</div>') +
-      (list.length ? '<ul class="lilo-issues">' + list.map(function (i) { return '<li>' + LILO_LIGHT[i.tone] + ' ' + (i.order ? '<b>' + esc(i.order) + '</b> ' : '') + (i.maker ? '<span class="lilo-maker">' + esc(i.maker) + '</span> ' : '') + '<span class="lilo-cat">［' + esc(CAT[i.cat] || '') + '］</span> ' + esc(i.text) + '</li>'; }).join('') + '</ul>' : '') +
-      '<div class="lilo-foot">' + refresh + '<span>まだ終わっていない注文 ' + s.total + ' 件を見ています（Shopify と作り手さんのエクセル）</span></div></div></details>';
+    box.innerHTML = '<details' + (bad ? ' open' : '') + '><summary class="lilo-head"><b>🌿 LILOCLE の様子</b><span class="lilo-sum">' + LILO_LIGHT[tone] + ' ' + esc(statusSum(bad, warn, 'ちゃんと回っています', tone)) + '</span>' +
+      '<small class="lilo-at">' + (at ? '注文は ' + esc(at) + ' 現在' : '') + (m.at ? '・マーケティングは ' + esc(m.at) : '') + '</small>' +
+      statusLightsHtml('運用（注文）', opsTiles) + statusLightsHtml('マーケティング', m.tiles) + '</summary>' +
+      '<div class="lilo-body">' +
+      (opsIssues.length ? '<ul class="lilo-issues">' + opsIssues.map(function (i) { return '<li>' + LILO_LIGHT[i.tone] + ' ' + (i.order ? '<b>' + esc(i.order) + '</b> ' : '') + (i.maker ? '<span class="lilo-maker">' + esc(i.maker) + '</span> ' : '') + '<span class="lilo-cat">［' + esc(CAT[i.cat] || '') + '］</span> ' + esc(i.text) + '</li>'; }).join('') + '</ul>' : '') +
+      (m.issues.length ? '<ul class="lilo-issues">' + m.issues.map(mktIssueHtml).join('') + '</ul>' : '') +
+      (!opsIssues.length && !m.issues.length ? '<div>気になることはありません。</div>' : '') +
+      (m.facts.length ? '<ul class="lilo-issues mkt-facts">' + m.facts.map(function (f) { return '<li>・' + esc(f) + '</li>'; }).join('') + '</ul>' : '') +
+      '<div class="lilo-foot">' + refresh + '<span>' + (s.loaded ? 'まだ終わっていない注文 ' + s.total + ' 件を見ています（Shopify と作り手さんのエクセル）。' : '') +
+      'マーケティングは毎朝の集計（Instagram は Windsor.ai、メルマガ・読みもの・メーカー紹介は Shopify）。目安はどれも週1本（8日で🟡・14日で🔴、メルマガ・読みもの・メーカー紹介は7日で🟡・10日で🔴）。🔴 はだれでも受け取れる仕事になり、様子が戻ると自動で完了します</span></div></div></details>';
   }
   // ---- Amazon の様子（2026-11-12 代表の指定：LILOCLE の様子の下に、昨日・今月売れた台数、お問い合わせ、在庫、健全性・返品）----
   var amzState = { loading: true };
@@ -6165,18 +6193,34 @@
       '<div class="lilo-foot"><span>売れた台数・在庫・健全性・返品は、毎朝7時の Amazon チェックの数字です（Amazon の注文データは約1.5日遅れて届くので、「昨日」は途中までのことがあります）</span></div></div></details>';
   }
 
-  // ---- マーケティングの様子（2026-11-15 代表の指定）----
-  // ビジラボ（DX支援）と LILOCLE の SNS の投稿が続いているか・反応、SEO コラムの下書きと公開、ホームページの集客。
+  // ---- マーケティング（2026-11-15 代表の指定）----
+  // ビジラボ（DX支援）：SNS の投稿・反応、SEO コラムの下書きと公開、ホームページの集客、メルマガ（HubSpot で始める予定。それまでは ⚪）。
+  // LILOCLE：Instagram の投稿・反応、メルマガ（Shopify Email）、読みもの（Shopify のブログ「読み物」）、メーカー紹介（Shopify の特集ページ）。
   // 数字は毎朝の定時実行「毎朝マーケティングの様子」が「案件管理キュー/status」に置く marketing-status-yyyyMMdd.json、
   // コラムの下書きは SharePoint「公式サイト資料/コラム」をアプリが直接見る（sync.js loadMarketingStatus）。
   // 🔴 には仕事の中身を付け、sync.js がだれでも取れる仕事として1回だけ入れる。様子が戻れば、その仕事は自動で完了。
+  // 出す場所は、ビジラボの様子（renderBizStatus）と LILOCLE の様子（renderLiloStatus）の「マーケティング」の段（tile.biz で分ける）
   // 見るアカウント（LILOCLE の Facebook・ビジラボの TikTok は運用していないので見ない。2026-11-15 代表の指定）
   var MKT_SNS = {
-    'ig-busilabo': { label: 'Instagram（ビジラボ）', business: '業務改善・DX支援', skill: 'Claude に「インスタの投稿案を出して」と頼む（スキル「ビジラボ Instagram」）' },
-    'ig-lilocle': { label: 'Instagram（LILOCLE）', business: 'LILOCLE運営', skill: '毎週月曜の「LILOCLE 週次SNS投稿案」のメールを見る。なければ Claude（LILOCLE運営AIチーム）に「今週の Instagram 投稿案を作って」と頼む' },
-    'fb-busilabo': { label: 'Facebook（ビジラボ）', business: '業務改善・DX支援', skill: 'Claude に「フェイスブックの投稿案を出して」と頼む（スキル「ビジラボ Facebook」）' }
+    'ig-busilabo': { label: 'Instagram', full: 'Instagram（ビジラボ）', biz: 'busilabo', business: '業務改善・DX支援', skill: 'Claude に「インスタの投稿案を出して」と頼む（スキル「ビジラボ Instagram」）' },
+    'fb-busilabo': { label: 'Facebook', full: 'Facebook（ビジラボ）', biz: 'busilabo', business: '業務改善・DX支援', skill: 'Claude に「フェイスブックの投稿案を出して」と頼む（スキル「ビジラボ Facebook」）' },
+    'ig-lilocle': { label: 'Instagram', full: 'Instagram（LILOCLE）', biz: 'lilocle', business: 'LILOCLE運営', skill: '毎週月曜の「LILOCLE 週次SNS投稿案」のメールを見る。なければ Claude（LILOCLE運営AIチーム）に「今週の Instagram 投稿案を作って」と頼む' }
   };
-  // 目安：SNS は週1本（8日で🟡・14日で🔴）、コラムの公開は週1本（7日で🟡・10日で🔴）、下書きは毎日（1日空くと🟡・2日で🔴）。反応・集客は30%以上減ると🟡（🔴にはしない）
+  // LILOCLE の Shopify の発信（JSON の lilocle.newsletter・yomimono・feature）。目安はどれも週1本（7日で🟡・10日で🔴。2026-11-15 代表の指定）
+  var MKT_LILO = [
+    { id: 'newsletter', key: 'lilo-mail', label: 'メルマガ', unit: '通', verb: '配信', title: 'LILOCLE のメルマガを送る',
+      steps: ['Claude（LILOCLE運営AIチーム）に「今週のメルマガの文案を作って」と頼む（会員さん向け。いつもは 11:45 ごろに配信）',
+        'Shopify 管理画面 →「マーケティング」→「Shopify Email」で作り、文面と商品のリンクを確かめて送る'] },
+    { id: 'yomimono', key: 'lilo-yomimono', label: '読みもの', unit: '本', verb: '公開', title: 'LILOCLE の読みものを1本公開する',
+      steps: ['Claude（LILOCLE運営AIチーム）に「読みものの記事を作って」と頼む',
+        'Shopify 管理画面 →「コンテンツ」→「ブログ記事」で、ブログ「読み物」に記事を作って公開する'] },
+    { id: 'feature', key: 'lilo-feature', label: 'メーカー紹介', unit: '本', verb: '公開', title: 'LILOCLE のメーカー紹介（特集ページ）を1本作る',
+      steps: ['紹介するメーカーさん（作り手さん）と商品を決める',
+        'Claude（LILOCLE運営AIチーム）に「〇〇さんの特集ページを作って」と頼む',
+        'Shopify 管理画面 →「オンラインストア」→「ページ」で特集ページを作って公開する'] }
+  ];
+  // 目安：SNS は週1本（8日で🟡・14日で🔴）、コラムの公開・LILOCLE のメルマガ・読みもの・メーカー紹介は週1本（7日で🟡・10日で🔴）、
+  // 下書きは毎日（1日空くと🟡・2日で🔴）。反応・集客は30%以上減ると🟡（🔴にはしない）
   var MKT_SNS_WARN = 8, MKT_SNS_BAD = 14, MKT_PUB_WARN = 7, MKT_PUB_BAD = 10, MKT_DRAFT_WARN = 1, MKT_DRAFT_BAD = 2, MKT_DROP = -30;
   var mktState = { loading: true };
   function setMktStatus(state) { mktState = state || {}; renderMktStatus(); }
@@ -6190,62 +6234,85 @@
   function mktAgo(d) { return d === 0 ? '今日' : d === 1 ? '昨日' : d + '日前'; }
   function mktPct(now, prev) { return typeof now === 'number' && typeof prev === 'number' && prev > 0 ? Math.round((now - prev) / prev * 100) : null; }
   function mktPctText(p) { return p === null ? '' : '（前の同じ期間より ' + (p >= 0 ? '+' : '') + p + '%）'; }
-  // ホームページのお問い合わせ（業務改善・DX支援の「問い合わせ」から入った仕事。28日分。売り込みなど迷惑メール振分けのものは数えない）
-  function mktInquiries28d() {
-    var from = new Date(); from.setHours(0, 0, 0, 0); from.setDate(from.getDate() - 28);
-    return liveCards('task').filter(function (c) {
-      var d = addedOn(c);
-      return businessOf(c) === '業務改善・DX支援' && /^inquiry:/.test(roleVal(c, 'teamsMessageId')) && d && d >= from &&
-        !spamSuspect(c) && spamDecision(c) !== SPAM_MOVE;
-    }).length;
-  }
   function mktTaskSteps(steps) { return '\n\n【手順】\n' + steps.map(function (s, i) { return (i + 1) + '. ' + s; }).join('\n'); }
-  // 信号・知らせ・数字を決める。sync.js も同じものを使って仕事を入れる（判断を1か所にするため）
+  // 信号・知らせ・数字を決める。sync.js も同じものを使って仕事を入れる（判断を1か所にするため）。
+  // tiles・issues・facts には biz（'busilabo'／'lilocle'）を付ける。hold は「今回は数字が取れなかったので、入っている仕事を片付けない」目印の頭
   function mktChecks(s) {
     s = s || mktState;
-    var tiles = [], issues = [], facts = [], a = s.loaded ? s.data : null;
+    var tiles = [], issues = [], facts = [], hold = [], a = s.loaded ? s.data : null;
     var gen = a ? new Date(a.generatedAt || '') : null;
     var stale = !a || isNaN(gen.getTime()) || (Date.now() - gen.getTime()) > 36 * 3600000;
+    var T = function (biz, label, tone, text) { tiles.push({ biz: biz, label: label, tone: tone, text: text }); };
+    var msg = mktState.loading ? '読んでいます…' : (s.error || '読めませんでした');
+    var sns = a ? (a.sns || []) : [];
+    var react = { busilabo: { tone: 'ok', text: [] }, lilocle: { tone: 'ok', text: [] } };
+    // SNS の投稿（アカウントごと）と反応
+    var snsTile = function (id) {
+      var def = MKT_SNS[id], n = sns.filter(function (x) { return x.id === id; })[0];
+      if (!a) { T(def.biz, def.label, 'warn', msg); return; }
+      if (!n) { T(def.biz, def.label, 'warn', '数字が届いていません'); issues.push({ biz: def.biz, tone: 'warn', text: '［' + def.full + '］今朝の集計に数字がありませんでした' }); hold.push('mkt:sns:' + id + ':'); return; }
+      var d = mktDaysSince(n.lastPostDate);
+      var tone = d === null || d >= MKT_SNS_BAD ? 'bad' : d >= MKT_SNS_WARN ? 'warn' : 'ok';
+      T(def.biz, def.label, tone, d === null ? '投稿が見つかりません' : '最後の投稿 ' + mktMd(n.lastPostDate) + '（' + mktAgo(d) + '）・28日で ' + (n.posts28d || 0) + ' 本');
+      if (tone !== 'ok') {
+        var why = d === null ? 'この60日、投稿が見つかりません' : d + '日、投稿がありません（最後の投稿 ' + mktMd(n.lastPostDate) + '）';
+        issues.push({ biz: def.biz, tone: tone, text: '［' + def.full + '］' + why + '。週1本が目安です',
+          task: tone === 'bad' && !stale ? {
+            key: 'mkt:sns:' + id + ':' + (n.lastPostDate || 'none'),
+            fields: { Title: def.full + 'に投稿する', Business: def.business, Category: '発信', Priority: '中',
+              Content: def.full + 'に投稿する\nマーケティングの様子で🔴：' + why + '。週1本が目安です。' + mktTaskSteps([def.skill, '投稿文と画像を確かめて、' + def.label + ' に投稿する', '投稿すると、次の朝の集計で様子が🟢に戻り、この仕事は自動で完了します']) },
+            memo: why } : null });
+      }
+      // 反応：28日のリーチ（Instagram）・反応の数を、その前の28日と比べる
+      var rp = mktPct(n.reach28d, n.reachPrev28d), ep = mktPct(n.engagement28d, n.engagementPrev28d);
+      if ((rp !== null && rp <= MKT_DROP) || (ep !== null && ep <= MKT_DROP)) {
+        react[def.biz].tone = 'warn';
+        issues.push({ biz: def.biz, tone: 'warn', text: '［' + def.full + 'の反応］' + (rp !== null && rp <= MKT_DROP ? 'リーチが ' + rp + '%' : '反応が ' + ep + '%') + '（28日を、その前の28日と比べて）' });
+      }
+      var fd = typeof n.followers === 'number' && typeof n.followers7dAgo === 'number' ? n.followers - n.followers7dAgo : null;
+      react[def.biz].text.push(def.label + ' ' + (typeof n.followers === 'number' ? n.followers + '人' + (fd !== null ? '（7日で' + (fd >= 0 ? '+' : '') + fd + '）' : '') : '－'));
+      facts.push({ biz: def.biz, text: def.full + '：' +
+        (typeof n.followers === 'number' ? 'フォロワー ' + n.followers + '人' + (fd !== null ? '（7日で ' + (fd >= 0 ? '+' : '') + fd + '）' : '') + '・' : '') +
+        (typeof n.reach28d === 'number' ? 'リーチ ' + n.reach28d + mktPctText(rp) + '・' : '') +
+        '反応 ' + (typeof n.engagement28d === 'number' ? n.engagement28d : '－') + mktPctText(ep) + '（28日）' +
+        (n.best && n.best.date ? '／いちばん反応が良かった投稿：' + mktMd(n.best.date) + (typeof n.best.engagement === 'number' ? '（反応 ' + n.best.engagement + '）' : '') : '') });
+    };
+    var reactTile = function (biz) { T(biz, 'SNS の反応', a ? react[biz].tone : 'warn', a ? (react[biz].text.join('・') || '－') : msg); };
+
+    // ---- ビジラボ ----
+    snsTile('ig-busilabo'); snsTile('fb-busilabo'); reactTile('busilabo');
+    // コラムの下書き（毎日0時の「毎日SEOコラム下書き作成」。アプリがフォルダを直接見る）
+    var dr = s.drafts;
+    if (dr && dr.lastDate) {
+      var dd = mktDaysSince(dr.lastDate);
+      var dtone = dd >= MKT_DRAFT_BAD ? 'bad' : dd >= MKT_DRAFT_WARN ? 'warn' : 'ok';
+      T('busilabo', 'コラムの下書き', dtone, '最新 ' + mktMd(dr.lastDate) + '（' + mktAgo(dd) + '）・7日で ' + (dr.count7d || 0) + ' 本');
+      if (dtone !== 'ok') {
+        var dwhy = dd + '日、コラムの下書きが増えていません（最新 ' + mktMd(dr.lastDate) + '）';
+        issues.push({ biz: 'busilabo', tone: dtone, text: '［コラムの下書き］' + dwhy + '。毎日0時に1本できるはずです',
+          task: dtone === 'bad' ? {
+            key: 'mkt:column-draft:' + dr.lastDate,
+            fields: { Title: 'コラムの下書きが止まっていないか確かめる', Business: '業務改善・DX支援', Category: '発信', Priority: '中',
+              Content: 'コラムの下書きが止まっていないか確かめる\nマーケティングの様子で🔴：' + dwhy + '。毎日0時の「毎日SEOコラム下書き作成」が1本作るはずです。' + mktTaskSteps([
+                'SharePoint「公式サイト資料/コラム」を開いて、この2日の下書き（Word）がないことを確かめる',
+                '代表に「毎日のSEOコラムの下書きが止まっているようです」と知らせる',
+                '下書きがまたできると、様子が🟢に戻り、この仕事は自動で完了します']) },
+            memo: dwhy } : null });
+      }
+    } else {
+      T('busilabo', 'コラムの下書き', 'warn', s.draftsError ? 'フォルダを読めませんでした' : '読んでいます…');
+      if (s.draftsError) issues.push({ biz: 'busilabo', tone: 'warn', text: '［コラムの下書き］フォルダを読めませんでした（' + s.draftsError + '）' });
+    }
+    // コラムの公開（busilabo.com のコラムの公開日）
     if (a) {
-      var reactTone = 'ok', reactText = [];
-      (a.sns || []).forEach(function (n) {
-        var def = MKT_SNS[n.id];
-        if (!def) return;
-        var d = mktDaysSince(n.lastPostDate);
-        var tone = d === null || d >= MKT_SNS_BAD ? 'bad' : d >= MKT_SNS_WARN ? 'warn' : 'ok';
-        tiles.push({ label: def.label, tone: tone, text: d === null ? '投稿が見つかりません' : '最後の投稿 ' + mktMd(n.lastPostDate) + '（' + mktAgo(d) + '）・28日で ' + (n.posts28d || 0) + ' 本' });
-        if (tone !== 'ok') {
-          var why = d === null ? 'この60日、投稿が見つかりません' : d + '日、投稿がありません（最後の投稿 ' + mktMd(n.lastPostDate) + '）';
-          issues.push({ tone: tone, text: '［' + def.label + '］' + why + '。週1本が目安です',
-            task: tone === 'bad' && !stale ? {
-              key: 'mkt:sns:' + n.id + ':' + (n.lastPostDate || 'none'),
-              fields: { Title: def.label + 'に投稿する', Business: def.business, Category: '発信', Priority: '中',
-                Content: def.label + 'に投稿する\nマーケティングの様子で🔴：' + why + '。週1本が目安です。' + mktTaskSteps([def.skill, '投稿文と画像を確かめて、' + def.label.replace(/（.*/, '') + ' に投稿する', '投稿すると、次の朝の集計で様子が🟢に戻り、この仕事は自動で完了します']) },
-              memo: why } : null });
-        }
-        // 反応：28日のリーチ（Instagram）・反応の数を、その前の28日と比べる
-        var rp = mktPct(n.reach28d, n.reachPrev28d), ep = mktPct(n.engagement28d, n.engagementPrev28d);
-        if ((rp !== null && rp <= MKT_DROP) || (ep !== null && ep <= MKT_DROP)) {
-          reactTone = 'warn';
-          issues.push({ tone: 'warn', text: '［' + def.label + 'の反応］' + (rp !== null && rp <= MKT_DROP ? 'リーチが ' + rp + '%' : '反応が ' + ep + '%') + '（28日を、その前の28日と比べて）' });
-        }
-        var fd = typeof n.followers === 'number' && typeof n.followers7dAgo === 'number' ? n.followers - n.followers7dAgo : null;
-        reactText.push(def.label.replace(/（(.*)）/, ' $1') + ' ' + (typeof n.followers === 'number' ? n.followers + '人' + (fd !== null ? '（7日で' + (fd >= 0 ? '+' : '') + fd + '）' : '') : ''));
-        facts.push(def.label + '：' +
-          (typeof n.followers === 'number' ? 'フォロワー ' + n.followers + '人' + (fd !== null ? '（7日で ' + (fd >= 0 ? '+' : '') + fd + '）' : '') + '・' : '') +
-          (typeof n.reach28d === 'number' ? 'リーチ ' + n.reach28d + mktPctText(rp) + '・' : '') +
-          '反応 ' + (typeof n.engagement28d === 'number' ? n.engagement28d : '－') + mktPctText(ep) + '（28日）' +
-          (n.best && n.best.date ? '／いちばん反応が良かった投稿：' + mktMd(n.best.date) + (typeof n.best.engagement === 'number' ? '（反応 ' + n.best.engagement + '）' : '') : ''));
-      });
-      tiles.push({ label: 'SNS の反応', tone: reactTone, text: reactText.join('・') || '－' });
-      // コラムの公開（busilabo.com のコラムの公開日）
       var c = a.column || {};
       var pd = mktDaysSince(c.lastPublishedDate);
       var ptone = pd === null || pd >= MKT_PUB_BAD ? 'bad' : pd >= MKT_PUB_WARN ? 'warn' : 'ok';
-      tiles.push({ label: 'コラムの公開', tone: ptone, text: pd === null ? '公開日が分かりません' : '最後の公開 ' + mktMd(c.lastPublishedDate) + '（' + mktAgo(pd) + '）・28日で ' + (c.published28d || 0) + ' 本' });
+      T('busilabo', 'コラムの公開', ptone, pd === null ? '公開日が分かりません' : '最後の公開 ' + mktMd(c.lastPublishedDate) + '（' + mktAgo(pd) + '）・28日で ' + (c.published28d || 0) + ' 本');
+      if (pd === null) hold.push('mkt:column-publish:');
       if (ptone !== 'ok') {
         var pwhy = pd === null ? 'コラムの公開日が読めませんでした' : pd + '日、コラムの公開がありません（最後の公開 ' + mktMd(c.lastPublishedDate) + (c.lastPublishedTitle ? '「' + c.lastPublishedTitle + '」' : '') + '）';
-        issues.push({ tone: ptone, text: '［コラムの公開］' + pwhy + '。週1本が目安です',
+        issues.push({ biz: 'busilabo', tone: ptone, text: '［コラムの公開］' + pwhy + '。週1本が目安です',
           task: ptone === 'bad' && !stale && pd !== null ? {
             key: 'mkt:column-publish:' + c.lastPublishedDate,
             fields: { Title: 'コラムを1本公開する', Business: '業務改善・DX支援', Category: '発信', Priority: '中',
@@ -6256,61 +6323,119 @@
                 '公開されると、次の朝の集計で様子が🟢に戻り、この仕事は自動で完了します']) },
             memo: pwhy } : null });
       }
-      // ホームページ（GA4・Search Console）とお問い合わせ
+      // ホームページ（GA4・Search Console）
       var site = a.site || {};
       var sp = mktPct(site.sessions7d, site.sessionsPrev7d), cp = mktPct(site.scClicks28d, site.scClicksPrev28d);
-      var inq = mktInquiries28d();
       var stone = (sp !== null && sp <= MKT_DROP) || (cp !== null && cp <= MKT_DROP) ? 'warn' : 'ok';
-      tiles.push({ label: 'ホームページ', tone: stone, text: 'アクセス ' + (typeof site.sessions7d === 'number' ? site.sessions7d : '－') + '（7日）・検索からのクリック ' + (typeof site.scClicks28d === 'number' ? site.scClicks28d : '－') + '（28日）・お問い合わせ ' + inq + ' 件（28日）' });
-      if (sp !== null && sp <= MKT_DROP) issues.push({ tone: 'warn', text: '［ホームページ］アクセスが ' + sp + '%（7日を、その前の7日と比べて）' });
-      if (cp !== null && cp <= MKT_DROP) issues.push({ tone: 'warn', text: '［ホームページ］検索からのクリックが ' + cp + '%（28日を、その前の28日と比べて）' });
-      facts.push('ホームページ：アクセス ' + (typeof site.sessions7d === 'number' ? site.sessions7d : '－') + mktPctText(sp) + '（7日）・検索での表示 ' + (typeof site.scImpressions28d === 'number' ? site.scImpressions28d : '－') + mktPctText(mktPct(site.scImpressions28d, site.scImpressionsPrev28d)) + '・クリック ' + (typeof site.scClicks28d === 'number' ? site.scClicks28d : '－') + mktPctText(cp) + '（28日）・お問い合わせ ' + inq + ' 件（28日）' +
-        ((site.topQueries || []).length ? '／よく検索された言葉：' + site.topQueries.slice(0, 3).map(function (q) { return '「' + q.query + '」'; }).join('') : ''));
-      if (stale) issues.push({ tone: 'warn', text: '［数字］数字が古いままです（' + (isNaN(gen.getTime()) ? '不明' : (gen.getMonth() + 1) + '/' + gen.getDate()) + ' のもの）。毎朝のマーケティングの集計が止まっているかもしれません' });
+      T('busilabo', 'ホームページ', stone, 'アクセス ' + (typeof site.sessions7d === 'number' ? site.sessions7d : '－') + '（7日）・検索からのクリック ' + (typeof site.scClicks28d === 'number' ? site.scClicks28d : '－') + '（28日）');
+      if (sp !== null && sp <= MKT_DROP) issues.push({ biz: 'busilabo', tone: 'warn', text: '［ホームページ］アクセスが ' + sp + '%（7日を、その前の7日と比べて）' });
+      if (cp !== null && cp <= MKT_DROP) issues.push({ biz: 'busilabo', tone: 'warn', text: '［ホームページ］検索からのクリックが ' + cp + '%（28日を、その前の28日と比べて）' });
+      facts.push({ biz: 'busilabo', text: 'ホームページ：アクセス ' + (typeof site.sessions7d === 'number' ? site.sessions7d : '－') + mktPctText(sp) + '（7日）・検索での表示 ' + (typeof site.scImpressions28d === 'number' ? site.scImpressions28d : '－') + mktPctText(mktPct(site.scImpressions28d, site.scImpressionsPrev28d)) + '・クリック ' + (typeof site.scClicks28d === 'number' ? site.scClicks28d : '－') + mktPctText(cp) + '（28日）' +
+        ((site.topQueries || []).length ? '／よく検索された言葉：' + site.topQueries.slice(0, 3).map(function (q) { return '「' + q.query + '」'; }).join('') : '') });
     } else {
-      var msg = mktState.loading ? '読んでいます…' : (s.error || '読めませんでした');
-      ['SNS の投稿', 'SNS の反応', 'コラムの公開', 'ホームページ'].forEach(function (l) { tiles.push({ label: l, tone: 'warn', text: msg }); });
+      T('busilabo', 'コラムの公開', 'warn', msg);
+      T('busilabo', 'ホームページ', 'warn', msg);
     }
-    // コラムの下書き（毎日0時の「毎日SEOコラム下書き作成」。アプリがフォルダを直接見る）
-    var dr = s.drafts;
-    if (dr && dr.lastDate) {
-      var dd = mktDaysSince(dr.lastDate);
-      var dtone = dd >= MKT_DRAFT_BAD ? 'bad' : dd >= MKT_DRAFT_WARN ? 'warn' : 'ok';
-      tiles.splice(tiles.length - 2 < 0 ? 0 : tiles.length - 2, 0, { label: 'コラムの下書き', tone: dtone, text: '最新 ' + mktMd(dr.lastDate) + '（' + mktAgo(dd) + '）・7日で ' + (dr.count7d || 0) + ' 本' });
-      if (dtone !== 'ok') {
-        var dwhy = dd + '日、コラムの下書きが増えていません（最新 ' + mktMd(dr.lastDate) + '）';
-        issues.push({ tone: dtone, text: '［コラムの下書き］' + dwhy + '。毎日0時に1本できるはずです',
-          task: dtone === 'bad' ? {
-            key: 'mkt:column-draft:' + dr.lastDate,
-            fields: { Title: 'コラムの下書きが止まっていないか確かめる', Business: '業務改善・DX支援', Category: '発信', Priority: '中',
-              Content: 'コラムの下書きが止まっていないか確かめる\nマーケティングの様子で🔴：' + dwhy + '。毎日0時の「毎日SEOコラム下書き作成」が1本作るはずです。' + mktTaskSteps([
-                'SharePoint「公式サイト資料/コラム」を開いて、この2日の下書き（Word）がないことを確かめる',
-                '代表に「毎日のSEOコラムの下書きが止まっているようです」と知らせる',
-                '下書きがまたできると、様子が🟢に戻り、この仕事は自動で完了します']) },
-            memo: dwhy } : null });
+    // ビジラボのメルマガは HubSpot で始める予定（2026-11-15 代表）。始めるまでは ⚪ で、仕事は入れない
+    T('busilabo', 'メルマガ', 'off', 'まだ始めていません（HubSpot で始める予定）');
+
+    // ---- LILOCLE ----
+    snsTile('ig-lilocle'); reactTile('lilocle');
+    var lilo = a ? (a.lilocle || {}) : null;
+    MKT_LILO.forEach(function (def) {
+      var x = lilo ? lilo[def.id] : null;
+      if (!a) { T('lilocle', def.label, 'warn', msg); return; }
+      if (!x) { T('lilocle', def.label, 'warn', '数字が届いていません'); issues.push({ biz: 'lilocle', tone: 'warn', text: '［' + def.label + '］今朝の集計に数字がありませんでした（Shopify から読めなかったかもしれません）' }); hold.push('mkt:' + def.key + ':'); return; }
+      var d = mktDaysSince(x.lastDate);
+      var tone = d === null || d >= MKT_PUB_BAD ? 'bad' : d >= MKT_PUB_WARN ? 'warn' : 'ok';
+      T('lilocle', def.label, tone, d === null ? 'この半年、' + def.verb + 'が見つかりません' : '最後の' + def.verb + ' ' + mktMd(x.lastDate) + '（' + mktAgo(d) + '）・28日で ' + (x.count28d || 0) + ' ' + def.unit);
+      if (tone !== 'ok') {
+        var why = d === null ? 'この半年、' + def.label + 'の' + def.verb + 'が見つかりません' : d + '日、' + def.label + 'の' + def.verb + 'がありません（最後の' + def.verb + ' ' + mktMd(x.lastDate) + (x.lastTitle ? '「' + x.lastTitle + '」' : '') + '）';
+        issues.push({ biz: 'lilocle', tone: tone, text: '［' + def.label + '］' + why + '。週1' + def.unit + 'が目安です',
+          task: tone === 'bad' && !stale ? {
+            key: 'mkt:' + def.key + ':' + (x.lastDate || 'none'),
+            fields: { Title: def.title, Business: 'LILOCLE運営', Category: '発信', Priority: '中',
+              Content: def.title + '\nマーケティングの様子で🔴：' + why + '。週1' + def.unit + 'が目安です。' + mktTaskSteps(def.steps.concat([def.verb + 'すると、次の朝の集計で様子が🟢に戻り、この仕事は自動で完了します'])) },
+            memo: why } : null });
       }
-    } else if (s.draftsError) {
-      issues.push({ tone: 'warn', text: '［コラムの下書き］フォルダを読めませんでした（' + s.draftsError + '）' });
-    }
+    });
+
+    if (a && stale) issues.push({ biz: 'both', tone: 'warn', text: '［数字］数字が古いままです（' + (isNaN(gen.getTime()) ? '不明' : (gen.getMonth() + 1) + '/' + gen.getDate()) + ' のもの）。毎朝のマーケティングの集計が止まっているかもしれません' });
     var bad = issues.filter(function (i) { return i.tone === 'bad'; }).length, warn = issues.filter(function (i) { return i.tone === 'warn'; }).length;
     var tone = bad ? 'bad' : (warn || tiles.some(function (t) { return t.tone === 'warn'; })) ? 'warn' : 'ok';
-    return { tiles: tiles, issues: issues, facts: facts, tone: tone, bad: bad, warn: warn, stale: stale, data: a, gen: gen };
+    return { tiles: tiles, issues: issues, facts: facts, hold: hold, tone: tone, bad: bad, warn: warn, stale: stale, data: a, gen: gen };
   }
-  function renderMktStatus() {
-    var box = document.querySelector('[data-mkt-status]');
-    if (!box) return;
+  // ビジラボ／LILOCLE の分だけを取り出す（数字が古いという知らせは両方に出す）
+  function mktPart(biz) {
     var r = mktChecks(mktState);
-    var sum = r.bad ? '見てほしいことが ' + r.bad + ' 件あります' : r.warn ? '気をつけたいことが ' + r.warn + ' 件あります' : (r.data ? 'ちゃんと回っています' : '数字はまだ届いていません');
+    var mine = function (x) { return x.biz === biz || x.biz === 'both'; };
+    var tiles = r.tiles.filter(mine);
+    var issues = r.issues.filter(mine).sort(function (x, y) { return (x.tone === 'bad' ? 0 : 1) - (y.tone === 'bad' ? 0 : 1); });
+    var bad = issues.filter(function (i) { return i.tone === 'bad'; }).length, warn = issues.filter(function (i) { return i.tone === 'warn'; }).length;
+    var tone = bad ? 'bad' : (warn || tiles.some(function (t) { return t.tone === 'warn'; })) ? 'warn' : 'ok';
     var at = r.data && r.gen && !isNaN(r.gen.getTime()) ? (r.gen.getMonth() + 1) + '/' + r.gen.getDate() + ' ' + r.gen.getHours() + ':' + pad2(r.gen.getMinutes()) + ' の数字' : '';
-    var list = r.issues.slice().sort(function (x, y) { return (x.tone === 'bad' ? 0 : 1) - (y.tone === 'bad' ? 0 : 1); });
-    box.setAttribute('data-tone', r.tone);
-    box.innerHTML = '<details' + (r.bad ? ' open' : '') + '><summary class="lilo-head"><b>📣 マーケティングの様子</b><span class="lilo-sum">' + LILO_LIGHT[r.tone] + ' ' + esc(sum) + '</span>' +
-      '<span class="lilo-lights">' + r.tiles.map(function (t) { return '<span class="lilo-light"><span class="lilo-dot">' + LILO_LIGHT[t.tone] + '</span>' + esc(t.label) + '<small>' + esc(t.text) + '</small></span>'; }).join('') + '</span>' +
-      '<small class="lilo-at">' + esc(at) + '</small></summary>' +
-      '<div class="lilo-body">' + (list.length ? '<ul class="lilo-issues">' + list.map(function (i) { return '<li>' + LILO_LIGHT[i.tone] + ' ' + esc(i.text) + (i.task ? ' <small>→ 仕事に入れました（だれでも受け取れます）</small>' : '') + '</li>'; }).join('') + '</ul>' : '<div>気になることはありません。</div>') +
-      (r.facts.length ? '<ul class="lilo-issues mkt-facts">' + r.facts.map(function (f) { return '<li>・' + esc(f) + '</li>'; }).join('') + '</ul>' : '') +
-      '<div class="lilo-foot"><span>SNS・コラムの公開・ホームページは毎朝の集計（Windsor.ai・busilabo.com）、コラムの下書きは SharePoint のフォルダを今見た数です。目安：SNS は週1本（8日で🟡・14日で🔴）、コラムの公開は週1本（10日で🔴）。🔴 はだれでも受け取れる仕事になり、様子が戻ると自動で完了します</span></div></div></details>';
+    return { tiles: tiles, issues: issues, facts: r.facts.filter(mine).map(function (f) { return f.text; }), tone: tone, bad: bad, warn: warn, at: at };
   }
+
+  // ---- ビジラボの運用（2026-11-15 代表の指定：問い合わせ・商談と成約の進み具合・お客様への仕事の遅れ）----
+  // どれもアプリの中のカード（問い合わせ・成約後の構築タスク・運用中の顧客・仕事）から、開くたびに数える。仕事は増やさない（カードがすでに仕事のため）
+  function bizOpsChecks() {
+    var tiles = [], issues = [];
+    var inq = liveCards('inquiry').filter(function (c) { return !spamSuspect(c) && spamDecision(c) !== SPAM_MOVE; });
+    var ageOf = function (c) { var v = roleVal(c, 'receivedAt'); return v ? -dayDiffFromToday(v.slice(0, 10)) : null; };
+    var name = function (c) { return cardTitle(c); };
+    // 問い合わせ：返事をしていないもの（未対応）。受付から2日たつと🔴
+    var waiting = inq.filter(function (c) { return statusOf(c) === '未対応'; });
+    var recent = inq.filter(function (c) { var g = ageOf(c); return g !== null && g < 28; }).length;
+    var wTone = !waiting.length ? 'ok' : waiting.some(function (c) { var g = ageOf(c); return g !== null && g >= 2; }) ? 'bad' : 'warn';
+    tiles.push({ label: '問い合わせ', tone: wTone, text: (waiting.length ? '返事待ち ' + waiting.length + ' 件' : '返事待ちはありません') + '・28日で ' + recent + ' 件' });
+    waiting.forEach(function (c) {
+      var g = ageOf(c);
+      issues.push({ tone: g !== null && g >= 2 ? 'bad' : 'warn', text: '［問い合わせ］' + name(c) + '：' + (g === null ? '' : g === 0 ? '今日受付・' : '受付から ' + g + ' 日・') + 'まだ返事をしていません' });
+    });
+    // 商談・成約：対応中・商談中で期限を過ぎたものは🔴（止まっている）
+    var doing = inq.filter(function (c) { return statusOf(c) === '対応中'; }), meeting = inq.filter(function (c) { return statusOf(c) === '商談中'; });
+    var won = inq.filter(function (c) { return statusOf(c) === '成約'; }).length;
+    var stuck = doing.concat(meeting).filter(isOverdue);
+    tiles.push({ label: '商談・成約', tone: stuck.length ? 'bad' : 'ok', text: '対応中 ' + doing.length + '・商談中 ' + meeting.length + '・成約 ' + won + '（これまで）' });
+    stuck.forEach(function (c) { issues.push({ tone: 'bad', text: '［商談・成約］' + name(c) + '（' + statusOf(c) + '）：期限 ' + mktMd(roleVal(c, 'due')) + ' を過ぎています' }); });
+    // お客様への仕事の遅れ：成約後の構築タスク・ビジラボの仕事の期限切れ、運用中の顧客の「停滞」（🔴）・「要フォロー」・次の連絡日の過ぎたもの（🟡）
+    var late = [];
+    liveCards('wontask').filter(function (c) { return isOverdue(c); }).forEach(function (c) { late.push({ tone: 'bad', text: '［構築］' + name(c) + '：期限 ' + mktMd(roleVal(c, 'due')) + ' を過ぎています' }); });
+    liveCards('task').filter(function (c) { return businessOf(c) === DX_BUSINESS && !isDone(c) && isOverdue(c); }).forEach(function (c) { late.push({ tone: 'bad', text: '［仕事］' + name(c) + '：期限 ' + mktMd(roleVal(c, 'due')) + ' を過ぎています' }); });
+    liveCards('ops').forEach(function (c) {
+      var st = statusOf(c), next = roleVal(c, 'nextTouch');
+      if (st === '停滞') late.push({ tone: 'bad', text: '［運用中］' + name(c) + '：停滞しています' });
+      else if (st === '要フォロー' || (next && next < todayStr)) late.push({ tone: 'warn', text: '［運用中］' + name(c) + '：' + (st === '要フォロー' ? 'フォローが要ります' : '次の連絡日 ' + mktMd(next) + ' を過ぎています') });
+    });
+    var lBad = late.filter(function (x) { return x.tone === 'bad'; }).length;
+    tiles.push({ label: 'お客様への仕事', tone: lBad ? 'bad' : late.length ? 'warn' : 'ok', text: late.length ? '遅れ ' + late.length + ' 件' : '遅れはありません' });
+    issues = issues.concat(late);
+    return { tiles: tiles, issues: issues };
+  }
+
+  // ---- ビジラボの様子（運用＋マーケティング）----
+  function renderBizStatus() {
+    var box = document.querySelector('[data-biz-status]');
+    if (!box) return;
+    var o = bizOpsChecks(), m = mktPart('busilabo');
+    var oIssues = o.issues.slice().sort(function (x, y) { return (x.tone === 'bad' ? 0 : 1) - (y.tone === 'bad' ? 0 : 1); });
+    var oBad = oIssues.filter(function (i) { return i.tone === 'bad'; }).length, oWarn = oIssues.filter(function (i) { return i.tone === 'warn'; }).length;
+    var bad = oBad + m.bad, warn = oWarn + m.warn;
+    var tone = worstTone([oBad ? 'bad' : oWarn ? 'warn' : 'ok', m.tone]);
+    box.setAttribute('data-tone', tone);
+    box.innerHTML = '<details' + (bad ? ' open' : '') + '><summary class="lilo-head"><b>💼 ビジラボの様子</b><span class="lilo-sum">' + LILO_LIGHT[tone] + ' ' + esc(statusSum(bad, warn, 'ちゃんと回っています', tone)) + '</span>' +
+      '<small class="lilo-at">運用は今の件数' + (m.at ? '・マーケティングは ' + esc(m.at) : '') + '</small>' +
+      statusLightsHtml('運用（お客様）', o.tiles) + statusLightsHtml('マーケティング', m.tiles) + '</summary>' +
+      '<div class="lilo-body">' +
+      (oIssues.length ? '<ul class="lilo-issues">' + oIssues.map(function (i) { return '<li>' + LILO_LIGHT[i.tone] + ' ' + esc(i.text) + '</li>'; }).join('') + '</ul>' : '') +
+      (m.issues.length ? '<ul class="lilo-issues">' + m.issues.map(mktIssueHtml).join('') + '</ul>' : '') +
+      (!oIssues.length && !m.issues.length ? '<div>気になることはありません。</div>' : '') +
+      (m.facts.length ? '<ul class="lilo-issues mkt-facts">' + m.facts.map(function (f) { return '<li>・' + esc(f) + '</li>'; }).join('') + '</ul>' : '') +
+      '<div class="lilo-foot"><span>運用は、問い合わせ・成約後の構築タスク・運用中の顧客・仕事のカードを今数えたものです。マーケティングは毎朝の集計（Windsor.ai・busilabo.com）で、コラムの下書きは SharePoint のフォルダを今見た数です。目安：SNS は週1本（8日で🟡・14日で🔴）、コラムの公開は週1本（10日で🔴）。🔴 はだれでも受け取れる仕事になり、様子が戻ると自動で完了します</span></div></div></details>';
+  }
+  // マーケティングの数字が変わったら、ビジラボと LILOCLE の両方を描き直す
+  function renderMktStatus() { renderBizStatus(); renderLiloStatus(); }
 
   document.addEventListener('click', function (e) {
     var b = e.target.closest && e.target.closest('[data-lilo-refresh]');
@@ -6828,7 +6953,7 @@
 
   function renderToday() {
     try { renderAmzStatus(); } catch (e) { console.log("amazon status render failed: " + e.message); }
-    try { renderMktStatus(); } catch (e) { console.log("marketing status render failed: " + e.message); }   // お問い合わせの件数は仕事が変わるたびに数え直す   // お問い合わせの件数は仕事が変わるたびに数え直す
+    try { renderMktStatus(); } catch (e) { console.log("marketing status render failed: " + e.message); }   // ビジラボの運用の件数は仕事が変わるたびに数え直す
     var now = new Date(todayStr + "T00:00:00");
     var dateEl = document.querySelector('[data-today-date]');
     if (dateEl) dateEl.innerHTML = '<span class="today-md">' + (now.getMonth() + 1) + '/' + now.getDate() + '</span><span class="today-dow">' + WEEKDAYS[now.getDay()] + '曜日</span>';

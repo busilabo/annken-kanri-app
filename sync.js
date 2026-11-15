@@ -1033,8 +1033,8 @@
     }
   }
 
-  // ---- マーケティングの様子（Amazon の様子の下。2026-11-15 代表の指定）----
-  // 毎朝の定時実行「毎朝マーケティングの様子」が「案件管理キュー/status」に marketing-status-yyyyMMdd.json を置く（SNS・コラムの公開・ホームページ）。
+  // ---- マーケティングの様子（ビジラボの様子・LILOCLE の様子の「マーケティング」の段。2026-11-15 代表の指定）----
+  // 毎朝の定時実行「毎朝マーケティングの様子」が「案件管理キュー/status」に marketing-status-yyyyMMdd.json を置く（SNS・コラムの公開・ホームページ、LILOCLE のメルマガ・読みもの・メーカー紹介）。
   // コラムの下書きは「公式サイト資料/コラム」（毎日0時の「毎日SEOコラム下書き作成」が YYYY-MM-DD-….docx を置く）をここで直接見る。
   // 判断は index.html の mktChecks。🔴 はだれでも取れる仕事として1回だけ入れ（目印 mkt:…）、様子が戻ったら自動で完了にする
   var MKT_COLUMN_FOLDER = "01JXBRTLWPHERNSBDA6RAY5ORQVRE25CTP";
@@ -1080,6 +1080,8 @@
     taskCards().forEach(function (c) {
       var k = taskKeyOf(c);
       if (!/^mkt:/.test(k) || !isOpenTask(c) || wanted[k]) return;
+      // 今回その数字が取れなかったもの（r.hold）は、戻ったとは言えないので片付けない（2026-11-15）
+      if ((r.hold || []).some(function (h) { return k.indexOf(h) === 0; })) return;
       var isDraft = /^mkt:column-draft:/.test(k);
       if (isDraft ? !st.drafts : !trusted) return;
       window.__app.setTaskStatus(c, "完了");
