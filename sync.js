@@ -1033,6 +1033,60 @@
     }
   }
 
+  // ---- マーケティングの様子（Amazon の様子の下。2026-11-15 代表の指定）----
+  // 毎朝の定時実行「毎朝マーケティングの様子」が「案件管理キュー/status」に marketing-status-yyyyMMdd.json を置く（SNS・コラムの公開・ホームページ）。
+  // コラムの下書きは「公式サイト資料/コラム」（毎日0時の「毎日SEOコラム下書き作成」が YYYY-MM-DD-….docx を置く）をここで直接見る。
+  // 判断は index.html の mktChecks。🔴 はだれでも取れる仕事として1回だけ入れ（目印 mkt:…）、様子が戻ったら自動で完了にする
+  var MKT_COLUMN_FOLDER = "01JXBRTLWPHERNSBDA6RAY5ORQVRE25CTP";
+  var mktBusy = false;
+  async function columnDrafts() {
+    var names = [], url = "/drives/" + LILO_DRIVE + "/items/" + MKT_COLUMN_FOLDER + "/children?$select=name&$top=999";
+    for (var page = 0; url && page < 5; page++) {
+      var res = await graph(url);
+      (res.value || []).forEach(function (x) { names.push(x.name); });
+      url = res["@odata.nextLink"] ? res["@odata.nextLink"].replace("https://graph.microsoft.com/v1.0", "") : "";
+    }
+    var dates = names.filter(function (n) { return /^\d{4}-\d{2}-\d{2}.*\.docx$/i.test(n); }).map(function (n) { return n.slice(0, 10); }).sort();
+    var weekAgo = ymd(new Date(Date.now() - 6 * 86400000));
+    return { lastDate: dates[dates.length - 1] || "", count7d: dates.filter(function (d) { return d >= weekAgo; }).length };
+  }
+  async function loadMarketingStatus() {
+    if (mktBusy || !window.__app || !window.__app.setMktStatus) return;
+    mktBusy = true;
+    var st = { loaded: false };
+    try {
+      var list = await graph("/drives/" + LILO_DRIVE + "/items/" + STATUS_FOLDER + "/children?$select=id,name&$top=200");
+      var f = (list.value || []).filter(function (x) { return /^marketing-status-\d{8}\.json$/.test(x.name); }).sort(function (a, b) { return a.name < b.name ? 1 : -1; })[0];
+      if (f) { st.data = await graph("/drives/" + LILO_DRIVE + "/items/" + f.id + "/content"); st.loaded = true; }
+      else st.error = "まだ数字が届いていません（毎朝の「マーケティングの様子」の集計が置きます）";
+    } catch (e) { log("marketing status failed: " + e.message); st.error = "読めませんでした（" + e.message.slice(0, 60) + "）"; }
+    try { st.drafts = await columnDrafts(); } catch (e) { log("column drafts failed: " + e.message); st.draftsError = e.message.slice(0, 60); }
+    window.__app.setMktStatus(st);
+    try { await ensureMarketingTasks(st); } catch (e) { log("marketing tasks failed: " + e.message); }
+    mktBusy = false;
+  }
+  async function ensureMarketingTasks(st) {
+    if (!listIds.task || !window.__app.mktChecks) return;
+    var r = window.__app.mktChecks(st);
+    // 数字が届いていない・古いときは、入れることも片付けることもしない（下書きはアプリが今見た数なので別）
+    var trusted = st.loaded && !r.stale;
+    var wanted = {};
+    for (var i = 0; i < r.issues.length; i++) {
+      var t = r.issues[i].task;
+      if (!t) continue;
+      wanted[t.key] = true;
+      await createTaskOnce(t.key, Object.assign({ Owner: "未定" }, t.fields), "マーケティングの様子で🔴", t.memo || "");
+    }
+    taskCards().forEach(function (c) {
+      var k = taskKeyOf(c);
+      if (!/^mkt:/.test(k) || !isOpenTask(c) || wanted[k]) return;
+      var isDraft = /^mkt:column-draft:/.test(k);
+      if (isDraft ? !st.drafts : !trusted) return;
+      window.__app.setTaskStatus(c, "完了");
+      addNote(c, "自動で完了", isDraft ? "コラムの下書きがまたできたので、完了にしました" : "マーケティングの様子が戻った（投稿・公開があった）ので、完了にしました");
+    });
+  }
+
   async function loadLiloStatus() {
     if (liloBusy || !window.__app || !window.__app.setLiloStatus) return;
     liloBusy = true;
@@ -2163,7 +2217,7 @@
     card._last = now;
     if (!threadId || last.owner === undefined) return null;
     // メール・定時報告・FAX・問い合わせ・毎日の確認から来た仕事は Teams に返信しない（返す投稿がない）
-    if (/^(mail|routine|fax|inquiry|daily|recur|recurinst|sns):/.test(threadId)) return null;
+    if (/^(mail|routine|fax|inquiry|daily|recur|recurinst|sns|mkt):/.test(threadId)) return null;
     var title = (fields.Title || "").slice(0, 40);
     var handover = (fields.Handover || "").split("\n")[0].slice(0, 80);
     if (now.status === "完了" && last.status !== "完了") {
@@ -2722,6 +2776,9 @@
     window.__lilo = { refresh: loadLiloStatus };
     loadAmazonStatus();
     setInterval(loadAmazonStatus, LILO_REFRESH_MS);
+    window.__mkt = { refresh: loadMarketingStatus };
+    loadMarketingStatus();
+    setInterval(loadMarketingStatus, LILO_REFRESH_MS);
     await drainQueue();
     setInterval(drainQueue, QUEUE_DRAIN_MS);
     // 最終チェック：終わった仕事でまだ確かめていないもの・待ちのものを、5分ごとに確かめる（index.html の finalCheckSweep）
