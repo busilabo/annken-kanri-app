@@ -1436,34 +1436,36 @@
   @media (max-width: 700px) { .lilo-lights { grid-template-columns: 1fr; } .lilo-sum { font-size: 16px; } }
   .lilo-at { color: var(--text-muted); margin-left: auto; font-size: 13px; }
   /* マーケティングのカード（2026-11-16 代表の指定：成果と状況を1つに。発信ごとに1枚） */
-  .mk-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 6px; margin: 6px 0 10px; }
-  @media (max-width: 700px) { .mk-grid { grid-template-columns: 1fr; } }
-  .mk-card { background: var(--surface, #fff); border-radius: 10px; padding: 6px 10px; display: flex; flex-direction: column; gap: 3px; border: 1px solid var(--border); border-left-width: 4px; min-width: 0; }
-  .mk-card[data-tone="bad"] { border-left-color: var(--crit); }
-  .mk-card[data-tone="warn"] { border-left-color: var(--warn); }
-  .mk-head { display: flex; align-items: baseline; gap: 4px 10px; flex-wrap: wrap; font-size: 14px; }
-  .mk-head > b { flex: none; }
-  .mk-last { font-size: 12px; color: var(--text-muted); margin-left: auto; }
-  .mk-last[data-tone="bad"] { color: var(--crit); font-weight: 700; }
-  .mk-last[data-tone="warn"] { color: var(--warn); font-weight: 700; }
-  .mk-did { font-size: 12.5px; color: var(--text-muted); } .mk-did b { color: var(--text); } .mk-did small { margin-left: 2px; }
-  .mk-ms { display: flex; flex-wrap: wrap; gap: 2px 12px; align-items: baseline; }
-  .mk-m { display: inline-flex; align-items: baseline; gap: 3px; font-size: 13px; white-space: nowrap; }
-  .mk-mn { font-size: 11.5px; color: var(--text-muted); }
-  .mk-mn:empty { display: none; }
-  .mk-m b { font-size: 14px; font-variant-numeric: tabular-nums; }
-  .mk-ms-sm .mk-m b { font-size: 12.5px; }
-  .mk-more > summary { cursor: pointer; font-size: 12px; color: var(--text-muted); }
-  .mk-d { font-size: 11.5px; font-weight: 700; color: var(--text-muted); }
+  .mk-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; margin: 8px 0 12px; }
+  @media (max-width: 700px) { .mk-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } }
+  .mk-card { background: var(--surface, #fff); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; border: 1px solid var(--border); min-width: 0; }
+  .mk-card[data-tone="bad"] { background: var(--crit-soft); border-color: var(--crit); }
+  .mk-card[data-tone="warn"] { background: var(--warn-soft); border-color: var(--warn); }
+  .mk-top { display: flex; justify-content: space-between; align-items: center; gap: 6px; font-size: 13px; color: var(--text-muted); font-weight: 700; }
+  .mk-top small { font-weight: 400; }
+  .mk-badge { flex: none; font-size: 12px; font-weight: 800; border-radius: 6px; padding: 1px 7px; background: var(--neutral-soft); color: var(--text-muted); }
+  .mk-badge[data-dir="up"] { background: var(--ok-soft); color: var(--ok); }
+  .mk-badge[data-dir="down"] { background: var(--crit-soft); color: var(--crit); }
+  .mk-big { font-size: 28px; font-weight: 800; letter-spacing: -.5px; line-height: 1.2; font-variant-numeric: tabular-nums; margin: 2px 0; }
+  .mk-big small { font-size: 13px; font-weight: 700; margin-left: 3px; letter-spacing: 0; }
+  .mk-big[data-tone="bad"] { color: var(--crit); } .mk-big[data-tone="warn"] { color: var(--warn); }
+  .mk-big-none { color: var(--text-muted); font-size: 15px; font-weight: 700; letter-spacing: 0; }
+  .mk-sub1 { font-size: 12.5px; color: var(--text-muted); }
+  .mk-sub1:empty { display: none; }
+  .mk-smalls { display: flex; flex-wrap: wrap; gap: 0 10px; font-size: 12.5px; color: var(--text-muted); }
+  .mk-sm { white-space: nowrap; } .mk-sm b { color: var(--text); font-variant-numeric: tabular-nums; }
+  .mk-d { font-size: 11.5px; font-weight: 700; margin-left: 2px; color: var(--text-muted); }
   .mk-d[data-dir="up"] { color: var(--ok); } .mk-d[data-dir="down"] { color: var(--crit); }
-  .mk-sub { font-size: 11.5px; color: var(--text-muted); }
-  .mk-items { list-style: none; margin: 4px 0 2px; padding: 0 0 0 4px; display: flex; flex-direction: column; gap: 4px; }
-  .mk-it-head { display: flex; align-items: baseline; gap: 6px; min-width: 0; font-size: 13px; }
+  .mk-more { margin-top: 4px; }
+  .mk-more > summary { cursor: pointer; font-size: 12px; color: var(--text-muted); }
+  .mk-items { list-style: none; margin: 4px 0 2px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+  .mk-it-head { display: flex; align-items: baseline; gap: 6px; min-width: 0; font-size: 12.5px; }
   .mk-date { color: var(--text-muted); font-variant-numeric: tabular-nums; flex: none; }
-  .mk-type { font-size: 11.5px; background: var(--neutral-soft); border-radius: 6px; padding: 0 6px; flex: none; }
+  .mk-type { font-size: 11px; background: var(--neutral-soft); border-radius: 6px; padding: 0 5px; flex: none; }
   .mk-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .mk-none { font-size: 13px; color: var(--text-muted); }
-  .mk-note { font-size: 12px; color: var(--crit); }
+  .mk-last[data-tone="bad"] { color: var(--crit); font-weight: 700; } .mk-last[data-tone="warn"] { color: var(--warn); font-weight: 700; }
+  .mk-none { font-size: 12.5px; color: var(--text-muted); }
+  .mk-note { font-size: 12px; color: var(--crit); font-weight: 700; margin-top: 2px; }
   .lilo-help > summary { cursor: pointer; color: var(--text-muted); font-size: 12px; }
   .lilo-help > div { color: var(--text-muted); font-size: 12px; margin-top: 4px; }
   .mk-ops { margin-top: 4px; }
@@ -6461,18 +6463,42 @@
     var a = mktState.loaded ? mktState.data : null, w = a && a.weekly;
     return { w: w, list: w && Array.isArray(w.channels) ? w.channels.filter(function (c) { return c && c.biz === biz; }) : [] };
   }
+  // 大きな数字のマス（2026-11-16 代表が A 案を選択）：1マス＝発信1つ。いちばん大事な数字を1つだけ大きく、右上に前の週と比べた札。
+  // 間があいている発信は、大きな数字の代わりに「N日あいています」を赤で。ほかの数字は下に小さく、投稿ごとは押すと開く
+  var MK_MAIN = ['リーチ', '閲覧', '表示', '特集ページの閲覧', 'サイトへの訪問', '訪問'];
+  function mkBadge(m) {
+    if (!m || typeof m.value !== 'number' || typeof m.prev !== 'number') return '';
+    if (m.prev === 0) return m.value > 0 ? '<span class="mk-badge" data-dir="up">↑新</span>' : '';
+    var p = mktPct(m.value, m.prev);
+    if (p === null || p === 0) return '<span class="mk-badge">±0%</span>';
+    return '<span class="mk-badge" data-dir="' + (p > 0 ? 'up' : 'down') + '">' + (p > 0 ? '↑' : '↓') + Math.abs(p) + '%</span>';
+  }
+  function mkSmall(m) { return '<span class="mk-sm">' + (m.name ? esc(m.name) + ' ' : '') + '<b>' + esc(wkNum(m)) + '</b>' + wkDelta(m) + '</span>'; }
   function mkCard(icon, label, opt) {
     opt = opt || {};
     var t = opt.tile, ch = opt.ch;
     var alert = t && (t.tone === 'bad' || t.tone === 'warn');
-    // スリムに（2026-11-16 代表の指定）：見出し1行に「最後にやった日」と「先週やったこと」、数字は1行、投稿ごとは押すと開く
-    var lastText = t && t.text ? String(t.text).split('・')[0].replace(/^最後の\S+?\s+/, '最後 ') : '';
-    var did = ch && ch.did ? '<span class="mk-did">先週 <b>' + esc(ch.did) + '</b>' + (ch.didPrev ? '<small>（前 ' + esc(ch.didPrev.replace(/^[^0-9]*/, '')) + '）</small>' : '') + '</span>' : '';
-    var head = '<div class="mk-head"><b>' + icon + ' ' + esc(label) + '</b>' + did +
-      (lastText ? '<span class="mk-last"' + (alert ? ' data-tone="' + t.tone + '"' : '') + '>' + (alert ? '⚠️ ' : '') + esc(lastText) + '</span>' : '') + '</div>';
-    var body = '';
-    var chips = (opt.chips || '') + (ch && (ch.totals || []).length ? ch.totals.map(wkMetric).join('') : '');
-    if (chips) body += '<div class="mk-ms">' + chips + '</div>';
+    var lastText = t && /^最後/.test(t.text || '') ? String(t.text).split('・')[0].replace(/^最後の\S+?\s+/, '最後 ') : '';
+    var gap = alert && /（(\d+)日前）/.exec(t.text || '');
+    var totals = ch && Array.isArray(ch.totals) ? ch.totals.slice() : [];
+    var main = opt.main;
+    if (!main && totals.length) {
+      var mi = -1;
+      MK_MAIN.some(function (n) { mi = totals.map(function (x) { return x.name; }).indexOf(n); return mi !== -1; });
+      if (mi === -1) mi = 0;
+      main = totals.splice(mi, 1)[0];
+    }
+    var big;
+    if (gap) big = '<div class="mk-big" data-tone="' + t.tone + '">' + gap[1] + '<small>日あいています</small></div>';
+    else if (main) big = '<div class="mk-big">' + esc(wkNum(main)) + '</div>';
+    else big = '<div class="mk-big mk-big-none">' + (t && t.text && !lastText ? esc(t.text) : '－') + '</div>';
+    var head = '<div class="mk-top"><span>' + icon + ' ' + esc(label) + (main && !gap ? ' <small>' + esc(main.name || '') + '</small>' : '') + '</span>' + (gap ? '' : mkBadge(main)) + '</div>';
+    var subs = [];
+    if (ch && ch.did) subs.push('先週 ' + esc(ch.did));
+    if (lastText) subs.push(esc(gap ? lastText.replace(/（\d+日前）/, '') : lastText));
+    var body = '<div class="mk-sub1">' + subs.join('・') + '</div>';
+    var smalls = (opt.chips || '') + totals.map(mkSmall).join('') + (gap && main ? mkSmall(main) : '');
+    if (smalls) body += '<div class="mk-smalls">' + smalls + '</div>';
     body += (opt.top || '');
     if (ch) {
       var items = Array.isArray(ch.items) ? ch.items : [];
@@ -6480,11 +6506,11 @@
         var link = /^https:\/\//.test(it.link || '') ? it.link : '';
         return '<li><div class="mk-it-head"><span class="mk-date">' + esc(mktMd(it.date)) + '</span>' + (it.type ? '<span class="mk-type">' + esc(it.type) + '</span>' : '') +
           (link ? '<a class="mk-title" href="' + esc(link) + '" target="_blank" rel="noopener">' + esc(it.title || '（題なし）') + ' ↗</a>' : '<span class="mk-title">' + esc(it.title || '（題なし）') + '</span>') + '</div>' +
-          '<div class="mk-ms mk-ms-sm">' + (it.metrics || []).map(wkMetric).join('') + '</div></li>';
+          '<div class="mk-smalls">' + (it.metrics || []).map(mkSmall).join('') + '</div></li>';
       }).join('') + '</ul></details>';
-    } else if (opt.noWeekly !== true) body += '<div class="mk-none">先週の数字はまだ届いていません</div>';
+    } else if (opt.noWeekly !== true && !opt.main) body += '<div class="mk-none">先週の数字はまだ届いていません</div>';
     if (opt.note) body += '<div class="mk-note">' + opt.note + '</div>';
-    return '<div class="mk-card"' + (alert ? ' data-tone="' + t.tone + '"' : '') + '>' + head + body + '</div>';
+    return '<div class="mk-card"' + (alert ? ' data-tone="' + t.tone + '"' : '') + '>' + head + big + body + '</div>';
   }
   // 🔴 で仕事に入れたものは、カードの下に一言
   function mkTaskNote(issues, label) {
@@ -6498,32 +6524,34 @@
     var ch = function (id) { return wc.list.filter(function (c) { return c.id === id; })[0]; };
     var a = mktState.loaded ? mktState.data : null;
     var sns = function (id) { return a && Array.isArray(a.sns) ? a.sns.filter(function (x) { return x.id === id; })[0] : null; };
-    var followers = function (id) { var n = sns(id); return n && typeof n.followers === 'number' ? wkMetric({ name: 'フォロワー', value: n.followers, prev: typeof n.followers7dAgo === 'number' ? n.followers7dAgo : null, unit: '人' }) : ''; };
+    var followers = function (id) { var n = sns(id); return n && typeof n.followers === 'number' ? mkSmall({ name: 'フォロワー', value: n.followers, prev: typeof n.followers7dAgo === 'number' ? n.followers7dAgo : null, unit: '人' }) : ''; };
     var cards = [];
     if (biz === 'lilocle') {
       var sales = extra.sales, src = ch('source');
-      var top = '';
+      var top = '', smain = null, schips = '';
       if (sales && sales.d7) {
-        top = '<div class="mk-ms">' +
-          wkMetric({ name: '先週', value: sales.d7.sales, prev: sales.p7.sales, unit: '円' }) + wkMetric({ name: '', value: sales.d7.orders, prev: sales.p7.orders, unit: '件' }) + '</div><div class="mk-ms">' +
-          wkMetric({ name: '28日', value: sales.d28.sales, prev: sales.p28.sales, unit: '円' }) + wkMetric({ name: '', value: sales.d28.orders, prev: sales.p28.orders, unit: '件' }) + '</div>';
+        smain = { name: '先週の売上', value: sales.d7.sales, prev: sales.p7.sales, unit: '円' };
+        schips = mkSmall({ name: '注文', value: sales.d7.orders, prev: sales.p7.orders, unit: '件' }) + mkSmall({ name: '28日', value: sales.d28.sales, prev: sales.p28.sales, unit: '円' });
       } else top = '<div class="mk-none">' + (sales && sales.error ? '売上を読めませんでした（' + esc(sales.error) + '）' : '売上を読んでいます…') + '</div>';
-      if (src && (src.totals || []).length) top += '<div class="mk-ms mk-ms-sm"><span class="mk-sub">先週どこから：</span>' + src.totals.map(wkMetric).join('') + '</div>';
-      cards.push(mkCard('💴', '売上・注文', { top: top, noWeekly: true, tile: extra.salesTile }));
+      if (src && (src.totals || []).length) top += '<div class="mk-smalls"><span class="mk-sm">どこから：</span>' + src.totals.map(mkSmall).join('') + '</div>';
+      cards.push(mkCard('💴', '売上', { main: smain, chips: schips, top: top, noWeekly: true }));
       cards.push(mkCard('📸', 'Instagram', { tile: tile('Instagram'), ch: ch('ig'), chips: followers('ig-lilocle'), note: mkTaskNote(m.issues, 'Instagram') }));
       cards.push(mkCard('✉️', 'メルマガ', { tile: tile('メルマガ'), ch: ch('mail'), note: mkTaskNote(m.issues, 'メルマガ') }));
       cards.push(mkCard('📖', '読みもの', { tile: tile('読みもの'), ch: ch('yomimono'), itemWord: '記事', note: mkTaskNote(m.issues, '読みもの') }));
       cards.push(mkCard('🏷', 'メーカー紹介', { tile: tile('メーカー紹介'), ch: ch('feature'), note: mkTaskNote(m.issues, 'メーカー紹介') }));
     } else {
       var inq = extra.inquiry;
-      if (inq) cards.push(mkCard('📨', '問い合わせ・成約', { top: '<div class="mk-ms"><span class="mk-m">' + esc(inq.text) + '</span></div>', noWeekly: true }));
+      var iq = inq && /問い合わせ (\d+) 件・成約 (\d+) 件/.exec(inq.text || '');
+      if (inq) cards.push(mkCard('📨', '問い合わせ', iq ? { main: { name: '28日', value: +iq[1], unit: '件' }, chips: mkSmall({ name: '成約（これまで）', value: +iq[2], unit: '件' }), noWeekly: true } : { top: '<div class="mk-sub1">' + esc(inq.text) + '</div>', noWeekly: true }));
       cards.push(mkCard('📸', 'Instagram', { tile: tile('Instagram'), ch: ch('ig'), chips: followers('ig-busilabo'), note: mkTaskNote(m.issues, 'Instagram') }));
       cards.push(mkCard('👍', 'Facebook', { tile: tile('Facebook'), ch: ch('fb'), chips: followers('fb-busilabo'), note: mkTaskNote(m.issues, 'Facebook') }));
       var pub = tile('コラムの公開'), dr = tile('コラムの下書き');
       cards.push(mkCard('📝', 'コラム', { tile: pub, ch: ch('column'), itemWord: '記事',
-        top: dr ? '<div class="mk-sub">下書き <span class="mk-last"' + (dr.tone === 'bad' || dr.tone === 'warn' ? ' data-tone="' + dr.tone + '"' : '') + '>' + (dr.tone === 'bad' || dr.tone === 'warn' ? '⚠️ ' : '') + esc(dr.text) + '</span></div>' : '',
+        top: dr ? '<div class="mk-sub1">下書き <span class="mk-last"' + (dr.tone === 'bad' || dr.tone === 'warn' ? ' data-tone="' + dr.tone + '"' : '') + '>' + (dr.tone === 'bad' || dr.tone === 'warn' ? '⚠️ ' : '') + esc(String(dr.text).replace(/^下書き\s*/, '')) + '</span></div>' : '',
         note: mkTaskNote(m.issues, 'コラム') }));
-      cards.push(mkCard('🌐', 'ホームページ', { tile: tile('ホームページ'), ch: ch('site') }));
+      var site = ch('site'), sv = site && /(\d[\d,]*)/.exec(site.did || ''), sp = site && /(\d[\d,]*)/.exec(site.didPrev || '');
+      cards.push(mkCard('🌐', 'ホームページ', { tile: tile('ホームページ'), ch: site ? Object.assign({}, site, { did: '' }) : null,
+        main: sv ? { name: '訪問', value: +sv[1].replace(/,/g, ''), prev: sp ? +sp[1].replace(/,/g, '') : null } : null }));
       var mail = tile('メルマガ');
       if (mail) cards.push(mkCard('✉️', 'メルマガ', { tile: mail, noWeekly: true }));
     }
