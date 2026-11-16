@@ -1449,6 +1449,10 @@
   .mk-big { font-size: 28px; font-weight: 800; letter-spacing: -.5px; line-height: 1.2; font-variant-numeric: tabular-nums; margin: 2px 0; }
   .mk-big small { font-size: 13px; font-weight: 700; margin-left: 3px; letter-spacing: 0; }
   .mk-big[data-tone="bad"] { color: var(--crit); } .mk-big[data-tone="warn"] { color: var(--warn); }
+  .mk-spark { display: flex; align-items: flex-end; gap: 4px; height: 30px; margin: 2px 0 0; }
+  .mk-spark i { flex: 1; background: var(--accent-soft, #e3ebfa); border-radius: 3px 3px 0 0; min-height: 2px; }
+  .mk-spark i[data-last] { background: var(--accent, #3b6fd8); }
+  .mk-spark-cap { display: flex; justify-content: space-between; font-size: 10.5px; color: var(--text-muted); margin-bottom: 2px; }
   .mk-big-none { color: var(--text-muted); font-size: 15px; font-weight: 700; letter-spacing: 0; }
   .mk-sub1 { font-size: 12.5px; color: var(--text-muted); }
   .mk-sub1:empty { display: none; }
@@ -6474,6 +6478,17 @@
     return '<span class="mk-badge" data-dir="' + (p > 0 ? 'up' : 'down') + '">' + (p > 0 ? '↑' : '↓') + Math.abs(p) + '%</span>';
   }
   function mkSmall(m) { return '<span class="mk-sm">' + (m.name ? esc(m.name) + ' ' : '') + '<b>' + esc(wkNum(m)) + '</b>' + wkDelta(m) + '</span>'; }
+  // 直近4週の小さな棒グラフ（2026-11-16 代表の指定。見本 A の形）。series は古い週から順に [{from, value}]、いちばん右が先週で濃い色
+  function mkSpark(series, unit) {
+    var list = (Array.isArray(series) ? series : []).filter(function (x) { return x && typeof x.value === 'number'; }).slice(-4);
+    if (list.length < 2) return '';
+    var max = Math.max.apply(null, list.map(function (x) { return x.value; }));
+    return '<div class="mk-spark">' + list.map(function (x, i) {
+      var h = max > 0 ? Math.max(4, Math.round(x.value / max * 100)) : 4;
+      var tip = (x.from ? mktMd(x.from) + '〜 ' : '') + wkNum({ value: x.value, unit: unit });
+      return '<i style="height:' + h + '%" title="' + esc(tip) + '"' + (i === list.length - 1 ? ' data-last' : '') + '></i>';
+    }).join('') + '</div><div class="mk-spark-cap"><span>' + (list.length) + '週前</span><span>先週</span></div>';
+  }
   function mkCard(icon, label, opt) {
     opt = opt || {};
     var t = opt.tile, ch = opt.ch;
@@ -6493,6 +6508,7 @@
     else if (main) big = '<div class="mk-big">' + esc(wkNum(main)) + '</div>';
     else big = '<div class="mk-big mk-big-none">' + (t && t.text && !lastText ? esc(t.text) : '－') + '</div>';
     var head = '<div class="mk-top"><span>' + icon + ' ' + esc(label) + (main && !gap ? ' <small>' + esc(main.name || '') + '</small>' : '') + '</span>' + (gap ? '' : mkBadge(main)) + '</div>';
+    big += mkSpark(opt.series || (ch && ch.series), main && main.unit);
     var subs = [];
     if (ch && ch.did) subs.push('先週 ' + esc(ch.did));
     if (lastText) subs.push(esc(gap ? lastText.replace(/（\d+日前）/, '') : lastText));
@@ -6534,7 +6550,8 @@
         schips = mkSmall({ name: '注文', value: sales.d7.orders, prev: sales.p7.orders, unit: '件' }) + mkSmall({ name: '28日', value: sales.d28.sales, prev: sales.p28.sales, unit: '円' });
       } else top = '<div class="mk-none">' + (sales && sales.error ? '売上を読めませんでした（' + esc(sales.error) + '）' : '売上を読んでいます…') + '</div>';
       if (src && (src.totals || []).length) top += '<div class="mk-smalls"><span class="mk-sm">どこから：</span>' + src.totals.map(mkSmall).join('') + '</div>';
-      cards.push(mkCard('💴', '売上', { main: smain, chips: schips, top: top, noWeekly: true }));
+      var sser = ch('sales');
+      cards.push(mkCard('💴', '売上', { main: smain, chips: schips, top: top, noWeekly: true, series: sser && sser.series }));
       cards.push(mkCard('📸', 'Instagram', { tile: tile('Instagram'), ch: ch('ig'), chips: followers('ig-lilocle'), note: mkTaskNote(m.issues, 'Instagram') }));
       cards.push(mkCard('✉️', 'メルマガ', { tile: tile('メルマガ'), ch: ch('mail'), note: mkTaskNote(m.issues, 'メルマガ') }));
       cards.push(mkCard('📖', '読みもの', { tile: tile('読みもの'), ch: ch('yomimono'), itemWord: '記事', note: mkTaskNote(m.issues, '読みもの') }));
@@ -6542,7 +6559,7 @@
     } else {
       var inq = extra.inquiry;
       var iq = inq && /問い合わせ (\d+) 件・成約 (\d+) 件/.exec(inq.text || '');
-      if (inq) cards.push(mkCard('📨', '問い合わせ', iq ? { main: { name: '28日', value: +iq[1], unit: '件' }, chips: mkSmall({ name: '成約（これまで）', value: +iq[2], unit: '件' }), noWeekly: true } : { top: '<div class="mk-sub1">' + esc(inq.text) + '</div>', noWeekly: true }));
+      if (inq) cards.push(mkCard('📨', '問い合わせ', iq ? { main: { name: '28日', value: +iq[1], unit: '件' }, series: inq.series, chips: mkSmall({ name: '成約（これまで）', value: +iq[2], unit: '件' }), noWeekly: true } : { top: '<div class="mk-sub1">' + esc(inq.text) + '</div>', noWeekly: true }));
       cards.push(mkCard('📸', 'Instagram', { tile: tile('Instagram'), ch: ch('ig'), chips: followers('ig-busilabo'), note: mkTaskNote(m.issues, 'Instagram') }));
       cards.push(mkCard('👍', 'Facebook', { tile: tile('Facebook'), ch: ch('fb'), chips: followers('fb-busilabo'), note: mkTaskNote(m.issues, 'Facebook') }));
       var pub = tile('コラムの公開'), dr = tile('コラムの下書き');
@@ -6597,7 +6614,8 @@
     var stuck = doing.concat(meeting).filter(isOverdue);
     tiles.push({ label: '商談', tone: stuck.length ? 'bad' : 'ok', text: '対応中 ' + doing.length + '・商談中 ' + meeting.length });
     // 成果の段に出す：問い合わせの数と成約（2026-11-16 代表の指定）
-    var results = [{ label: '問い合わせ・成約', tone: 'ok', text: '28日で問い合わせ ' + recent + ' 件・成約 ' + won + ' 件（これまで）' }];
+    var weeks = [3, 2, 1, 0].map(function (k) { return { value: inq.filter(function (c) { var g = ageOf(c); return g !== null && g >= k * 7 && g < k * 7 + 7; }).length }; });
+    var results = [{ label: '問い合わせ・成約', tone: 'ok', text: '28日で問い合わせ ' + recent + ' 件・成約 ' + won + ' 件（これまで）', series: weeks }];
     stuck.forEach(function (c) { issues.push({ tone: 'bad', text: '［商談・成約］' + name(c) + '（' + statusOf(c) + '）：期限 ' + mktMd(roleVal(c, 'due')) + ' を過ぎています' }); });
     // お客様への仕事の遅れ：成約後の構築タスク・ビジラボの仕事の期限切れ、運用中の顧客の「停滞」（🔴）・「要フォロー」・次の連絡日の過ぎたもの（🟡）
     var late = [];
