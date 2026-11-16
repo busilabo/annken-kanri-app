@@ -1437,6 +1437,8 @@
   .lilo-at { color: var(--text-muted); margin-left: auto; font-size: 13px; }
   /* マーケティングのカード（2026-11-16 代表の指定：成果と状況を1つに。発信ごとに1枚） */
   .mk-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; margin: 8px 0 12px; }
+  /* ビジラボは1行に並べる（2026-11-17 代表の指定）。狭い画面では折り返す */
+  @media (min-width: 901px) { .mk-grid[data-one-row] { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; } .mk-grid[data-one-row] .mk-card { padding: 8px 10px; } .mk-grid[data-one-row] .mk-big { font-size: 24px; } .mk-grid[data-one-row] .mk-big-none { font-size: 14px; } }
   @media (max-width: 700px) { .mk-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } }
   .mk-card { background: var(--surface, #fff); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; border: 1px solid var(--border); min-width: 0; }
   .mk-card[data-tone="bad"] { background: var(--crit-soft); border-color: var(--crit); }
@@ -6574,7 +6576,7 @@
     }
     var w = wc.w;
     return '<div class="lilo-sec">マーケティング' + (w && w.from ? '<small>（先週 ' + esc(mktMd(w.from) + '〜' + mktMd(w.to)) + '・前の週と比べて）</small>' : '') + '</div>' +
-      '<div class="mk-grid">' + cards.join('') + '</div>';
+      '<div class="mk-grid"' + (biz === 'busilabo' ? ' data-one-row' : '') + '>' + cards.join('') + '</div>';
   }
   // LILOCLE の売上・注文数（Shopify。直近7日・28日と、その前の同じ期間）。28日が30%以上減ると🟡
   function liloSalesPart(sales) {
