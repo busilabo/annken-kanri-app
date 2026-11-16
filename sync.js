@@ -1094,6 +1094,8 @@
     liloBusy = true;
     window.__app.setLiloStatus({ loading: true });
     try {
+      // 売上・注文数（マーケティングの成果）は同時に読む。読めなくても注文の様子は出す
+      var salesP = callApi(SHOPIFY_ENDPOINT, { action: "sales" }, 60000).catch(function (e) { return { error: e.message }; });
       var out = await callApi(SHOPIFY_ENDPOINT, { action: "open" }, 60000);
       var orders = out.orders || [];
       // 作り手さん（D〜）のエクセルを読む。自社発送（L〜）は作り手さんの確認がないので外す
@@ -1164,10 +1166,10 @@
         { key: "ship", label: "発送", tone: worst("ship"), text: (n("ship") ? "気をつけたい注文が " + n("ship") + " 件・" : "遅れなし・") + "発送待ち " + counts.unshipped + " 件" },
         { key: "pay", label: "支払いの確定", tone: worst("pay"), text: n("pay") ? "期限が近い注文が " + n("pay") + " 件" : "期限が近い注文はありません" }
       ];
-      window.__app.setLiloStatus({ loaded: true, at: new Date(), checks: checks, issues: issues, total: orders.length });
+      window.__app.setLiloStatus({ loaded: true, at: new Date(), checks: checks, issues: issues, total: orders.length, sales: await salesP });
     } catch (e) {
       log("lilo status failed: " + e.message);
-      window.__app.setLiloStatus({ loaded: false, error: e.message });
+      window.__app.setLiloStatus({ loaded: false, error: e.message, sales: typeof salesP !== "undefined" ? await salesP : null });
     } finally { liloBusy = false; }
   }
   async function removeFromMakerExcel(order) {
