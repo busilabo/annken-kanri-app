@@ -13,6 +13,9 @@
 #   ノウハウ      … 代表の判断ルールや資料の場所（脳内アップロードの成果を入れる。画面はまだ無い）
 #   目標と数字    … 数字の数え方と月の目標（2026-11-17 データベースの見直し 第1段。坂中様の設計の kpi_definition に当たる）
 #   数字の記録    … 週ごと・発信ごとの数字（毎朝の集計の4週分を、アプリが週1行ずつ貯める。metric_observation に当たる）
+#   発信          … 投稿・記事・メルマガ 1件1行と反響（毎朝の集計の posts を、アプリが貯める。第2段）
+#   試していること … 発信で試していることと結果（何が効いたかを残す。第2段）
+#   売上          … ビジラボの事業の契約 1件1行。売上の日は契約日（成約管理タスクで契約金額を入れると自動でできる。第2段）
 #   問い合わせ管理 … 「どこから来たか」「きっかけの発信」「見込金額」「失注の理由」を足す（成長の画面の「やったこと→成果の流れ」用）
 #
 # 使い方:
@@ -44,7 +47,10 @@ $Plan = [ordered]@{
     @{ name = 'LostReason';     type = 'text';      desc = '失注の理由（予算／時期／他社に決定／連絡が途切れた／その他）' }
     @{ name = 'LostNote';       type = 'multiline'; desc = '失注の理由の一言' }
   )}
-  '成約管理タスク' = @{ create = $false; columns = @( $CustomerId ) }
+  '成約管理タスク' = @{ create = $false; columns = @(
+    $CustomerId
+    @{ name = 'ContractAmount'; type = 'number'; desc = '契約金額（税抜・円）。入れると「売上」の表に1行できる（第2段）' }
+  )}
   '運用状況' = @{ create = $false; columns = @( $CustomerId ) }
   'タスク' = @{ create = $false; columns = @(
     $CustomerId
@@ -124,6 +130,49 @@ $Plan = [ordered]@{
     @{ name = 'Value';       type = 'number';    desc = '値。取れなかった週は行を作らない（0 で埋めない）' }
     @{ name = 'Source';      type = 'text';      desc = '出所（Windsor.ai／Shopify／GA4 など）' }
     @{ name = 'MeasuredAt';  type = 'dateTime';  desc = '取った日時（毎朝の集計の時刻）' }
+  )}
+  '発信' = @{ create = $true; columns = @(
+    @{ name = 'RecordKey';   type = 'text';      desc = '事業|発信|元のID（同じ投稿を二重に入れないための鍵）'; indexed = $true }
+    @{ name = 'PostDate';    type = 'text';      desc = '出した日（YYYY-MM-DD）'; indexed = $true }
+    @{ name = 'Business';    type = 'text';      desc = '事業（busilabo／lilocle）' }
+    @{ name = 'Channel';     type = 'text';      desc = '発信（ig／fb／column／yomimono／feature／mail）' }
+    @{ name = 'PostType';    type = 'text';      desc = '種類（リール／写真／複数の写真／記事／メルマガ など）' }
+    @{ name = 'Theme';       type = 'text';      desc = 'テーマ（毎朝の集計の Claude が本文から選ぶ。これまでのテーマに合わせる）' }
+    @{ name = 'Link';        type = 'multiline'; desc = '元のページ' }
+    @{ name = 'Reach';       type = 'number';    desc = 'リーチ（取れたものだけ。取れないときは空）' }
+    @{ name = 'Views';       type = 'number';    desc = '表示・閲覧' }
+    @{ name = 'Likes';       type = 'number';    desc = 'いいね・反応' }
+    @{ name = 'Saves';       type = 'number';    desc = '保存' }
+    @{ name = 'Shares';      type = 'number';    desc = 'シェア' }
+    @{ name = 'Comments';    type = 'number';    desc = 'コメント' }
+    @{ name = 'Clicks';      type = 'number';    desc = 'クリック（メルマガ・Facebook）' }
+    @{ name = 'Experiment';  type = 'text';      desc = '試していることの番号（「試していること」の表の行の ID。あれば）' }
+    @{ name = 'MeasuredAt';  type = 'dateTime';  desc = '数字を取った日時' }
+    $Deleted
+  )}
+  '試していること' = @{ create = $true; columns = @(
+    @{ name = 'Business';    type = 'text';      desc = '事業（busilabo／lilocle）' }
+    @{ name = 'Channel';     type = 'text';      desc = '発信（ig／fb／column など）' }
+    @{ name = 'StartDate';   type = 'text';      desc = '始めた日（YYYY-MM-DD）' }
+    @{ name = 'EndDate';     type = 'text';      desc = '結果を見る日（YYYY-MM-DD。ふつうは4週後）' }
+    @{ name = 'Change';      type = 'multiline'; desc = '何を変えて試すか' }
+    @{ name = 'Measure';     type = 'text';      desc = '何で比べるか（1本あたりのリーチ など）' }
+    @{ name = 'Result';      type = 'multiline'; desc = '結果（試す前の4週と比べて）' }
+    @{ name = 'Status';      type = 'text';      desc = '試している／効いた／効かなかった／やめた' }
+    $Deleted
+  )}
+  '売上' = @{ create = $true; columns = @(
+    $CustomerId
+    @{ name = 'InquiryId';    type = 'text';     desc = '元の問い合わせ（問い合わせ管理の行の ID）。どこから来たお客様の売上かを出すため'; indexed = $true }
+    @{ name = 'WonTaskId';    type = 'text';     desc = '成約管理タスクの行の ID（そこで契約金額を入れたときに自動でできた行）'; indexed = $true }
+    @{ name = 'Business';     type = 'text';     desc = '事業（業務改善・DX支援 など）' }
+    @{ name = 'Product';      type = 'text';     desc = '商品（できるAIチーム＋ 土台 など）' }
+    @{ name = 'Amount';       type = 'number';   desc = '金額（税抜・円）' }
+    @{ name = 'ContractDate'; type = 'dateTime'; desc = '契約日。売上はこの日で数える（2026-11-17 代表の決定）' }
+    @{ name = 'PaidDate';     type = 'dateTime'; desc = '入金日（参考）' }
+    @{ name = 'SaleStatus';   type = 'text';     desc = '見込み／確定／取り消し' }
+    @{ name = 'Memo';         type = 'multiline'; desc = 'メモ' }
+    $Deleted
   )}
   'ノウハウ' = @{ create = $true; columns = @(
     @{ name = 'Category';    type = 'text';      desc = '種類（判断ルール／手順／資料の場所／顧客ごとの注意）' }

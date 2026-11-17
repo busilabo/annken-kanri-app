@@ -55,6 +55,8 @@
       Company: { role: "company", kind: "input" },
       Owner: { role: "owner", kind: "input" },
       ContractDate: { role: "contractDate", kind: "date" },
+      // 入れると「売上」の表に1行できる（syncSale。2026-11-17 第2段）
+      ContractAmount: { role: "contractAmount", kind: "number" },
       Plan: { role: "plan", kind: "input" },
       SetupSteps: { role: "setupSteps", kind: "checkboxGroup" },
       ProductionSteps: { role: "productionSteps", kind: "checkboxGroup" },
@@ -464,7 +466,39 @@
       savedAt[kind + ":" + itemId] = Date.now();
       if (notice) postTeamsReply(card, notice);
       logActivity(card, kind, fields);
+      if (kind === "wontask") syncSale(card, itemId, fields).catch(function (e) { log("sale sync failed: " + e.message); });
     } catch (e) { log("save failed: " + e.message); }
+  }
+
+  // ---- 売上（2026-11-17 データベースの見直し 第2段）----
+  // 成約管理タスクで契約金額を入れると、「売上」の表に1行つくる（あれば直す）。売上の日は契約日（代表の決定）。
+  // 元の問い合わせ（同じ顧客ID で「成約」の問い合わせ）が分かれば InquiryId に入れ、「どこから来たお客様の売上か」を出せるようにする
+  var SALE_LIST = "売上";
+  var saleListId = null;
+  async function findListId(name) {
+    var res = await graph("/sites/" + siteId + "/lists?$filter=" + encodeURIComponent("displayName eq '" + name + "'"));
+    return res.value && res.value[0] ? res.value[0].id : null;
+  }
+  async function syncSale(card, itemId, f) {
+    if (!("ContractAmount" in f)) return;   // 列がまだない
+    if (!saleListId) { saleListId = await findListId(SALE_LIST); if (!saleListId) return; }
+    var found = await graph("/sites/" + siteId + "/lists/" + saleListId + "/items?$expand=fields($select=WonTaskId,Amount,SaleStatus)&$filter=" + encodeURIComponent("fields/WonTaskId eq '" + itemId + "'"));
+    var row = found.value && found.value[0];
+    var amount = typeof f.ContractAmount === "number" ? f.ContractAmount : null;
+    if (amount === null && !row) return;
+    var cid = f.CustomerId || "", inq = "";
+    if (cid) document.querySelectorAll('.card[data-kind="inquiry"]').forEach(function (c) {
+      var el = c.querySelector('[data-role="customerId"]'), st = c.querySelector('[data-role="status"]');
+      if (!inq && el && el.value === cid && st && st.textContent.trim() === "成約") inq = c.getAttribute("data-item-id") || "";
+    });
+    var fields = {
+      Title: ((f.Company || "") + " " + (f.Plan || "")).trim() || "契約",
+      CustomerId: cid, InquiryId: inq, WonTaskId: String(itemId), Business: "業務改善・DX支援", Product: f.Plan || "",
+      Amount: amount, ContractDate: f.ContractDate || null,
+      SaleStatus: amount === null ? "見込み" : (f.ContractDate ? "確定" : "見込み")
+    };
+    if (row) await graph("/sites/" + siteId + "/lists/" + saleListId + "/items/" + row.id + "/fields", { method: "PATCH", body: fields });
+    else await graph("/sites/" + siteId + "/lists/" + saleListId + "/items", { method: "POST", body: { fields: fields } });
   }
 
   // 保存待ちのカード。保存が終わるまでは、5秒ごとの読み直しで SharePoint の古い値に戻さない
@@ -1083,6 +1117,7 @@
     window.__app.setMktStatus(st);
     try { await ensureMarketingTasks(st); } catch (e) { log("marketing tasks failed: " + e.message); }
     try { await recordMetrics(st); } catch (e) { log("metrics record failed: " + e.message); }
+    try { await recordPosts(st); } catch (e) { log("posts record failed: " + e.message); }
     mktBusy = false;
   }
   // ---- 数字の記録（2026-11-17 データベースの見直し 第1段）----
@@ -1129,6 +1164,46 @@
       else if (h.id && Number(h.value) !== row.Value) { await graph("/sites/" + siteId + "/lists/" + metricListId + "/items/" + h.id + "/fields", { method: "PATCH", body: { Value: row.Value, MeasuredAt: row.MeasuredAt } }); fixed++; }
     }
     log("metrics recorded: +" + added + " / fixed " + fixed + " / rows " + rows.length);
+    try { localStorage.setItem(doneKey, "1"); } catch (e) { /* 保存できない環境でも動く */ }
+  }
+  // ---- 発信（2026-11-17 データベースの見直し 第2段）----
+  // 毎朝の集計の posts（直近60日の投稿・記事・メルマガ 1件ずつと反響）を、「発信」の表に1件1行で貯める。
+  // 鍵（RecordKey）は「事業|発信|元のID」。反響の数字が変わったら直す（投稿のあとも数日は伸びるため）。取れない数字は空のまま
+  var POST_LIST = "発信";
+  var postListId = null;
+  var POST_NUM = { reach: "Reach", views: "Views", likes: "Likes", saves: "Saves", shares: "Shares", comments: "Comments", clicks: "Clicks" };
+  async function recordPosts(st) {
+    var d = st && st.loaded && st.data;
+    var posts = d && Array.isArray(d.posts) ? d.posts : [];
+    if (!posts.length || !siteId) return;
+    var doneKey = "postsRecorded:" + String(d.generatedAt || "");
+    try { if (localStorage.getItem(doneKey)) return; } catch (e) { /* 保存できない環境でも動く */ }
+    if (!postListId) { postListId = await findListId(POST_LIST); if (!postListId) { log("list not found, skipping: " + POST_LIST); return; } }
+    var measured = d.generatedAt && !isNaN(new Date(d.generatedAt).getTime()) ? new Date(d.generatedAt).toISOString() : new Date().toISOString();
+    var rows = posts.filter(function (p) { return p && p.biz && p.channel && /^\d{4}-\d{2}-\d{2}/.test(p.date || "") && (p.id || p.link); }).map(function (p) {
+      var row = { RecordKey: p.biz + "|" + p.channel + "|" + String(p.id || p.link).slice(0, 200), Title: String(p.title || "（題なし）").slice(0, 120), PostDate: String(p.date).slice(0, 10),
+        Business: p.biz, Channel: p.channel, PostType: p.type || "", Theme: p.theme || "", Link: /^https:\/\//.test(p.link || "") ? p.link : "", MeasuredAt: measured };
+      var m = p.metrics || {};
+      Object.keys(POST_NUM).forEach(function (k) { if (typeof m[k] === "number" && isFinite(m[k])) row[POST_NUM[k]] = m[k]; });
+      return row;
+    });
+    var have = {}, url = "/sites/" + siteId + "/lists/" + postListId + "/items?$expand=fields($select=RecordKey,Reach,Views,Likes,Saves,Shares,Comments,Clicks,Theme,PostType)&$top=500";
+    for (var page = 0; url && page < 20; page++) {
+      var r = await graph(url);
+      (r.value || []).forEach(function (it) { if (it.fields && it.fields.RecordKey) have[it.fields.RecordKey] = { id: it.id, f: it.fields }; });
+      url = r["@odata.nextLink"] ? r["@odata.nextLink"].replace("https://graph.microsoft.com/v1.0", "") : "";
+    }
+    var added = 0, fixed = 0;
+    for (var i = 0; i < rows.length; i++) {
+      var row = rows[i], h = have[row.RecordKey];
+      if (!h) { await graph("/sites/" + siteId + "/lists/" + postListId + "/items", { method: "POST", body: { fields: row } }); added++; have[row.RecordKey] = { f: row }; continue; }
+      if (!h.id) continue;
+      var patch = {}, changed = false;
+      Object.keys(POST_NUM).forEach(function (k) { var c = POST_NUM[k]; if (c in row && Number(h.f[c]) !== row[c]) { patch[c] = row[c]; changed = true; } });
+      ["Theme", "PostType"].forEach(function (c) { if (row[c] && !h.f[c]) { patch[c] = row[c]; changed = true; } });   // 人が直したテーマは上書きしない
+      if (changed) { patch.MeasuredAt = row.MeasuredAt; await graph("/sites/" + siteId + "/lists/" + postListId + "/items/" + h.id + "/fields", { method: "PATCH", body: patch }); fixed++; }
+    }
+    log("posts recorded: +" + added + " / fixed " + fixed + " / rows " + rows.length);
     try { localStorage.setItem(doneKey, "1"); } catch (e) { /* 保存できない環境でも動く */ }
   }
   async function ensureMarketingTasks(st) {
