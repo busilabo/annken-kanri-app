@@ -665,6 +665,17 @@
     }
   }
 
+  function normalizeOrigin(v) {
+    var t = String(v || "").trim();
+    if (!t) return "";
+    if (/instagram|インスタ/i.test(t)) return "Instagram";
+    if (/facebook|フェイスブック/i.test(t)) return "Facebook";
+    if (/コラム/.test(t)) return "コラム";
+    if (/紹介/.test(t)) return "紹介";
+    if (/セミナー|研修|講座/.test(t)) return "セミナー";
+    if (/ホームページ|検索|google|サイト/i.test(t)) return "ホームページ";
+    return "その他";
+  }
   async function createInquiryItem(data) {
     var srcId = data.srcId || "";
     {
@@ -687,7 +698,9 @@
         Deleted: false
       };
       // どこから来たか：受け取り口が分かっていれば入れる（分からなければ空のまま。あとで人か Claude が選ぶ）
-      if (data.origin && listColumns.inquiry && listColumns.inquiry.Origin) fields.Origin = data.origin;
+      // フォームの「ビジラボを何で知りましたか」の答え（2026-11-17）を、カードの選択肢にそろえる
+      var org = normalizeOrigin(data.origin);
+      if (org && listColumns.inquiry && listColumns.inquiry.Origin) fields.Origin = org;
       if (data.receivedAt) fields.ReceivedAt = String(data.receivedAt).slice(0, 10) + "T00:00:00.000Z";
       var created = await graph("/sites/" + siteId + "/lists/" + listIds.inquiry + "/items", { method: "POST", body: { fields: fields } });
       applying = true;

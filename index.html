@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 公開のときに、公開の仕組み（.github/workflows/publish-annken-kanri-app.yml）がこの版の番号に書き換える。手元では dev のまま -->
-<meta name="app-version" content="601ad4f">
+<meta name="app-version" content="4758662">
 <title>ビジラボ 仕事管理</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@500&display=swap">
 <style>
@@ -1751,6 +1751,20 @@
   .ta ul { list-style: none; margin: 2px 0 0 1.2em; padding: 0; display: grid; gap: 2px; font-size: 13px; }
   .ta-goal { margin-left: 8px; font-weight: 700; color: var(--accent); font-size: 13px; }
   .ta-more { color: var(--text-muted); }
+  .seo-ks { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 8px 0; }
+  @media (max-width: 700px) { .seo-ks { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .seo-k { border: 1px solid var(--border); border-radius: 10px; padding: 6px 10px; display: grid; gap: 1px; }
+  .seo-k span { font-size: 12px; color: var(--text-muted); font-weight: 700; } .seo-k b { font-size: 20px; font-weight: 900; font-variant-numeric: tabular-nums; }
+  .seo-sub { font-size: 12.5px; font-weight: 800; color: var(--text-muted); margin: 8px 0 4px; }
+  .seo-ideas { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 13.5px; }
+  .seo-ideas li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .seo-kind { font-size: 11.5px; font-weight: 800; border-radius: 6px; padding: 0 7px; background: var(--accent-soft); color: var(--accent); }
+  .seo-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; margin-top: 8px; }
+  .ef tr[data-near] td { background: var(--warn-soft); } .ef tr[data-low] td { background: var(--crit-soft); }
+  .ef td a { color: var(--accent); }
+  .seo-tech { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 13px; }
+  .seo-tech li { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+  .seo-iss { color: var(--warn); font-weight: 700; font-size: 12.5px; } .seo-ok { color: var(--ok); font-size: 12.5px; }
 </style>
 </head>
 <body>
@@ -6747,7 +6761,7 @@
     box.innerHTML = '<details open><summary class="lilo-head"><b>💼 ビジラボの様子</b><span class="lilo-sum">' + LILO_LIGHT[tone] + ' ' + esc(statusSum(bad, warn, 'ちゃんと回っています', tone)) + '</span>' + (gh ? '<span class="g-head">' + esc(gh) + '</span>' : '') +
       '<small class="lilo-at">運用は今の件数' + (m.at ? '・マーケティングは ' + esc(m.at) : '') + '</small></summary>' +
       '<div class="lilo-body">' + growthTopHtml('busilabo') +
-      mktCardsHtml('busilabo', { inquiry: o.results[0] }) + effectHtml('busilabo') +
+      mktCardsHtml('busilabo', { inquiry: o.results[0] }) + seoHtml() + effectHtml('busilabo') +
       '<div class="mk-ops">' + statusLightsHtml('運用状況', o.tiles) + '</div>' +
       (oIssues.length ? '<ul class="lilo-issues">' + oIssues.map(function (i) { return '<li>' + LILO_LIGHT[i.tone] + ' ' + esc(i.text) + '</li>'; }).join('') + '</ul>' : '') +
       '<div class="lilo-foot"><details class="lilo-help"><summary>ℹ️ 数字の見かた</summary><div>運用は、問い合わせ・成約後の構築タスク・運用中の顧客・仕事のカードを今数えたものです。マーケティングは毎朝の集計（Windsor.ai・busilabo.com）で、コラムの下書きは SharePoint のフォルダを今見た数です。目安：SNS は週1本（8日で🟡・14日で🔴）、コラムの公開は週1本（10日で🔴）。🔴 はだれでも受け取れる仕事になり、様子が戻ると自動で完了します</div></details></div></div></details>';
@@ -6913,6 +6927,52 @@
     return '<details class="g-d" data-g-open="' + biz + '"' + (growthOpen[biz] ? ' open' : '') + '><summary><span class="g-tag" data-k="D">D</span> 何が効いたか <small>（直近8週の発信 ' + posts.length + '本・試していること ' + running + '件）</small></summary>' +
       '<div class="ef-wrap"><div class="ef-main">' + body + '</div><div class="ts-list"><div class="ef-cht">試していること</div>' + (tl || '<div class="mk-none">まだありません。下から足せます。</div>') + form + '</div></div></details>';
   }
+  // ---- 🔎 ホームページの健康（SEO）（2026-11-17 代表の指定）----
+  // 毎朝の集計の seo（Search Console・GA4・ページの作りの点検）。直近28日と前の28日を比べ、伸ばしどころは「＋ 仕事に入れる」で仕事に
+  function seoDelta(v, p, lowerIsBetter, pct) {
+    if (typeof v !== 'number' || typeof p !== 'number') return '';
+    var diff = pct ? (p ? Math.round((v - p) / p * 100) : null) : Math.round((v - p) * 10) / 10;
+    if (diff === null || diff === 0) return '<span class="mk-d">±0' + (pct ? '%' : '') + '</span>';
+    var good = lowerIsBetter ? diff < 0 : diff > 0;
+    return '<span class="mk-d" data-dir="' + (good ? 'up' : 'down') + '">' + (diff > 0 ? '↑' : '↓') + Math.abs(diff) + (pct ? '%' : '') + '</span>';
+  }
+  function seoPct(x) { return typeof x === 'number' ? (Math.round(x * 1000) / 10) + '%' : '－'; }
+  function seoPath(u) { return String(u || '').replace(/^https?:\/\/(www\.)?busilabo\.com/, '') || '/'; }
+  function seoHtml() {
+    var a = mktState.loaded ? mktState.data : null, s = a && a.seo;
+    if (!s) return '<details class="g-d" data-g-open="seo"' + (growthOpen.seo ? ' open' : '') + '><summary>🔎 ホームページの健康（SEO）<small>（次の毎朝の集計（7:20）から出ます）</small></summary></details>';
+    var tech = Array.isArray(s.tech) ? s.tech : [], heavy = tech.filter(function (t) { return t.noindex; }).length;
+    var warnN = tech.reduce(function (n, t) { return n + ((t.issues || []).length); }, 0) + (s.sitemap === false ? 1 : 0) + (s.robots === false ? 1 : 0);
+    var kpi = function (label, val, d) { return '<div class="seo-k"><span>' + label + '</span><b>' + val + '</b>' + d + '</div>'; };
+    var kpis = '<div class="seo-ks">' +
+      kpi('検索での表示', typeof s.impressions === 'number' ? s.impressions.toLocaleString('ja-JP') : '－', seoDelta(s.impressions, s.impressionsPrev, false, true)) +
+      kpi('クリック', typeof s.clicks === 'number' ? s.clicks.toLocaleString('ja-JP') : '－', seoDelta(s.clicks, s.clicksPrev, false, true)) +
+      kpi('クリック率', seoPct(s.ctr), typeof s.ctr === 'number' && typeof s.ctrPrev === 'number' ? seoDelta(Math.round(s.ctr * 1000) / 10, Math.round(s.ctrPrev * 1000) / 10, false, false).replace('</span>', 'pt</span>') : '') +
+      kpi('平均の順位', typeof s.position === 'number' ? (Math.round(s.position * 10) / 10) + '位' : '－', seoDelta(s.position, s.positionPrev, true, false).replace('</span>', '位</span>')) + '</div>';
+    var ideas = (Array.isArray(s.ideas) ? s.ideas : []).slice(0, 3).map(function (it, i) {
+      var key = 'seo:' + (s.to || '') + ':' + i, has = window.__growth && window.__growth.hasTask(key);
+      return '<li><span class="seo-kind">' + esc(it.kind || '') + '</span><span>' + (it.target ? '<b>' + esc(it.target) + '</b>：' : '') + esc(it.text || '') + '</span>' +
+        (has ? '<span class="rv-btn done">✓ 仕事に入れました</span>' : '<button type="button" class="rv-btn" data-next-add="' + esc(key) + '" data-next-biz="busilabo" data-next-text="' + esc((it.target ? it.target + '：' : '') + (it.text || '')) + '" data-next-week="' + esc(mktMd(s.from) + '〜' + mktMd(s.to) + ' の検索') + '">＋ 仕事に入れる</button>') + '</li>';
+    }).join('');
+    var qRows = (Array.isArray(s.queries) ? s.queries : []).slice(0, 8).map(function (q) {
+      var near = typeof q.position === 'number' && q.position >= 8 && q.position <= 20 && (q.impressions || 0) >= 20;
+      return '<tr' + (near ? ' data-near' : '') + '><td>' + esc(q.query || '') + '</td><td class="n">' + (q.impressions || 0) + '</td><td class="n">' + (q.clicks || 0) + '</td><td class="n">' + seoPct(q.ctr) + '</td><td class="n">' + (typeof q.position === 'number' ? (Math.round(q.position * 10) / 10) : '－') + '</td></tr>';
+    }).join('');
+    var pRows = (Array.isArray(s.pages) ? s.pages : []).slice(0, 8).map(function (p) {
+      var low = (p.impressions || 0) >= 50 && typeof p.ctr === 'number' && p.ctr < 0.01;
+      return '<tr' + (low ? ' data-low' : '') + '><td><a href="' + esc(/^https:\/\//.test(p.page || '') ? p.page : 'https://www.busilabo.com' + seoPath(p.page)) + '" target="_blank" rel="noopener">' + esc(seoPath(p.page)) + '</a></td><td class="n">' + (p.impressions || 0) + '</td><td class="n">' + (p.clicks || 0) + '</td><td class="n">' + seoPct(p.ctr) + '</td><td class="n">' + (typeof p.views === 'number' ? p.views : '－') + '</td></tr>';
+    }).join('');
+    var tRows = tech.map(function (t) {
+      var iss = t.issues || [];
+      return '<li data-ok="' + (iss.length ? '0' : '1') + '"><b>' + esc(seoPath(t.url)) + '</b> ' + (iss.length ? iss.map(function (x) { return '<span class="seo-iss">⚠ ' + esc(x) + '</span>'; }).join('') : '<span class="seo-ok">✓ 問題なし</span>') + '</li>';
+    }).join('') + (s.sitemap === false ? '<li data-ok="0"><b>/sitemap.xml</b> <span class="seo-iss">⚠ 開けません</span></li>' : '') + (s.robots === false ? '<li data-ok="0"><b>/robots.txt</b> <span class="seo-iss">⚠ 開けません</span></li>' : '');
+    var sum = '検索 ' + (typeof s.clicks === 'number' ? 'クリック ' + s.clicks : '') + (typeof s.position === 'number' ? '・平均 ' + (Math.round(s.position * 10) / 10) + '位' : '') + (warnN ? '・作りの注意 ' + warnN + '件' : '・作りの注意なし');
+    return '<details class="g-d seo" data-g-open="seo"' + (growthOpen.seo || heavy ? ' open' : '') + '><summary>🔎 ホームページの健康（SEO）<small>（' + esc(mktMd(s.from) + '〜' + mktMd(s.to)) + '・前の28日と比べて／' + esc(sum) + '）</small>' + (heavy ? '<span class="seo-iss">⚠ 検索に出ない設定（noindex）のページがあります</span>' : '') + '</summary>' +
+      kpis + (ideas ? '<div class="seo-sub">伸ばしどころ（Claude が数字から）</div><ul class="seo-ideas">' + ideas + '</ul>' : '') +
+      '<div class="seo-grid"><div class="ef-t"><div class="ef-h">検索語（表示の多い順。黄色は「あと少しで1ページ目」）</div><table class="ef"><thead><tr><th>検索語</th><th>表示</th><th>クリック</th><th>率</th><th>順位</th></tr></thead><tbody>' + (qRows || '<tr><td colspan="5">まだありません</td></tr>') + '</tbody></table></div>' +
+      '<div class="ef-t"><div class="ef-h">ページ（赤は「表示のわりにクリックが少ない」）</div><table class="ef"><thead><tr><th>ページ</th><th>表示</th><th>クリック</th><th>率</th><th>閲覧</th></tr></thead><tbody>' + (pRows || '<tr><td colspan="5">まだありません</td></tr>') + '</tbody></table></div></div>' +
+      (tRows ? '<div class="seo-sub">ページの作りの点検（題・説明文・見出し・検索に出る設定・画像の説明）</div><ul class="seo-tech">' + tRows + '</ul>' : '') + '</details>';
+  }
   function growthTopHtml(biz) {
     return '<div class="g-row2">' + goalPanelHtml(biz) + reviewPanelHtml(biz) + '</div>' + flowHtml(biz);
   }
@@ -6950,7 +7010,9 @@
       e.preventDefault();
       var biz = nx.getAttribute('data-next-biz'), text = nx.getAttribute('data-next-text');
       nx.disabled = true; nx.textContent = '入れています…';
-      window.__growth.addNext(nx.getAttribute('data-next-add'), { Title: text, Business: GROWTH_BIZ[biz] || '', Category: '発信', Content: '先週（' + nx.getAttribute('data-next-week') + '）の振り返りの「次の一手」です。\n' + text })
+      var isSeo = /^seo:/.test(nx.getAttribute('data-next-add'));
+      window.__growth.addNext(nx.getAttribute('data-next-add'), { Title: text, Business: GROWTH_BIZ[biz] || '', Category: '発信',
+        Content: (isSeo ? 'ホームページの健康（SEO）の伸ばしどころです（' + nx.getAttribute('data-next-week') + '）。\n' : '先週（' + nx.getAttribute('data-next-week') + '）の振り返りの「次の一手」です。\n') + text })
         .then(function () { renderMktStatus(); }, function (err) { alert('仕事に入れられませんでした：' + err.message); renderMktStatus(); });
       return;
     }
@@ -8414,8 +8476,8 @@
 })();
 </script>
 <script src="vendor/msal-browser.min.js"></script>
-<script src="sync.js?v=601ad4f"></script>
-<script src="chat.js?v=601ad4f"></script>
+<script src="sync.js?v=4758662"></script>
+<script src="chat.js?v=4758662"></script>
 <script>
 // 新しい版が出たら知らせて切り替える（2026-11-17 代表の指摘：ブラウザが古い版を覚えていて、更新しても前の画面のままだった）。
 // 公開のたびに version.txt に版の番号が入る。5分ごとと、画面に戻ってきたときに見比べ、違えば上に帯を出す。押すと読み直す（入力中の内容を消さないよう、勝手には読み直さない）
