@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 公開のときに、公開の仕組み（.github/workflows/publish-annken-kanri-app.yml）がこの版の番号に書き換える。手元では dev のまま -->
-<meta name="app-version" content="9b05a9c">
+<meta name="app-version" content="9e5bca4">
 <title>ビジラボ 仕事管理</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@500&display=swap">
 <style>
@@ -1746,6 +1746,7 @@
   .ts-form .rv-btn { justify-self: start; }
   .today-alerts { background: var(--surface, #fff); border: 1px solid var(--border); border-radius: 14px; padding: 10px 16px; margin: 4px 0 14px; display: grid; gap: 6px; }
   .today-alerts:empty { display: none; }
+  .release-btn { border-style: dashed; }
   .ta-ops .lilo-lights { margin-top: 4px; }
   .ta-ops .lilo-light { border: 1px solid var(--border); }
   .ta-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -6003,12 +6004,7 @@
       activateTab('today');
       window.scrollTo(0, 0);
     } else if (t.hasAttribute('data-s-release')) {
-      // 担当を外す（2026-11-18 代表の指定：受けたけれど外したいとき、だれかに渡さずに「次の走者募集」に戻す。申し送りは書かなくてよい）
-      var was = ownerOf(card);
-      if (!window.confirm('「' + was + '」さんの担当を外して、次の走者募集に戻しますか？')) return;
-      addHistoryEntry(card, 'task', '担当を外す', statusOf(card), null, was + 'さんが外しました（次の走者募集に戻した）');
-      closeSimplePanel(card);
-      assignCard(card, UNASSIGNED);
+      releaseOwner(card);
     } else if (t.hasAttribute('data-s-reopen')) {
       setTaskStatus(card, '進行中');
       addHistoryEntry(card, 'task', '未完了に戻す', '進行中', null, '');
@@ -6022,7 +6018,7 @@
       // 申し送りの入力と渡す先のボタン。押したときの処理は今日のボードの「渡す」と同じ（passBaton）
       var panel = openSimplePanel(card, '<div class="passer"><label class="passer-label">申し送り（どこまで終わったか・次にやること・資料の場所・何を待っているか）</label>' +
         '<textarea class="passer-text" rows="3"></textarea><div class="passer-actions">' +
-        '<button type="button" class="claim-btn" data-pass-to="' + UNASSIGNED + '" data-pass-card="' + key + '">次の走者募集に戻す</button>' +
+        '<button type="button" class="claim-btn" data-pass-to="' + UNASSIGNED + '" data-pass-card="' + key + '">次の走者募集に戻す（申し送りなしでも可）</button>' +
         STAFF.filter(function (n) { return n !== UNASSIGNED && n !== ownerOf(card); }).map(function (n) {
           return '<button type="button" class="picker-btn" data-pass-to="' + esc(n) + '" data-pass-card="' + key + '">' + esc(n) + 'さんに渡す</button>';
         }).join('') + '<span class="passer-hint" data-passer-hint></span></div></div>');
@@ -8052,7 +8048,7 @@
     passer.innerHTML = '<label class="passer-label">申し送り（どこまで進んだか・次にやること・資料の場所）</label>' +
       '<textarea class="passer-text" rows="3"></textarea>' +
       '<div class="passer-actions">' +
-      '<button type="button" class="claim-btn" data-pass-to="' + UNASSIGNED + '" data-pass-card="' + key + '">走者募集に戻す</button>' +
+      '<button type="button" class="claim-btn" data-pass-to="' + UNASSIGNED + '" data-pass-card="' + key + '">走者募集に戻す（申し送りなしでも可）</button>' +
       names.map(function (n) { return '<button type="button" class="picker-btn" data-here data-pass-to="' + esc(n) + '" data-pass-card="' + key + '">' + esc(n) + 'さんに渡す</button>'; }).join('') +
       '<span class="passer-hint" data-passer-hint></span></div>';
     passer.querySelector('textarea').value = roleVal(card, 'handover');
@@ -8060,14 +8056,41 @@
     passer.querySelector('textarea').focus();
   }
 
+  // 担当を外す（2026-11-18 代表の指定：受けたけれど外したいとき、だれかに渡さずに「次の走者募集」に戻す。申し送りは書かなくてよい）
+  // 仕事の画面の「↩ 担当を外す」と、「渡す」「申し送りを書いて渡す」の欄の「↩ 担当を外す（申し送りなし）」から
+  function releaseOwner(card) {
+    if (!card || !document.body.contains(card)) return;
+    var was = ownerOf(card);
+    if (!was || was === UNASSIGNED) return;
+    if (!window.confirm('「' + was + '」さんの担当を外して、次の走者募集に戻しますか？')) return;
+    addHistoryEntry(card, card.getAttribute('data-kind') || 'task', '担当を外す', statusOf(card), null, was + 'さんが外しました（次の走者募集に戻した）');
+    closeInlinePanels();
+    if (card.getAttribute('data-kind') === 'task') closeSimplePanel(card);
+    assignCard(card, UNASSIGNED);
+  }
+  document.addEventListener('click', function (e) {
+    var rb = e.target.closest && e.target.closest('[data-release-key]');
+    if (!rb) return;
+    e.preventDefault();
+    releaseOwner(jumpRegistry[rb.getAttribute('data-release-key')]);
+  });
+
   function passBaton(btn) {
     var passer = btn.closest('.passer');
     var card = jumpRegistry[btn.getAttribute('data-pass-card')];
     if (!passer || !card || !document.body.contains(card)) return;
     var text = passer.querySelector('textarea').value.trim();
-    if (!text) { passer.querySelector('[data-passer-hint]').textContent = '申し送りを書いてから渡してください'; return; }
     var to = btn.getAttribute('data-pass-to');
     var from = ownerOf(card);
+    // 走者募集に戻すときは申し送りなしでよい（2026-11-18 代表の指定）。人に渡すときは書いてから
+    if (!text && to !== UNASSIGNED) { passer.querySelector('[data-passer-hint]').textContent = '申し送りを書いてから渡してください'; return; }
+    if (!text) {
+      addHistoryEntry(card, card.getAttribute('data-kind'), '担当を外す', statusOf(card), null, from + 'さんが外しました（次の走者募集に戻した）');
+      closeInlinePanels();
+      if (card.getAttribute('data-kind') === 'task') closeSimplePanel(card);
+      assignCard(card, UNASSIGNED);
+      return;
+    }
     // 申し送りを書き込み、input を発火して記名（渡す人の名前）と保存に乗せる。担当を変えるのはその後
     var handover = card.querySelector('[data-role="handover"]');
     if (handover) {
@@ -8644,8 +8667,8 @@
 })();
 </script>
 <script src="vendor/msal-browser.min.js"></script>
-<script src="sync.js?v=9b05a9c"></script>
-<script src="chat.js?v=9b05a9c"></script>
+<script src="sync.js?v=9e5bca4"></script>
+<script src="chat.js?v=9e5bca4"></script>
 <script>
 // 新しい版が出たら知らせて切り替える（2026-11-17 代表の指摘：ブラウザが古い版を覚えていて、更新しても前の画面のままだった）。
 // 公開のたびに version.txt に版の番号が入る。5分ごとと、画面に戻ってきたときに見比べ、違えば上に帯を出す。押すと読み直す（入力中の内容を消さないよう、勝手には読み直さない）
