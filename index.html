@@ -1827,6 +1827,16 @@
           <div class="field"><label>期限</label><input type="date" data-role="due"></div>
           <!-- 「担当者名」は先方の担当者。こちらは自社側の担当なので名前を分けている -->
           <div class="field"><label>自社担当</label><select data-role="owner" data-staff-select></select></div>
+          <!-- 成長の画面の「やったこと→成果の流れ」用（2026-11-17 データベースの見直し 第1段）。分からないときは「不明」を選ぶ（空や「その他」で埋めない） -->
+          <div class="field"><label>どこから来たか</label><select data-role="origin">
+            <option value="">（まだ選んでいない）</option><option>Instagram</option><option>Facebook</option><option>ホームページ</option><option>コラム</option><option>紹介</option><option>セミナー</option><option>その他</option><option>不明</option>
+          </select></div>
+          <div class="field"><label>見込金額（税抜・円）</label><input type="text" inputmode="numeric" data-role="expectedAmount" placeholder="例：500000"></div>
+          <input type="hidden" data-role="sourcePost">
+          <div class="field"><label>失注の理由</label><select data-role="lostReason">
+            <option value="">（失注したときに選ぶ）</option><option>予算</option><option>時期</option><option>他社に決定</option><option>連絡が途切れた</option><option>その他</option>
+          </select></div>
+          <div class="field"><label>失注の理由の一言</label><div class="editable" contenteditable="true" data-role="lostNote" data-placeholder="失注したときの一言"></div></div>
           <div class="field wide">
             <label>企業情報</label>
             <div class="company-panel" data-company-panel data-local-hidden>

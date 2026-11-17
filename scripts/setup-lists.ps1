@@ -11,6 +11,9 @@
 #   連絡先        … 事業ごとの取引先・メーカーの担当者（パートさんがすぐ連絡先を見つけられるように）
 #   やり取りログ  … 日々のやり取り（Teams・メールなど）を1件1行でためる。Power Automate が自動で足していく
 #   ノウハウ      … 代表の判断ルールや資料の場所（脳内アップロードの成果を入れる。画面はまだ無い）
+#   目標と数字    … 数字の数え方と月の目標（2026-11-17 データベースの見直し 第1段。坂中様の設計の kpi_definition に当たる）
+#   数字の記録    … 週ごと・発信ごとの数字（毎朝の集計の4週分を、アプリが週1行ずつ貯める。metric_observation に当たる）
+#   問い合わせ管理 … 「どこから来たか」「きっかけの発信」「見込金額」「失注の理由」を足す（成長の画面の「やったこと→成果の流れ」用）
 #
 # 使い方:
 #   pwsh -File scripts/setup-lists.ps1
@@ -33,7 +36,14 @@ $CustomerId = @{ name = 'CustomerId'; type = 'text'; desc = '顧客ID（顧客�
 
 # create = $true のリストは、無ければ作る。$false のリストは既存のものに列を足すだけ。
 $Plan = [ordered]@{
-  '問い合わせ管理' = @{ create = $false; columns = @( $CustomerId ) }
+  '問い合わせ管理' = @{ create = $false; columns = @(
+    $CustomerId
+    @{ name = 'Origin';         type = 'text';      desc = 'どこから来たか（Instagram／Facebook／ホームページ／コラム／紹介／セミナー／その他／不明）。分からないときは「不明」で、空や「その他」で埋めない' }
+    @{ name = 'SourcePost';     type = 'text';      desc = 'きっかけの発信（分かれば。発信の表ができたらその番号）' }
+    @{ name = 'ExpectedAmount'; type = 'number';    desc = '見込金額（税抜・円）' }
+    @{ name = 'LostReason';     type = 'text';      desc = '失注の理由（予算／時期／他社に決定／連絡が途切れた／その他）' }
+    @{ name = 'LostNote';       type = 'multiline'; desc = '失注の理由の一言' }
+  )}
   '成約管理タスク' = @{ create = $false; columns = @( $CustomerId ) }
   '運用状況' = @{ create = $false; columns = @( $CustomerId ) }
   'タスク' = @{ create = $false; columns = @(
@@ -95,6 +105,25 @@ $Plan = [ordered]@{
     @{ name = 'Summary';     type = 'multiline'; desc = 'やり取りの要約' }
     @{ name = 'SourceLink';  type = 'multiline'; desc = '元のメッセージへのリンク' }
     @{ name = 'SourceId';    type = 'text';      desc = '元メッセージのID（同じものを二重に取り込まないため）'; indexed = $true }
+  )}
+  '目標と数字' = @{ create = $true; columns = @(
+    @{ name = 'MetricCode';  type = 'text';      desc = '数字の名前（英字で固定。数字の記録の MetricCode とそろえる）'; indexed = $true }
+    @{ name = 'Business';    type = 'text';      desc = '事業（業務改善・DX支援／LILOCLE運営／Amazon販売／家電の卸販売）' }
+    @{ name = 'HowToCount';  type = 'multiline'; desc = '数え方（何を数えるか・含めないもの・どの日付で数えるか）' }
+    @{ name = 'Period';      type = 'text';      desc = '期間（月／週）' }
+    @{ name = 'TargetMonth'; type = 'text';      desc = '対象の月（YYYY-MM）。空なら数え方だけの行' }
+    @{ name = 'Target';      type = 'number';    desc = '目標の数' }
+    $Deleted
+  )}
+  '数字の記録' = @{ create = $true; columns = @(
+    @{ name = 'RecordKey';   type = 'text';      desc = '週の初め|事業|発信|数字の名前（同じ行を二重に入れないための鍵）'; indexed = $true }
+    @{ name = 'WeekStart';   type = 'text';      desc = '週の初め（月曜。YYYY-MM-DD）'; indexed = $true }
+    @{ name = 'Business';    type = 'text';      desc = '事業（busilabo／lilocle）' }
+    @{ name = 'Channel';     type = 'text';      desc = '発信（ig／fb／mail／yomimono／feature／column／site／sales）' }
+    @{ name = 'MetricCode';  type = 'text';      desc = '数字の名前（目標と数字の MetricCode とそろえる）' }
+    @{ name = 'Value';       type = 'number';    desc = '値。取れなかった週は行を作らない（0 で埋めない）' }
+    @{ name = 'Source';      type = 'text';      desc = '出所（Windsor.ai／Shopify／GA4 など）' }
+    @{ name = 'MeasuredAt';  type = 'dateTime';  desc = '取った日時（毎朝の集計の時刻）' }
   )}
   'ノウハウ' = @{ create = $true; columns = @(
     @{ name = 'Category';    type = 'text';      desc = '種類（判断ルール／手順／資料の場所／顧客ごとの注意）' }
@@ -161,6 +190,7 @@ function New-ColumnBody {
     'multiline' { $b.text = @{ allowMultipleLines = $true;  linesForEditing = 4; textType = 'plain' } }
     'boolean'   { $b.boolean = @{} }
     'dateTime'  { $b.dateTime = @{ displayAs = 'default'; format = 'dateTime' } }
+    'number'    { $b.number = @{ decimalPlaces = 'automatic'; displayAs = 'number' } }
   }
   return $b
 }
@@ -223,6 +253,31 @@ foreach ($listName in $Plan.Keys) {
       $failed++
     }
   }
+}
+
+# 「目標と数字」が空なら、数え方の行（目標の数はまだ空）を入れる。行があれば何もしない（何度実行しても安全）
+$GoalSeed = @(
+  @{ Title = '問い合わせ'; MetricCode = 'busilabo_inquiries'; Business = '業務改善・DX支援'; Period = '月'; HowToCount = '問い合わせ管理の行のうち、受付日がその月のもの。迷惑メール・対象外として移したものは数えない' }
+  @{ Title = '商談'; MetricCode = 'busilabo_meetings'; Business = '業務改善・DX支援'; Period = '月'; HowToCount = '問い合わせ管理の行のうち、商談日時（MeetingAt）がその月のもの。同じ会社の2回目以降の商談は数えない' }
+  @{ Title = '成約'; MetricCode = 'busilabo_contracts'; Business = '業務改善・DX支援'; Period = '月'; HowToCount = '成約管理タスクの行のうち、契約日がその月のもの' }
+  @{ Title = '売上'; MetricCode = 'busilabo_sales'; Business = '業務改善・DX支援'; Period = '月'; HowToCount = '売上の表（第2段で作る）の、契約日がその月の金額（税抜）の合計。取り消しは引く（2026-11-17 代表の決定：売上の日は契約日）' }
+  @{ Title = '売上'; MetricCode = 'lilocle_sales'; Business = 'LILOCLE運営'; Period = '月'; HowToCount = 'Shopify の注文のうち、注文日がその月のものの今の合計金額（キャンセル・返金を引いたあと。キャンセルした注文とテスト注文は除く）。アプリの「先週の売上」と同じ数え方' }
+  @{ Title = '注文'; MetricCode = 'lilocle_orders'; Business = 'LILOCLE運営'; Period = '月'; HowToCount = 'Shopify の注文のうち、注文日がその月のものの数（キャンセルした注文とテスト注文は除く）' }
+)
+$goalList = Find-List -Token $token -SiteId $siteId -Name '目標と数字'
+if ($goalList) {
+  $have = Invoke-Graph -Token $token -Method GET -Path "/sites/$siteId/lists/$($goalList.id)/items?`$top=1"
+  if (-not $have.value -or $have.value.Count -eq 0) {
+    foreach ($g in $GoalSeed) {
+      try {
+        Invoke-Graph -Token $token -Method POST -Path "/sites/$siteId/lists/$($goalList.id)/items" -Body @{ fields = $g } | Out-Null
+        Write-Host ("  + 目標と数字：{0}（{1}）" -f $g.Title, $g.MetricCode) -ForegroundColor Green
+      } catch {
+        Write-Host ("  ! 目標と数字：{0} 失敗: {1}" -f $g.MetricCode, $_.Exception.Message) -ForegroundColor Red
+        $failed++
+      }
+    }
+  } else { Write-Host '  - 目標と数字：行があるので入れません' -ForegroundColor DarkGray }
 }
 
 Write-Host ''

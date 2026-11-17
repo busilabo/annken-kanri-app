@@ -41,6 +41,12 @@
       Content: { role: "content", kind: "editable" },
       MeetingAt: { role: "meetingAt", kind: "datetime" },
       Plan: { role: "plan", kind: "checkboxGroup" },
+      // 成長の画面の「やったこと→成果の流れ」用（2026-11-17 データベースの見直し 第1段）
+      Origin: { role: "origin", kind: "input" },
+      SourcePost: { role: "sourcePost", kind: "input" },
+      ExpectedAmount: { role: "expectedAmount", kind: "number" },
+      LostReason: { role: "lostReason", kind: "input" },
+      LostNote: { role: "lostNote", kind: "editable" },
       Memo: { role: "memo", kind: "editable" }
     },
     wontask: {
@@ -177,6 +183,12 @@
   function readField(card, spec) {
     if (spec.kind === "chip") { var el = getRoleEl(card, spec.role); return el ? el.textContent.trim() : ""; }
     if (spec.kind === "input") { var el2 = getRoleEl(card, spec.role); return el2 ? el2.value : ""; }
+    if (spec.kind === "number") {
+      var elN = getRoleEl(card, spec.role);
+      if (!elN) return undefined;
+      var nv = String(elN.value || "").replace(/[,，円¥\s]/g, "");
+      return nv === "" || isNaN(Number(nv)) ? null : Number(nv);
+    }
     if (spec.kind === "date") {
       var elD = getRoleEl(card, spec.role);
       if (!elD) return undefined;
@@ -224,6 +236,11 @@
         return;
       }
       el2.value = value || "";
+      return;
+    }
+    if (spec.kind === "number") {
+      var elN = getRoleEl(card, spec.role);
+      if (elN) elN.value = value === null || value === undefined || value === "" ? "" : String(value);
       return;
     }
     if (spec.kind === "date") {
@@ -635,6 +652,8 @@
         History: "[]",
         Deleted: false
       };
+      // どこから来たか：受け取り口が分かっていれば入れる（分からなければ空のまま。あとで人か Claude が選ぶ）
+      if (data.origin && listColumns.inquiry && listColumns.inquiry.Origin) fields.Origin = data.origin;
       if (data.receivedAt) fields.ReceivedAt = String(data.receivedAt).slice(0, 10) + "T00:00:00.000Z";
       var created = await graph("/sites/" + siteId + "/lists/" + listIds.inquiry + "/items", { method: "POST", body: { fields: fields } });
       applying = true;
@@ -1063,7 +1082,54 @@
     try { st.drafts = await columnDrafts(); } catch (e) { log("column drafts failed: " + e.message); st.draftsError = e.message.slice(0, 60); }
     window.__app.setMktStatus(st);
     try { await ensureMarketingTasks(st); } catch (e) { log("marketing tasks failed: " + e.message); }
+    try { await recordMetrics(st); } catch (e) { log("metrics record failed: " + e.message); }
     mktBusy = false;
+  }
+  // ---- 数字の記録（2026-11-17 データベースの見直し 第1段）----
+  // 毎朝の集計の weekly.channels[].series（発信ごとの4週分）を、SharePoint の「数字の記録」に1週1行で貯める。
+  // 鍵（RecordKey）は「週の初め|事業|発信|数字の名前」。同じ鍵があれば値が変わったときだけ直す。取れなかった週（null）は行を作らない
+  var METRIC_LIST = "数字の記録";
+  var METRIC_OF = { ig: "reach", fb: "views", mail: "site_visits", yomimono: "views", feature: "views", column: "views", site: "sessions", sales: "sales" };
+  var METRIC_SOURCE = { ig: "Windsor.ai（Instagram）", fb: "Windsor.ai（Facebook）", column: "Windsor.ai（GA4）", site: "Windsor.ai（GA4）", mail: "Shopify", yomimono: "Shopify", feature: "Shopify", sales: "Shopify" };
+  var metricListId = null;
+  async function recordMetrics(st) {
+    var d = st && st.loaded && st.data;
+    var chs = d && d.weekly && Array.isArray(d.weekly.channels) ? d.weekly.channels : [];
+    if (!chs.length || !siteId) return;
+    var stamp = String(d.generatedAt || "");
+    var doneKey = "metricsRecorded:" + stamp;
+    try { if (localStorage.getItem(doneKey)) return; } catch (e) { /* 保存できない環境でも動く */ }
+    if (!metricListId) {
+      var res = await graph("/sites/" + siteId + "/lists?$filter=" + encodeURIComponent("displayName eq '" + METRIC_LIST + "'"));
+      metricListId = res.value && res.value[0] ? res.value[0].id : null;
+      if (!metricListId) { log("list not found, skipping: " + METRIC_LIST); return; }
+    }
+    var rows = [];
+    chs.forEach(function (c) {
+      var code = METRIC_OF[c.id];
+      if (!code || !Array.isArray(c.series)) return;
+      c.series.forEach(function (p) {
+        if (!p || !/^\d{4}-\d{2}-\d{2}$/.test(p.from || "") || typeof p.value !== "number" || !isFinite(p.value)) return;
+        var mc = c.biz + "_" + c.id + "_" + code;
+        rows.push({ RecordKey: p.from + "|" + c.biz + "|" + c.id + "|" + mc, Title: (c.label || c.id) + " " + p.from, WeekStart: p.from, Business: c.biz, Channel: c.id, MetricCode: mc, Value: p.value, Source: METRIC_SOURCE[c.id] || "", MeasuredAt: stamp && !isNaN(new Date(stamp).getTime()) ? new Date(stamp).toISOString() : new Date().toISOString() });
+      });
+    });
+    if (!rows.length) return;
+    // 今ある行を読む（週ごと・発信ごとに数行なので、年に数百行。全部読んでも軽い）
+    var have = {}, url = "/sites/" + siteId + "/lists/" + metricListId + "/items?$expand=fields($select=RecordKey,Value)&$top=500";
+    for (var page = 0; url && page < 20; page++) {
+      var r = await graph(url);
+      (r.value || []).forEach(function (it) { if (it.fields && it.fields.RecordKey) have[it.fields.RecordKey] = { id: it.id, value: it.fields.Value }; });
+      url = r["@odata.nextLink"] ? r["@odata.nextLink"].replace("https://graph.microsoft.com/v1.0", "") : "";
+    }
+    var added = 0, fixed = 0;
+    for (var i = 0; i < rows.length; i++) {
+      var row = rows[i], h = have[row.RecordKey];
+      if (!h) { await graph("/sites/" + siteId + "/lists/" + metricListId + "/items", { method: "POST", body: { fields: row } }); added++; have[row.RecordKey] = { value: row.Value }; }
+      else if (h.id && Number(h.value) !== row.Value) { await graph("/sites/" + siteId + "/lists/" + metricListId + "/items/" + h.id + "/fields", { method: "PATCH", body: { Value: row.Value, MeasuredAt: row.MeasuredAt } }); fixed++; }
+    }
+    log("metrics recorded: +" + added + " / fixed " + fixed + " / rows " + rows.length);
+    try { localStorage.setItem(doneKey, "1"); } catch (e) { /* 保存できない環境でも動く */ }
   }
   async function ensureMarketingTasks(st) {
     if (!listIds.task || !window.__app.mktChecks) return;
