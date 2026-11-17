@@ -184,6 +184,15 @@ $Plan = [ordered]@{
     @{ name = 'Note';         type = 'multiline'; desc = '止まったときの直し方など' }
     $Deleted
   )}
+  'マーケティングの道具' = @{ create = $true; columns = @(
+    @{ name = 'Purpose';  type = 'multiline'; desc = '何のための道具か・社内で回せるとはどういう状態か' }
+    @{ name = 'Status';   type = 'text';      desc = 'まだ／作っている／社内で回せる' }
+    @{ name = 'Owner';    type = 'text';      desc = '担当（川合 など）' }
+    @{ name = 'DoneAt';   type = 'text';      desc = '社内で回せるようになった日（YYYY-MM-DD）' }
+    @{ name = 'SortNo';   type = 'number';    desc = '並び順' }
+    @{ name = 'Note';     type = 'multiline'; desc = 'メモ（寺尾さんのお題・置き場所など）' }
+    $Deleted
+  )}
   'ノウハウ' = @{ create = $true; columns = @(
     @{ name = 'Category';    type = 'text';      desc = '種類（判断ルール／手順／資料の場所／顧客ごとの注意）' }
     @{ name = 'Situation';   type = 'multiline'; desc = 'どんなときの話か' }
@@ -367,6 +376,59 @@ if ($srcList) {
     }
   } else { Write-Host '  - データの置き場所：行があるので入れません' -ForegroundColor DarkGray }
 }
+
+# ---- 2026-11-17 寺尾さん（デジマタクト）との打ち合わせ：3月末までの2つのミッション ----
+# 足りない行だけ足す（同じ名前・同じ目印の行があれば何もしない。何度実行しても安全）
+function Add-RowsIfMissing {
+  param($ListName, $Rows, $KeyField)
+  $l = Find-List -Token $token -SiteId $siteId -Name $ListName
+  if (-not $l) { Write-Host "  ! $ListName が見つかりません" -ForegroundColor Red; $script:failed++; return }
+  $existing = @()
+  $url = "/sites/$siteId/lists/$($l.id)/items?`$expand=fields&`$top=500"
+  $res = Invoke-Graph -Token $token -Method GET -Path $url
+  $existing = @($res.value | ForEach-Object { $_.fields })
+  foreach ($r in $Rows) {
+    $k = $r[$KeyField]
+    $dup = $existing | Where-Object { $_.$KeyField -eq $k -and (-not $r.TargetMonth -or $_.TargetMonth -eq $r.TargetMonth) }
+    if ($dup) { Write-Host ("  - {0}：{1} はあります" -f $ListName, $k) -ForegroundColor DarkGray; continue }
+    try {
+      Invoke-Graph -Token $token -Method POST -Path "/sites/$siteId/lists/$($l.id)/items" -Body @{ fields = $r } | Out-Null
+      Write-Host ("  + {0}：{1}" -f $ListName, $k) -ForegroundColor Green
+    } catch {
+      Write-Host ("  ! {0}：{1} 失敗: {2}" -f $ListName, $k, $_.Exception.Message) -ForegroundColor Red
+      $script:failed++
+    }
+  }
+}
+$Mission = '2026-11-17 寺尾さん（デジマタクト）との打ち合わせ'
+Add-RowsIfMissing -ListName '目標と数字' -KeyField 'MetricCode' -Rows @(
+  @{ Title = 'できるAIマスター育成プランの成約'; MetricCode = 'busilabo_master_plan'; Business = '業務改善・DX支援'; Period = '3月末まで'; TargetMonth = '2027-03'; Target = 2; HowToCount = "成約管理タスクのうち、契約プランに「マスター育成」を含み、契約日が 2026-11-17〜2027-03-31 のもの（ミッション2。$Mission）"; Deleted = $false }
+  @{ Title = '社長と話した数'; MetricCode = 'busilabo_ceo_talks'; Business = '業務改善・DX支援'; Period = '3月末まで'; TargetMonth = '2027-03'; Target = 30; HowToCount = "問い合わせ管理の商談日時が 2026-11-17〜2027-03-31 のもの（知り合い・商工会議所・パートナーの紹介も、問い合わせ管理に入れて商談日時を書く）。30人と話して2件の見込み（ミッション2。$Mission）"; Deleted = $false }
+  @{ Title = '社内で回せるマーケティングの道具'; MetricCode = 'busilabo_mkt_tools'; Business = '業務改善・DX支援'; Period = '3月末まで'; TargetMonth = '2027-03'; Target = 10; HowToCount = "「マーケティングの道具」の表で、状態が「社内で回せる」の数（ミッション1。$Mission）"; Deleted = $false }
+)
+Add-RowsIfMissing -ListName 'マーケティングの道具' -KeyField 'Title' -Rows @(
+  @{ Title = 'ホームページ・LP'; SortNo = 1; Status = 'まだ'; Owner = '川合'; Purpose = '社内でホームページと LP（できるAIマスター育成プランなど）を直して公開できる'; Note = '今は坂中・石﨑。Claude で直して Xserver に自動で上げる形'; Deleted = $false }
+  @{ Title = 'フォーム'; SortNo = 2; Status = 'まだ'; Owner = '川合'; Purpose = '問い合わせ・資料ダウンロードのフォームを社内で直せる（何で知りましたか、など）'; Note = ''; Deleted = $false }
+  @{ Title = '計測（GA4・Search Console・Clarity・コンバージョン）'; SortNo = 3; Status = '作っている'; Owner = '川合'; Purpose = 'だれが来て、どこで離れ、何がゴールにつながったかが見え、Claude Code が分析と対策まで出せる'; Note = '第1週のお題（2026-11-17）：Clarity を入れる・権限・分析スキル・コンバージョン設定'; Deleted = $false }
+  @{ Title = 'サービス資料・営業資料'; SortNo = 4; Status = 'まだ'; Owner = '川合'; Purpose = 'できるAIマスター育成プランの資料がそろい、社内で直せる（ターゲット・期待が持てる構成・分かりやすさ）'; Note = ''; Deleted = $false }
+  @{ Title = 'ホワイトペーパー（お役立ち資料）'; SortNo = 5; Status = 'まだ'; Owner = '川合'; Purpose = '資料ダウンロードで見込みのお客様と出会える資料を社内で作れる'; Note = ''; Deleted = $false }
+  @{ Title = '顧客管理'; SortNo = 6; Status = '作っている'; Owner = '川合'; Purpose = '問い合わせ・商談・成約・どこから来たかを1か所で見られる'; Note = '仕事管理アプリの問い合わせ管理と成長の画面（2026-11-17〜）。HubSpot を使うかは相談'; Deleted = $false }
+  @{ Title = 'メルマガ'; SortNo = 7; Status = 'まだ'; Owner = '川合'; Purpose = 'メルマガを社内で企画して出せる'; Note = 'HubSpot で始める予定'; Deleted = $false }
+  @{ Title = '記事（コラム）'; SortNo = 8; Status = '作っている'; Owner = '川合'; Purpose = '記事を社内で企画して出せる'; Note = '毎日のコラム下書きはある。公開が止まりがち'; Deleted = $false }
+  @{ Title = '広告'; SortNo = 9; Status = 'まだ'; Owner = '川合'; Purpose = '広告を出して、結果を見て、直せる'; Note = ''; Deleted = $false }
+  @{ Title = 'セミナー'; SortNo = 10; Status = 'まだ'; Owner = '川合'; Purpose = 'セミナーを企画から運営まで社内で回せる'; Note = ''; Deleted = $false }
+)
+Add-RowsIfMissing -ListName 'ノウハウ' -KeyField 'Title' -Rows @(
+  @{ Title = 'マーケティングマネージャーの役目'; Category = '判断ルール'; Situation = 'マーケティングの仕事をするとき'; Rule = '人は「決める・確かめる・直す」。だれに何を届けるかを決める／AI が作ったものを確かめて直す／数字を見て次の一手を決める。手を動かす（記事・投稿・メルマガの下書き、LP や資料の文章、数字の集計と報告）のは AI のスキル'; Exception = ''; Location = ''; Status = 'active'; Source = $Mission; Deleted = $false }
+  @{ Title = '寺尾さんとの毎週の進め方'; Category = '手順'; Situation = '2026-11〜2027-03 の毎週の打ち合わせ'; Rule = '寺尾さんがお題を出す（なぜそのお題か・意識するところ）→ 川合さんが1週間取り組む → 次の週に発表して指摘をもらう → 次のお題。詰まったら Claude Code に相談し、それでもだめなら Teams のチャットで寺尾さんに聞く。ペースが合わなければ3人で相談して変える'; Exception = ''; Location = '寺尾さんの進行表（スプレッドシート。できたら場所を書く）'; Status = 'active'; Source = $Mission; Deleted = $false }
+  @{ Title = '人を動かすのは「期待」'; Category = '判断ルール'; Situation = '営業資料・LP・投稿など、見た人に動いてほしいものを作るとき'; Rule = 'マーケティングの目的は、見た人に行動してもらうこと。人は感情が動かないと行動せず、感情を動かすには期待が要る。ターゲットを意識しているか・期待が持てる構成か・分かりやすいか、の3つで確かめる'; Exception = ''; Location = ''; Status = 'active'; Source = $Mission; Deleted = $false }
+  @{ Title = 'できるAIマスター育成プランの売り方（3月末まで）'; Category = '判断ルール'; Situation = 'マスター育成プランの営業'; Rule = '3月末までに2件。マーケティングの基盤は時間がかかるので、最初は営業で取りにいく。目安は社長30人と話して2件。道は、代表の知り合い・商工会議所・パートナー（社労士・信用金庫・税理士）。社労士とは助成金と組み合わせ、助成金を使う事業としてセットで提案してもらう。成約率や勉強会に来る割合は、やりながら数字を見直す'; Exception = ''; Location = ''; Status = 'active'; Source = $Mission; Deleted = $false }
+  @{ Title = '計測の意味'; Category = '判断ルール'; Situation = '計測（GA4・Search Console・Clarity・コンバージョン）を設定するとき'; Rule = '設定するだけだとオペレーターになる。計測がデジタルマーケティングでどんな意味を持つか、計測があるとないとで何が違うか、だれのどんな仕事がはかどるかを自分の言葉で考えてから設定する。コンバージョン（サイトのゴール）は事業全体を見て決める'; Exception = ''; Location = ''; Status = 'active'; Source = $Mission; Deleted = $false }
+)
+Add-RowsIfMissing -ListName 'データの置き場所' -KeyField 'Title' -Rows @(
+  @{ Title = '寺尾さんとの進行表'; Content = '毎週のお題と成果、営業の進み具合（3月末までの2つのミッション）'; Location = '寺尾さんのスプレッドシート（できたら場所を書く）'; Method = '手・毎週の打ち合わせ'; IntervalDays = 0; Owner = '川合'; CheckKey = ''; Note = '営業の進み具合は、仕事管理アプリの問い合わせ管理と成長の画面でも見られる（どちらで管理するかは寺尾さんと相談）'; Deleted = $false }
+  @{ Title = 'サイトの行動（Microsoft Clarity）'; Content = 'ヒートマップ・デッドクリック・離脱'; Location = 'Microsoft Clarity（Google タグマネージャーで入れる）'; Method = '自動（入れたら）'; IntervalDays = 0; Owner = '川合'; CheckKey = ''; Note = '第1週のお題（2026-11-17）で入れる'; Deleted = $false }
+)
 
 Write-Host ''
 Write-Host "リスト作成 $listsCreated 件 / 列作成 $created 件 / 既存 $skipped 件 / 失敗 $failed 件"

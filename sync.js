@@ -1223,7 +1223,8 @@
   // ---- 成長の画面（2026-11-17 代表の指定。見本 A〜D をそのまま）----
   // 目標と数字（A）・発信（D の比較）・試していること（D）を読み、index.html の setGrowth に渡す。書き込みは window.__growth から
   var GOAL_LIST = "目標と数字", TEST_LIST = "試していること", SOURCE_LIST = "データの置き場所";
-  var goalListId = null, testListId = null, sourceListId = null;
+  var goalListId = null, testListId = null, sourceListId = null, toolListId = null;
+  var TOOL_LIST = "マーケティングの道具";
   async function readAll(listId, select, maxPages) {
     var out = [], url = "/sites/" + siteId + "/lists/" + listId + "/items?$expand=fields($select=" + select + ")&$top=500";
     for (var page = 0; url && page < (maxPages || 10); page++) {
@@ -1245,6 +1246,11 @@
       g.posts = (await readAll(postListId, "Title,PostDate,Business,Channel,PostType,Theme,Link,Reach,Views,Likes,Saves,Shares,Comments,Clicks,Experiment,Deleted", 20)).filter(function (p) { return (p.PostDate || "") >= since; });
     }
     if (testListId) g.tests = await readAll(testListId, "Title,Business,Channel,StartDate,EndDate,Change,Measure,Result,Status,Deleted");
+    // 3月末までのミッション（2026-11-17 寺尾さんとの打ち合わせ）：マーケティングの道具10個
+    try {
+      if (!toolListId) toolListId = await findListId(TOOL_LIST);
+      if (toolListId) g.tools = await readAll(toolListId, "Title,Purpose,Status,Owner,DoneAt,SortNo,Note,Deleted");
+    } catch (e) { log("tools load failed: " + e.message); }
     // 数字のもとの新しさ（第3段）：「データの置き場所」の表と、発信・数字の記録・データの控えの最後の日時
     g.fresh = {};
     try {
