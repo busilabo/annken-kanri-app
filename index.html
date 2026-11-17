@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 公開のときに、公開の仕組み（.github/workflows/publish-annken-kanri-app.yml）がこの版の番号に書き換える。手元では dev のまま -->
-<meta name="app-version" content="4758662">
+<meta name="app-version" content="c185b54">
 <title>ビジラボ 仕事管理</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@500&display=swap">
 <style>
@@ -1765,6 +1765,13 @@
   .seo-tech { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 13px; }
   .seo-tech li { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
   .seo-iss { color: var(--warn); font-weight: 700; font-size: 12.5px; } .seo-ok { color: var(--ok); font-size: 12.5px; }
+  .fresh-box:empty { display: none; }
+  .fresh-box > details { background: var(--surface, #fff); border: 1px solid var(--border); border-radius: 14px; padding: 10px 16px; margin: 4px 0 14px; }
+  .fresh-box summary { cursor: pointer; font-weight: 800; } .fresh-box summary small { font-weight: 400; color: var(--text-muted); }
+  .fresh { list-style: none; margin: 8px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 6px; }
+  .fresh li { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; font-size: 13.5px; border: 1px solid var(--border); border-radius: 10px; padding: 5px 10px; }
+  .fresh li[data-tone="bad"] { border-color: var(--crit); background: var(--crit-soft); } .fresh li[data-tone="warn"] { border-color: var(--warn); background: var(--warn-soft); }
+  .fresh li small { color: var(--text-muted); font-size: 12px; }
 </style>
 </head>
 <body>
@@ -1857,6 +1864,8 @@
     <div class="lilo-status" data-lilo-status></div>
     <!-- Amazon の様子（毎朝7時の Amazon チェックの数字＋お問い合わせは開くたびに数える。sync.js loadAmazonStatus） -->
     <div class="lilo-status" data-amz-status></div>
+    <!-- 数字のもとの新しさ（第3段。「データの置き場所」の表。renderFresh） -->
+    <div class="fresh-box" data-fresh></div>
   </section>
 
   <!-- チーム状況。代表が全体を見る画面（引き継ぎの準備・仕事の偏り・一人しかできないスキル） -->
@@ -6973,11 +6982,48 @@
       '<div class="ef-t"><div class="ef-h">ページ（赤は「表示のわりにクリックが少ない」）</div><table class="ef"><thead><tr><th>ページ</th><th>表示</th><th>クリック</th><th>率</th><th>閲覧</th></tr></thead><tbody>' + (pRows || '<tr><td colspan="5">まだありません</td></tr>') + '</tbody></table></div></div>' +
       (tRows ? '<div class="seo-sub">ページの作りの点検（題・説明文・見出し・検索に出る設定・画像の説明）</div><ul class="seo-tech">' + tRows + '</ul>' : '') + '</details>';
   }
+  // ---- 数字のもとの新しさ（2026-11-17 データベースの見直し 第3段）----
+  // 「データの置き場所」の表の行ごとに、最後に新しくなった日時を確かめる。間隔を過ぎたら🟡、2倍を過ぎたら🔴
+  function freshAt(key) {
+    var fr = growthState.fresh || {};
+    switch (key) {
+      case 'marketing': return mktState.loaded && mktState.data ? mktState.data.generatedAt : '';
+      case 'amazon': return amzState.loaded && amzState.data ? amzState.data.generatedAt : '';
+      case 'shopify': return liloState.loaded && liloState.at ? liloState.at.toISOString() : '';
+      case 'posts': return fr.posts || '';
+      case 'metrics': return fr.metrics || '';
+      case 'backup': return fr.backup ? fr.backup + 'T23:59:00+09:00' : '';
+    }
+    return '';
+  }
+  function renderFresh() {
+    var box = document.querySelector('[data-fresh]');
+    if (!box) return;
+    var rows = (growthState.sources || []).slice().sort(function (a, b) { return (a.id | 0) - (b.id | 0); });
+    if (!rows.length) { box.innerHTML = ''; return; }
+    var worst = 'ok';
+    var lis = rows.map(function (r) {
+      var key = r.CheckKey || '', iv = typeof r.IntervalDays === 'number' ? r.IntervalDays : 0, at = key ? freshAt(key) : '', tone = 'off', txt = '確かめていません';
+      if (key && iv > 0) {
+        var t = at ? new Date(at) : null;
+        if (!t || isNaN(t.getTime())) { tone = 'warn'; txt = 'まだ読めていません'; }
+        else {
+          var days = (Date.now() - t.getTime()) / 86400000;
+          tone = days > iv * 2 ? 'bad' : days > iv ? 'warn' : 'ok';
+          txt = '最後 ' + (t.getMonth() + 1) + '/' + t.getDate() + ' ' + t.getHours() + ':' + pad2(t.getMinutes()) + '（' + (days < 1 ? Math.max(0, Math.round(days * 24)) + '時間前' : Math.floor(days) + '日前') + '）';
+        }
+        if (tone === 'bad' || (tone === 'warn' && worst === 'ok')) worst = tone;
+      }
+      return '<li data-tone="' + tone + '" title="' + esc((r.Content || '') + '\n置き場所：' + (r.Location || '') + '\n取り方：' + (r.Method || '') + (r.Note ? '\n止まったら：' + r.Note : '')) + '"><span>' + (LILO_LIGHT[tone] || '⚪') + '</span><b>' + esc(r.Title || '') + '</b><small>' + esc(txt) + (iv > 0 ? '・' + iv + '日ごと' : '') + '</small></li>';
+    }).join('');
+    box.innerHTML = '<details' + (worst !== 'ok' ? ' open' : '') + '><summary>🛠 数字のもとの新しさ <small>' + LILO_LIGHT[worst] + ' ' + (worst === 'ok' ? 'どれも新しい数字です' : '古いままの数字があります') + '（「データの置き場所」の表。名前にさわると置き場所と直し方が出ます）</small></summary><ul class="fresh">' + lis + '</ul></details>';
+  }
   function growthTopHtml(biz) {
     return '<div class="g-row2">' + goalPanelHtml(biz) + reviewPanelHtml(biz) + '</div>' + flowHtml(biz);
   }
   // 今日の画面は短く：事業ごとに一言と、🔴 のことだけ（2026-11-17 代表の指定。くわしくは「📈 成長」）
   function renderTodayAlerts() {
+    try { renderFresh(); } catch (e) { console.log('fresh render failed: ' + e.message); }
     var box = document.querySelector('[data-today-alerts]');
     if (!box) return;
     var rows = [['[data-biz-status]', '💼 ビジラボ', 'busilabo'], ['[data-lilo-status]', '🌿 LILOCLE', 'lilocle'], ['[data-amz-status]', '📦 Amazon', '']].map(function (x) {
@@ -8476,8 +8522,8 @@
 })();
 </script>
 <script src="vendor/msal-browser.min.js"></script>
-<script src="sync.js?v=4758662"></script>
-<script src="chat.js?v=4758662"></script>
+<script src="sync.js?v=c185b54"></script>
+<script src="chat.js?v=c185b54"></script>
 <script>
 // 新しい版が出たら知らせて切り替える（2026-11-17 代表の指摘：ブラウザが古い版を覚えていて、更新しても前の画面のままだった）。
 // 公開のたびに version.txt に版の番号が入る。5分ごとと、画面に戻ってきたときに見比べ、違えば上に帯を出す。押すと読み直す（入力中の内容を消さないよう、勝手には読み直さない）

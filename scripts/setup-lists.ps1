@@ -174,6 +174,16 @@ $Plan = [ordered]@{
     @{ name = 'Memo';         type = 'multiline'; desc = 'メモ' }
     $Deleted
   )}
+  'データの置き場所' = @{ create = $true; columns = @(
+    @{ name = 'Content';      type = 'multiline'; desc = '何のデータか' }
+    @{ name = 'Location';     type = 'text';      desc = '置き場所（サービス名・フォルダ。パスワードや鍵は書かない）' }
+    @{ name = 'Method';       type = 'text';      desc = '取り方（自動・毎朝の集計／自動・アプリが開くたび／手で など）' }
+    @{ name = 'IntervalDays'; type = 'number';    desc = '何日ごとに新しくなるはずか（これを過ぎると黄、2倍で赤）' }
+    @{ name = 'Owner';        type = 'text';      desc = '見る人・直す人' }
+    @{ name = 'CheckKey';     type = 'text';      desc = 'アプリが新しさを確かめる目印（marketing／amazon／shopify／posts／metrics／backup）。空なら確かめない' }
+    @{ name = 'Note';         type = 'multiline'; desc = '止まったときの直し方など' }
+    $Deleted
+  )}
   'ノウハウ' = @{ create = $true; columns = @(
     @{ name = 'Category';    type = 'text';      desc = '種類（判断ルール／手順／資料の場所／顧客ごとの注意）' }
     @{ name = 'Situation';   type = 'multiline'; desc = 'どんなときの話か' }
@@ -327,6 +337,35 @@ if ($goalList) {
       }
     }
   } else { Write-Host '  - 目標と数字：行があるので入れません' -ForegroundColor DarkGray }
+}
+
+# 「データの置き場所」が空なら、今あるデータの行を入れる（第3段。2026-11-17）
+$SourceSeed = @(
+  @{ Title = '毎朝のマーケティングの数字'; Content = 'SNS・ホームページ・コラム・LILOCLE の発信の数字、先週の反響、4週分、投稿1件ずつ、今月の売上、購入までの流れ、先週の振り返り、SEO'; Location = 'SharePoint 案件管理キュー/status（marketing-status-日付.json）'; Method = '自動・毎朝 7:20 の集計（Claude のルーティン）'; IntervalDays = 1; Owner = '代表'; CheckKey = 'marketing'; Note = '止まったら、ルーティン「毎朝マーケティングの様子（仕事管理アプリ）」をもう一度動かす。指示は docs/スキルとスケジュール/スケジュール/毎朝マーケティングの様子（仕事管理アプリ）.md' }
+  @{ Title = 'Instagram・Facebook の数字'; Content = '投稿・リーチ・表示・いいね・フォロワー'; Location = 'Windsor.ai（instagram・facebook_organic）'; Method = '自動・毎朝の集計が読む'; IntervalDays = 1; Owner = '代表'; CheckKey = ''; Note = 'Windsor.ai のつなぎが切れたら、Windsor.ai の画面でつなぎ直す' }
+  @{ Title = 'ホームページの数字（GA4・Search Console）'; Content = '訪問・ページごとの閲覧・検索の表示・クリック・順位'; Location = 'Windsor.ai（googleanalytics4・searchconsole）'; Method = '自動・毎朝の集計が読む'; IntervalDays = 1; Owner = '代表'; CheckKey = ''; Note = '' }
+  @{ Title = 'LILOCLE の注文・売上'; Content = '注文・売上・キャンセル・発送'; Location = 'Shopify（正本）'; Method = '自動・アプリが開くたび（busilabo-work-chat の shopify）'; IntervalDays = 1; Owner = '代表'; CheckKey = 'shopify'; Note = '読めないときは Azure の busilabo-work-chat と Shopify アプリ「ビジラボ 仕事管理」を確かめる' }
+  @{ Title = 'Amazon の数字'; Content = '売れた台数・在庫・健全性・返品'; Location = 'SharePoint 案件管理キュー/status（amazon-status-日付.json）'; Method = '自動・毎朝 7:00 の Amazon チェック'; IntervalDays = 1; Owner = '代表'; CheckKey = 'amazon'; Note = '' }
+  @{ Title = '発信（投稿1件ずつ）'; Content = '直近60日の投稿・記事・メルマガと反響'; Location = 'SharePoint の表「発信」'; Method = '自動・アプリが毎朝の集計から貯める'; IntervalDays = 2; Owner = '代表'; CheckKey = 'posts'; Note = 'アプリをだれも開かないと貯まらない' }
+  @{ Title = '数字の記録（週ごと）'; Content = '発信ごとの週の数字'; Location = 'SharePoint の表「数字の記録」'; Method = '自動・アプリが毎朝の集計から貯める'; IntervalDays = 8; Owner = '代表'; CheckKey = 'metrics'; Note = 'アプリをだれも開かないと貯まらない' }
+  @{ Title = '仕事管理のデータの控え'; Content = 'すべてのリストの毎晩の控え'; Location = 'SharePoint データベースの控え/日付'; Method = '自動・毎晩（データベースAI社員 dbguard）'; IntervalDays = 1; Owner = '代表'; CheckKey = 'backup'; Note = '止まったら Azure の busilabo-work-chat の dbguard を確かめる' }
+  @{ Title = '問い合わせ'; Content = 'お問い合わせ・資料ダウンロードのフォームの回答'; Location = 'Microsoft Forms → Power Automate → 案件管理キュー/queue → 問い合わせ管理'; Method = '自動・送信直後（①）と定時ルーティン（②）'; IntervalDays = 0; Owner = '代表'; CheckKey = ''; Note = 'Forms の Excel が止まることがある（予備の経路あり）' }
+  @{ Title = '出勤予定'; Content = 'パートさんの出勤予定'; Location = 'Outlook の予定表 → Power Automate → 案件管理キュー/shifts'; Method = '自動・15分ごと'; IntervalDays = 0; Owner = '代表'; CheckKey = ''; Note = '止まったら「仕組みの見張り」が仕事にする' }
+)
+$srcList = Find-List -Token $token -SiteId $siteId -Name 'データの置き場所'
+if ($srcList) {
+  $have = Invoke-Graph -Token $token -Method GET -Path "/sites/$siteId/lists/$($srcList.id)/items?`$top=1"
+  if (-not $have.value -or $have.value.Count -eq 0) {
+    foreach ($g in $SourceSeed) {
+      try {
+        Invoke-Graph -Token $token -Method POST -Path "/sites/$siteId/lists/$($srcList.id)/items" -Body @{ fields = $g } | Out-Null
+        Write-Host ("  + データの置き場所：{0}" -f $g.Title) -ForegroundColor Green
+      } catch {
+        Write-Host ("  ! データの置き場所：{0} 失敗: {1}" -f $g.Title, $_.Exception.Message) -ForegroundColor Red
+        $failed++
+      }
+    }
+  } else { Write-Host '  - データの置き場所：行があるので入れません' -ForegroundColor DarkGray }
 }
 
 Write-Host ''

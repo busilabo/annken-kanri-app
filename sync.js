@@ -1222,8 +1222,8 @@
   }
   // ---- 成長の画面（2026-11-17 代表の指定。見本 A〜D をそのまま）----
   // 目標と数字（A）・発信（D の比較）・試していること（D）を読み、index.html の setGrowth に渡す。書き込みは window.__growth から
-  var GOAL_LIST = "目標と数字", TEST_LIST = "試していること";
-  var goalListId = null, testListId = null;
+  var GOAL_LIST = "目標と数字", TEST_LIST = "試していること", SOURCE_LIST = "データの置き場所";
+  var goalListId = null, testListId = null, sourceListId = null;
   async function readAll(listId, select, maxPages) {
     var out = [], url = "/sites/" + siteId + "/lists/" + listId + "/items?$expand=fields($select=" + select + ")&$top=500";
     for (var page = 0; url && page < (maxPages || 10); page++) {
@@ -1245,6 +1245,19 @@
       g.posts = (await readAll(postListId, "Title,PostDate,Business,Channel,PostType,Theme,Link,Reach,Views,Likes,Saves,Shares,Comments,Clicks,Experiment,Deleted", 20)).filter(function (p) { return (p.PostDate || "") >= since; });
     }
     if (testListId) g.tests = await readAll(testListId, "Title,Business,Channel,StartDate,EndDate,Change,Measure,Result,Status,Deleted");
+    // 数字のもとの新しさ（第3段）：「データの置き場所」の表と、発信・数字の記録・データの控えの最後の日時
+    g.fresh = {};
+    try {
+      if (!sourceListId) sourceListId = await findListId(SOURCE_LIST);
+      if (sourceListId) g.sources = await readAll(sourceListId, "Title,Content,Location,Method,IntervalDays,Owner,CheckKey,Note,Deleted");
+      var maxOf = function (rows) { return rows.map(function (r) { return r.MeasuredAt || ""; }).sort().pop() || ""; };
+      if (postListId) g.fresh.posts = maxOf(await readAll(postListId, "MeasuredAt,Deleted", 20));
+      if (!metricListId) metricListId = await findListId(METRIC_LIST);
+      if (metricListId) g.fresh.metrics = maxOf(await readAll(metricListId, "MeasuredAt", 20));
+      var root = await graph("/drives/" + QUEUE_DRIVE_ID + "/root/children?$select=id,name");
+      var bk = (root.value || []).filter(function (x) { return x.name === "データベースの控え"; })[0];
+      if (bk) { var days = await graph("/drives/" + QUEUE_DRIVE_ID + "/items/" + bk.id + "/children?$select=name&$top=999"); g.fresh.backup = (days.value || []).map(function (x) { return x.name; }).filter(function (n) { return /^\d{4}-\d{2}-\d{2}$/.test(n); }).sort().pop() || ""; }
+    } catch (e) { log("freshness load failed: " + e.message); }
     window.__app.setGrowth(g);
   }
   window.__growth = {
