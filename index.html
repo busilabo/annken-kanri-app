@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 公開のときに、公開の仕組み（.github/workflows/publish-annken-kanri-app.yml）がこの版の番号に書き換える。手元では dev のまま -->
-<meta name="app-version" content="bebd890">
+<meta name="app-version" content="96088d2">
 <title>ビジラボ 仕事管理</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@500&display=swap">
 <style>
@@ -4958,7 +4958,13 @@
       { id: 'reply', type: 'mail', to: 'requester', end: true, title: 'お客様に、納期をお伝えする', help: 'contact@ から送ります',
         instruction: function (x) { return 'お客様（' + x.who + '）に、' + orderLabel(x) + 'の納期をお伝えするメールを書く。お伝えする内容：' + (x.memo('wait') || x.memo('how')) + '。お問い合わせへのお礼を入れる。書いていないことは約束しない。署名は付けない。'; } }
     ] },
-    'lilo-receipt': { family: 'lilo', label: '領収書のご依頼', hint: '領収書・請求書を出してほしい', steps: [
+    // 2026-11-17 代表の指摘：「領収書は商品と一緒に入っていますか？」は発行の依頼ではない。まず「同封していない」とお返事する
+    'lilo-receipt-q': { family: 'lilo', label: '領収書についてのご質問', hint: '領収書・請求書が同封されているか、どこで見られるか、出してもらえるかを聞いている（まだ「発行して」とは頼んでいない）', steps: [
+      { id: 'reply', type: 'mail', to: 'requester', end: true, title: 'お客様に、領収書は同封していないことをお返事する', help: 'contact@ から送ります。ご希望なら PDF でお送りできることも添えます',
+        instruction: function (x) { return 'お客様（' + x.who + '）から、' + orderLabel(x) + 'の領収書・請求書についてご質問をいただいた。LILOCLE では領収書・請求書は商品に同封していないことをお伝えし、ご希望であれば PDF の領収書をメールでお送りできるので、宛名と但し書きのご希望をこのメールへの返信で教えていただくよう案内するメールを書く。お問い合わせへのお礼を入れる。書いていないことは約束しない。署名は付けない。'; },
+        subject: function (x) { return '【LILOCLE】' + (x.o ? 'ご注文（' + x.o.name + '）' : 'ご注文') + 'の領収書について'; } }
+    ] },
+    'lilo-receipt': { family: 'lilo', label: '領収書のご依頼', hint: '領収書・請求書を発行して送ってほしいと、はっきり頼まれている（宛名・但し書きの指定など）。同封されているかの質問はこれではない', steps: [
       { id: 'make', type: 'site', site: 'claude', title: 'Claude で領収書を作る', help: '下の文をコピーして Claude に貼り付けます（スキル「LILOCLE 領収書作成」が PDF を作ります）', doneLabel: '✅ 作った',
         copy: function (x) { return '領収書を作って\n注文番号：' + (x.orderNo || '') + '\nお客様：' + x.who + '\nお問い合わせの内容：\n' + x.desc; } },
       { id: 'send', type: 'mail', to: 'requester', end: true, needFile: true, title: '領収書の PDF を添付して、お客様に送る', help: 'contact@ から送ります。送る欄の「📎 ファイルを付ける」で、作った領収書の PDF を選んでください',
@@ -5325,7 +5331,7 @@
     var html = '<div data-c-act="copy-' + d.id + '" class="s-compose" data-compose="' + key + '"><b>📋 ' + esc(site.name || '') + ' に貼り付ける文</b>' +
       '<label>文（ここで直せます）<textarea data-c-body disabled>' + (d.copy ? '' : 'AI が下書きを作っています…') + '</textarea></label>' +
       '<div class="s-draft-note" data-c-note></div>' +
-      (d.copyDraft ? '<div class="s-revise"><input type="text" data-c-request placeholder="直してほしいことを一言（例：もっと短く）"><button type="button" class="s-btn" data-c-revise="' + key + '">🤖 AI に直してもらう</button></div>' : '<input type="hidden" data-c-request><button type="button" hidden data-c-revise="' + key + '"></button>') +
+      '<div class="s-revise"><input type="text" data-c-request placeholder="直してほしいことを一言（例：もっと短く／宛名は〇〇で）"><button type="button" class="s-btn" data-c-revise="' + key + '">🤖 AI に直してもらう</button></div>' +
       '<div class="s-compose-err" data-c-err></div>' +
       '<div class="s-actions"><button type="button" class="s-btn s-primary" data-f-copy="' + key + '">📋 コピーして ' + esc(site.name || '') + ' を開く</button><button type="button" class="s-btn" data-c-close="' + key + '">閉じる</button>' +
       '<input type="hidden" data-c-to value="x@x.x"><input type="hidden" data-c-subject value="x"><button type="button" hidden data-c-send="' + key + '"></button></div></div>';
@@ -8621,8 +8627,8 @@
 })();
 </script>
 <script src="vendor/msal-browser.min.js"></script>
-<script src="sync.js?v=bebd890"></script>
-<script src="chat.js?v=bebd890"></script>
+<script src="sync.js?v=96088d2"></script>
+<script src="chat.js?v=96088d2"></script>
 <script>
 // 新しい版が出たら知らせて切り替える（2026-11-17 代表の指摘：ブラウザが古い版を覚えていて、更新しても前の画面のままだった）。
 // 公開のたびに version.txt に版の番号が入る。5分ごとと、画面に戻ってきたときに見比べ、違えば上に帯を出す。押すと読み直す（入力中の内容を消さないよう、勝手には読み直さない）
