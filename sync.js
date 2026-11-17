@@ -2034,6 +2034,18 @@
     return null;
   }
 
+  function repliesToSent(card, sentAt, subject) {
+    var body = textOf(getRoleEl(card, "content")) || "";
+    var j = new Date(sentAt.getTime() + 9 * 3600000);
+    var day = (j.getUTCMonth() + 1) + "月" + j.getUTCDate() + "日", hm = ("0" + j.getUTCHours()).slice(-2) + ":" + ("0" + j.getUTCMinutes()).slice(-2);
+    if (body.indexOf(day) !== -1 && body.indexOf(hm) !== -1) return true;
+    var plain = String(subject || "").trim();
+    if (/^(re|fw|fwd)\s*[:：]/i.test(plain)) return false;
+    var m = /(^|\n)件名：\s*(.+)/.exec(body);
+    var theirs = m ? m[2].trim() : (body.split("\n")[0] || "");
+    return /^(re|fw|fwd)\s*[:：]/i.test(theirs) && theirs.replace(/^((re|fw|fwd)\s*[:：]\s*)+/i, "").trim() === plain;
+  }
+
   async function drainMailSent(file, data) {
     var to = String(data.to || "").split(/[;,]/).map(function (s) {
       var m = /[\w.+-]+@[\w-]+(\.[\w-]+)+/.exec(s);
@@ -2058,6 +2070,9 @@
       // 一度だけのフローが送信済みアイテムを50件さかのぼって置くため（2026-11-06）
       var created = createdOn(c);
       if (created && sentAt < new Date(created.getTime() - 86400000)) return;
+      // 相手のメールが、こちらの送ったメールへの返事なら（引用に送った日時がある・件名が「Re: 送った件名」）、送ったのはこの仕事より前。数えない
+      // （2026-11-18 ORDER4638：前の日に送った「領収書について」に、お客様が宛名を返してきた仕事が、その前の返信で自動で完了になっていた）
+      if (repliesToSent(c, sentAt, subject)) return;
       // 返信を送ったあとに相手がまた書いてきていたら、その分はまだ終わっていない
       var follow = lastFollowUpAt(c);
       if (follow && follow > sentAt) return;
