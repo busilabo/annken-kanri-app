@@ -1877,6 +1877,65 @@
     });
   }
 
+  // ---- LILOCLE のお客様の仕事の名前（2026-11-17 代表の指定：「Re: ご注文内容の確認 注文番号：…」では開かないと分からない）----
+  // 「LILOCLEお客様：山田様｜キャンセルしたい（ORDER4638）」のように、だれの・何の用件か・どの注文かを名前にする。
+  // 用件は Claude が決まった候補から1つ選ぶ（classify の flow。選べないときは件名から Re: などを除いたもの）
+  var LILO_PURPOSES = [
+    { id: "cancel", label: "キャンセルしたい", hint: "注文の取り消し・キャンセルの依頼" },
+    { id: "change", label: "注文内容を変えたい", hint: "数量・商品・お届け先・お届け日の変更" },
+    { id: "delivery", label: "届く日・配送の質問", hint: "いつ届くか、発送されたか、追跡番号" },
+    { id: "confirm", label: "注文できたかの確認", hint: "注文が通ったか、確認メールが来ない" },
+    { id: "product", label: "商品の質問", hint: "在庫・原材料・サイズ・使い方・入荷" },
+    { id: "defect", label: "届いた商品の不具合", hint: "破損・欠品・違う商品・品質" },
+    { id: "return", label: "返品・交換したい", hint: "返品・交換・返金" },
+    { id: "receipt", label: "領収書がほしい", hint: "領収書・請求書・宛名" },
+    { id: "gift", label: "ギフト・のしの相談", hint: "のし・ラッピング・メッセージカード・贈り物" },
+    { id: "payment", label: "支払いの質問", hint: "支払い方法・決済・振込" },
+    { id: "thanks", label: "お礼・感想", hint: "お礼・感想・レビュー（返事は短くてよい）" },
+    { id: "other", label: "そのほかの問い合わせ", hint: "" }
+  ];
+  function liloOrderNo(text) { var m = /ORDER\s*0*(\d{3,})|#\s?(\d{4,})/i.exec(String(text || "")); return m ? "ORDER" + (m[1] || m[2]) : ""; }
+  function liloSubjectShort(subject) { return String(subject || "").replace(/^\s*((re|fw|fwd)\s*[:：]\s*)+/i, "").replace(/注文番号\s*[:：]?\s*\S+/, "").replace(/\s+/g, " ").trim().slice(0, 24) || "お問い合わせ"; }
+  async function liloCustomerTitle(name, subject, text) {
+    var purpose = "";
+    try {
+      var r = await callApi(CLASSIFY_ENDPOINT, { mode: "flow", content: "件名：" + subject + "\n" + String(text || "").slice(0, 3000), options: LILO_PURPOSES }, 40000);
+      var hit = LILO_PURPOSES.filter(function (p) { return p.id === (r && r.id); })[0];
+      if (hit && hit.id !== "other") purpose = hit.label;
+    } catch (e) { log("lilo purpose failed: " + e.message); }
+    if (!purpose) purpose = isCancelRequest(String(text || ""), subject) ? "キャンセルしたい" : liloSubjectShort(subject);
+    var order = liloOrderNo(subject + " " + text);
+    var who = String(name || "").replace(/(様|さん|殿)$/, "").trim();
+    return "LILOCLEお客様：" + (who ? who.slice(0, 16) + "様｜" : "") + purpose + (order ? "（" + order + "）" : "");
+  }
+  // 今ある LILOCLE のお客様の仕事のうち、件名のままの名前のものを一度だけ付け直す（画面を開いた人のパソコンで1件ずつ。終わったものは覚えておく）
+  var liloRetitleBusy = false;
+  async function retitleLiloTasks() {
+    if (liloRetitleBusy) return;
+    liloRetitleBusy = true;
+    try {
+      var cards = taskCards().filter(function (c) {
+        if (!isOpenTask(c)) return false;
+        var t = (textOf(getRoleEl(c, "content")) || "").split("\n")[0];
+        return /^LILOCLEお客様：/.test(t) && t.indexOf("｜") === -1 && !/^LILOCLEお客様：ホームページのお問い合わせ/.test(t);
+      }).slice(0, 10);
+      for (var i = 0; i < cards.length; i++) {
+        var c = cards[i], id = c.getAttribute("data-item-id"), mk = "liloRetitled:" + id;
+        try { if (localStorage.getItem(mk)) continue; } catch (e) { /* 保存できない環境でも動く */ }
+        var el = getRoleEl(c, "content"); if (!el) continue;
+        var body = textOf(el), lines = body.split("\n"), first = lines[0];
+        var subject = first.replace(/^LILOCLEお客様：/, "");
+        var requester = getRoleEl(c, "requester"), name = requester ? requester.value : "";
+        var title = await liloCustomerTitle(name, subject, lines.slice(1).join("\n"));
+        if (title && title !== first) {
+          writeField(c, "task", FIELD_MAP.task.Content, [title, "件名：" + subject].concat(lines.slice(1)).join("\n"));
+          scheduleSave(c);
+        }
+        try { localStorage.setItem(mk, "1"); } catch (e) { /* 保存できない環境でも動く */ }
+      }
+    } finally { liloRetitleBusy = false; }
+  }
+
   async function drainMailTask(file, data) {
     data = shopifyFormMail(data);
     // 退会希望はお客様のメールアドレスごとに1つの仕事。完了のメールは件名が変わるので、宛先のアドレスで見つけて完了にする（drainMailSent）
@@ -1915,7 +1974,11 @@
         var replyAddr = String(data.fromAddress || "").trim().toLowerCase();
         var replyLine = profile.business !== "Amazon販売" && /^[\w.+-]+@[\w-]+(\.[\w-]+)+$/.test(replyAddr) && !OWN_SENDER.test(replyAddr) && !/@shopify\.com$/.test(replyAddr)
           ? "\n返信先：" + replyAddr + "（" + String(data.mailbox || "").trim().toLowerCase() + " に届いたメール。件名「" + String(data.subject || "").slice(0, 80) + "」）" : "";
-        var content = profile.title + "\n" + preview + replyLine + draftText(draft) + stepsText(profile.steps);
+        // LILOCLE のお客様の仕事は、件名ではなく「だれの・何の用件か・どの注文か」を名前にする（2026-11-17）
+        if (/^LILOCLEお客様：/.test(profile.title) && !/^ホームページのお問い合わせ/.test(String(data.subject || ""))) {
+          profile = Object.assign({}, profile, { title: await liloCustomerTitle(from, String(data.subject || ""), preview), subjectLine: "件名：" + String(data.subject || "").slice(0, 80) });
+        }
+        var content = profile.title + "\n" + (profile.subjectLine ? profile.subjectLine + "\n" : "") + preview + replyLine + draftText(draft) + stepsText(profile.steps);
         // 下書きを待つ間に、別の人の画面が同じメールを仕事にしていたら作らない
         if (draft && await remoteTaskExists(key)) { await moveToProcessed(file, "mail task"); return; }
         var fields = {
@@ -3016,6 +3079,9 @@
     window.__mkt = { refresh: loadMarketingStatus };
     loadMarketingStatus();
     setInterval(loadMarketingStatus, LILO_REFRESH_MS);
+    // LILOCLE のお客様の仕事の名前を、件名から「だれの・何の用件か」に付け直す（2026-11-17。今ある仕事は一度だけ）
+    setTimeout(function () { retitleLiloTasks().catch(function (e) { log("retitle failed: " + e.message); }); }, 20000);
+    setInterval(function () { retitleLiloTasks().catch(function (e) { log("retitle failed: " + e.message); }); }, 10 * 60 * 1000);
     await drainQueue();
     setInterval(drainQueue, QUEUE_DRAIN_MS);
     // 最終チェック：終わった仕事でまだ確かめていないもの・待ちのものを、5分ごとに確かめる（index.html の finalCheckSweep）
