@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 公開のときに、公開の仕組み（.github/workflows/publish-annken-kanri-app.yml）がこの版の番号に書き換える。手元では dev のまま -->
-<meta name="app-version" content="7f875a9">
+<meta name="app-version" content="601ad4f">
 <title>ビジラボ 仕事管理</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@500&display=swap">
 <style>
@@ -1676,6 +1676,81 @@
   }
   #authGate .status { font-size: 13px; color: var(--text-muted); }
   .new-version-bar { position: fixed; left: 50%; top: calc(10px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); z-index: 9999; font: inherit; font-weight: 700; font-size: 14.5px; padding: 10px 18px; border-radius: 999px; border: 0; background: var(--accent); color: var(--surface, #fff); box-shadow: 0 4px 16px rgba(0,0,0,.2); cursor: pointer; }
+  /* 成長の画面（2026-11-17） */
+  .g-head { font-weight: 800; font-size: 15px; color: var(--accent); }
+  .g-row2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 10px; margin: 6px 0 10px; }
+  @media (max-width: 900px) { .g-row2 { grid-template-columns: 1fr; } }
+  .g-panel { background: var(--surface, #fff); border: 1px solid var(--border); border-radius: 12px; padding: 10px 14px; display: grid; gap: 8px; align-content: start; min-width: 0; }
+  .g-sec { font-size: 13px; font-weight: 800; color: var(--text-muted); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .g-sec small { font-weight: 400; }
+  .g-tag { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; border-radius: 5px; font-size: 11px; font-weight: 900; color: #fff; background: #2f6b4f; }
+  .g-tag[data-k="B"] { background: #7a4fb0; } .g-tag[data-k="C"] { background: #2C5F8A; } .g-tag[data-k="D"] { background: #b0602f; }
+  .gl { display: grid; gap: 3px; }
+  .gl-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; font-weight: 700; font-size: 13.5px; }
+  .gl-row b { font-size: 20px; font-weight: 900; font-variant-numeric: tabular-nums; }
+  .gl-row b small { font-size: 12px; color: var(--text-muted); }
+  .gl-set { font: inherit; font-size: 12px; font-weight: 700; border: 1px dashed var(--accent); color: var(--accent); background: transparent; border-radius: 6px; padding: 0 8px; cursor: pointer; }
+  .gl-set.gl-num { border-style: solid; border-color: var(--border); color: var(--text-muted); }
+  .gl-meter { position: relative; height: 12px; border-radius: 6px; background: var(--neutral-soft, #e8ebf0); margin-top: 2px; }
+  .gl-meter i { position: absolute; inset: 0 auto 0 0; border-radius: 6px; background: var(--ok); }
+  .gl-meter.late i { background: var(--warn); }
+  .gl-pace { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--text); }
+  .gl small, .gl-note { font-size: 12px; color: var(--text-muted); }
+  .gl .gl-late { color: var(--warn); font-weight: 700; } .gl .gl-ok { color: var(--ok); font-weight: 700; }
+  .rv-by { font-size: 12px; color: var(--text-muted); }
+  .rv { display: grid; grid-template-columns: auto 1fr; gap: 5px 12px; margin: 0; font-size: 13.5px; }
+  .rv dt { font-weight: 900; white-space: nowrap; } .rv dd { margin: 0; display: grid; gap: 5px; }
+  .rv-good { color: var(--ok); } .rv-bad { color: var(--crit); } .rv-nx { color: var(--accent); }
+  .rv-next { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .rv-btn { font: inherit; font-size: 12px; font-weight: 700; border-radius: 8px; padding: 2px 10px; border: 1px solid var(--accent); color: var(--accent); background: var(--surface, #fff); cursor: pointer; white-space: nowrap; }
+  .rv-btn.done { border-color: var(--ok); color: var(--ok); cursor: default; }
+  .fl { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 6px 0 4px; }
+  @media (max-width: 700px) { .fl { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; } }
+  .fl-step { background: var(--surface, #fff); border: 1px solid var(--border); padding: 8px 12px 8px 40px; display: grid; gap: 1px; position: relative; min-width: 0; }
+  .fl-step:first-child { border-radius: 12px 0 0 12px; padding-left: 12px; } .fl-step:last-child { border-radius: 0 12px 12px 0; }
+  .fl-step + .fl-step { border-left: none; }
+  .fl-step.weak { background: var(--crit-soft); border-color: var(--crit); }
+  .fl-k { font-size: 12px; color: var(--text-muted); font-weight: 700; }
+  .fl-v { font-size: 22px; font-weight: 900; font-variant-numeric: tabular-nums; line-height: 1.25; }
+  .fl-v small { font-size: 12px; color: var(--text-muted); margin-left: 2px; }
+  .fl-d { font-size: 11.5px; color: var(--text-muted); overflow-wrap: anywhere; }
+  .fl-step.weak .fl-d { color: var(--crit); font-weight: 700; }
+  .fl-rate { position: absolute; left: 0; top: 50%; transform: translate(-50%, -50%); background: var(--surface, #fff); border: 1px solid var(--border); border-radius: 999px; font-size: 11px; font-weight: 700; padding: 0 6px; z-index: 1; white-space: nowrap; }
+  .fl-step.weak .fl-rate { border-color: var(--crit); color: var(--crit); }
+  @media (max-width: 700px) { .fl-step { border-radius: 10px !important; border-left: 1px solid var(--border) !important; padding-left: 12px; } .fl-rate { position: static; transform: none; justify-self: start; } }
+  .fl-say { margin: 2px 0 10px; font-size: 13px; } .fl-say b { color: var(--crit); }
+  .fl-note { margin: 0 0 10px; font-size: 12px; color: var(--text-muted); }
+  .g-d { background: var(--surface, #fff); border: 1px solid var(--border); border-radius: 12px; padding: 8px 14px; margin: 0 0 10px; }
+  .g-d > summary { cursor: pointer; font-weight: 800; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .g-d > summary small { font-weight: 400; color: var(--text-muted); }
+  .ef-wrap { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 16px; margin-top: 8px; }
+  @media (max-width: 900px) { .ef-wrap { grid-template-columns: 1fr; } }
+  .ef-main { display: grid; gap: 12px; min-width: 0; }
+  .ef-cht { font-size: 13px; font-weight: 800; margin-bottom: 4px; }
+  .ef-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+  .ef-h { font-size: 11.5px; color: var(--text-muted); }
+  .ef-t { overflow-x: auto; }
+  .ef { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  .ef th { font-size: 11px; color: var(--text-muted); font-weight: 500; text-align: left; padding: 3px 5px; border-bottom: 1px solid var(--border); }
+  .ef td { padding: 4px 5px; border-bottom: 1px solid var(--border); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .ef td.n { text-align: right; }
+  .ef-bar { display: inline-block; height: 7px; border-radius: 4px; background: var(--accent); vertical-align: middle; margin-right: 5px; }
+  .ts-list { display: grid; gap: 6px; align-content: start; min-width: 0; }
+  .ts { border: 1px solid var(--border); border-radius: 10px; padding: 6px 10px; display: grid; gap: 2px; font-size: 13px; }
+  .ts[data-st="効いた"] { border-color: var(--ok); } .ts[data-st="効かなかった"], .ts[data-st="やめた"] { opacity: .75; }
+  .ts-h { display: flex; justify-content: space-between; gap: 6px; flex-wrap: wrap; } .ts-h small { color: var(--text-muted); }
+  .ts-st { font-size: 12px; font-weight: 800; color: var(--accent); } .ts[data-st="効いた"] .ts-st { color: var(--ok); }
+  .ts-r { font-size: 12px; color: var(--text-muted); } .ts-b { display: flex; gap: 6px; margin-top: 2px; }
+  .ts-form { display: grid; gap: 6px; margin-top: 4px; }
+  .ts-form input, .ts-form select { font: inherit; font-size: 13px; padding: 4px 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface, #fff); color: var(--text); min-width: 0; }
+  .ts-form .rv-btn { justify-self: start; }
+  .today-alerts { background: var(--surface, #fff); border: 1px solid var(--border); border-radius: 14px; padding: 10px 16px; margin: 4px 0 14px; display: grid; gap: 6px; }
+  .today-alerts:empty { display: none; }
+  .ta-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .ta { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 14px; }
+  .ta ul { list-style: none; margin: 2px 0 0 1.2em; padding: 0; display: grid; gap: 2px; font-size: 13px; }
+  .ta-goal { margin-left: 8px; font-weight: 700; color: var(--accent); font-size: 13px; }
+  .ta-more { color: var(--text-muted); }
 </style>
 </head>
 <body>
@@ -1707,6 +1782,7 @@
 
   <nav class="tabs" data-subnav="work">
     <button type="button" class="tab-btn" data-tab="today" data-local-active>🏠 今日 <span class="tab-count" data-local-count="today">0</span></button>
+    <button type="button" class="tab-btn" data-tab="growth">📈 成長</button>
     <button type="button" class="tab-btn" data-tab="task">仕事一覧 <span class="tab-count" data-local-count="task">0</span></button>
     <button type="button" class="tab-btn" data-tab="shift">出勤予定</button>
     <button type="button" class="tab-btn" data-tab="team">チーム状況</button>
@@ -1729,13 +1805,8 @@
   <!-- 今日（仕事管理のトップ）。全員が同じ画面を見る「リレーボード」。サインインした人には依存しない
        （同じアカウントを共用していても使えるように）。誰の仕事かは顔アイコンで見分ける -->
   <section class="panel" data-panel="today">
-    <!-- 様子はビジラボ・LILOCLE・Amazon の3つ。それぞれ「運用」と「マーケティング」の信号を出す（2026-11-15 代表の指定） -->
-    <!-- ビジラボの様子（運用：問い合わせ・商談・お客様への仕事はカードから今数える。マーケティング：sync.js loadMarketingStatus） -->
-    <div class="lilo-status" data-biz-status></div>
-    <!-- LILOCLE の様子（信号と一言。開くたびに最新。sync.js loadLiloStatus）。代表の予定の上に大きく（2026-11-12 代表の指定） -->
-    <div class="lilo-status" data-lilo-status></div>
-    <!-- Amazon の様子（毎朝7時の Amazon チェックの数字＋お問い合わせは開くたびに数える。sync.js loadAmazonStatus） -->
-    <div class="lilo-status" data-amz-status></div>
+    <!-- 様子は「📈 成長」の画面へ移し、今日は事業ごとの一言と 🔴 だけを短く出す（2026-11-17 代表の指定。renderTodayAlerts） -->
+    <div class="today-alerts" data-today-alerts></div>
     <!-- 代表の予定。今日の報告はページのいちばん下（2026-10-18 代表の指定） -->
     <div class="top-info">
       <section class="info-block" aria-label="代表の予定">
@@ -1762,6 +1833,16 @@
         <div data-reports></div>
       </section>
     </div>
+  </section>
+
+  <!-- 成長（2026-11-17 代表の指定。見本「成長の画面」A〜D）。事業ごとに：目標(A)・先週の振り返り(C) → やったこと→成果の流れ(B) → 発信のマス → 何が効いたか(D) → 運用状況 -->
+  <section class="panel" data-panel="growth" data-local-hidden>
+    <!-- ビジラボの様子（運用はカードから今数える。マーケティングは sync.js loadMarketingStatus、目標・発信・試していることは sync.js loadGrowth） -->
+    <div class="lilo-status" data-biz-status></div>
+    <!-- LILOCLE の様子（開くたびに最新。sync.js loadLiloStatus） -->
+    <div class="lilo-status" data-lilo-status></div>
+    <!-- Amazon の様子（毎朝7時の Amazon チェックの数字＋お問い合わせは開くたびに数える。sync.js loadAmazonStatus） -->
+    <div class="lilo-status" data-amz-status></div>
   </section>
 
   <!-- チーム状況。代表が全体を見る画面（引き継ぎの準備・仕事の偏り・一人しかできないスキル） -->
@@ -6165,6 +6246,7 @@
     // 読み直し中は、前の結果を出したまま「読んでいます」だけ付ける
     liloState = state && state.loading && liloState.loaded ? Object.assign({}, liloState, { loading: true }) : (state || {});
     renderLiloStatus();
+    renderTodayAlerts();
   }
   // 信号のマスを並べる（運用・マーケティングの段ごと）
   function statusLightsHtml(label, tiles) {
@@ -6206,10 +6288,11 @@
     box.setAttribute('data-tone', tone);
     // 上から：見出し（まとめの一言）→ マーケティング（発信ごとのカード）→ 運用状況（信号）。信号は運用状況だけ（2026-11-16 代表の指定）
     var salesWarn = sp.tiles.filter(function (t) { return t.tone === 'warn' && /前の/.test(t.text); })[0];
-    box.innerHTML = '<details open><summary class="lilo-head"><b>🌿 LILOCLE の様子</b><span class="lilo-sum">' + LILO_LIGHT[tone] + ' ' + esc(statusSum(bad, warn, 'ちゃんと回っています', tone)) + '</span>' +
+    var gh = goalHeadline('lilocle');
+    box.innerHTML = '<details open><summary class="lilo-head"><b>🌿 LILOCLE の様子</b><span class="lilo-sum">' + LILO_LIGHT[tone] + ' ' + esc(statusSum(bad, warn, 'ちゃんと回っています', tone)) + '</span>' + (gh ? '<span class="g-head">' + esc(gh) + '</span>' : '') +
       '<small class="lilo-at">' + (at ? '注文は ' + esc(at) + ' 現在' : '') + (m.at ? '・マーケティングは ' + esc(m.at) : '') + '</small></summary>' +
-      '<div class="lilo-body">' +
-      mktCardsHtml('lilocle', { sales: s.sales, salesTile: salesWarn ? { tone: 'warn', text: '28日で減っています' } : null }) +
+      '<div class="lilo-body">' + growthTopHtml('lilocle') +
+      mktCardsHtml('lilocle', { sales: s.sales, salesTile: salesWarn ? { tone: 'warn', text: '28日で減っています' } : null }) + effectHtml('lilocle') +
       '<div class="mk-ops">' + statusLightsHtml('運用状況', opsTiles) + '</div>' +
       (opsIssues.length ? '<ul class="lilo-issues">' + opsIssues.map(function (i) { return '<li>' + LILO_LIGHT[i.tone] + ' ' + (i.order ? '<b>' + esc(i.order) + '</b> ' : '') + (i.maker ? '<span class="lilo-maker">' + esc(i.maker) + '</span> ' : '') + '<span class="lilo-cat">［' + esc(CAT[i.cat] || '') + '］</span> ' + esc(i.text) + '</li>'; }).join('') + '</ul>' : '') +
       '<div class="lilo-foot">' + refresh + '<details class="lilo-help"><summary>ℹ️ 数字の見かた</summary><div>売上・注文は Shopify の今の数字です（キャンセル・返金を引いたあと。前の同じ期間と比べて、28日で30%以上減ると🟡）。' + (s.loaded ? 'まだ終わっていない注文 ' + s.total + ' 件を見ています（Shopify と作り手さんのエクセル）。' : '') +
@@ -6217,7 +6300,7 @@
   }
   // ---- Amazon の様子（2026-11-12 代表の指定：LILOCLE の様子の下に、昨日・今月売れた台数、お問い合わせ、在庫、健全性・返品）----
   var amzState = { loading: true };
-  function setAmzStatus(state) { amzState = state || {}; renderAmzStatus(); }
+  function setAmzStatus(state) { amzState = state || {}; renderAmzStatus(); renderTodayAlerts(); }
   // 返事をしていない Amazon の購入者メッセージ（仕事）。24時間以内に返信が要るので、20時間を過ぎたら赤
   function amzInquiries() {
     return liveCards('task').filter(function (c) {
@@ -6660,16 +6743,252 @@
     var tone = worstTone([oBad ? 'bad' : oWarn ? 'warn' : 'ok', m.tone]);
     box.setAttribute('data-tone', tone);
     // 上から：見出し → マーケティング（発信ごとのカード）→ 運用状況（信号）。信号は運用状況だけ（2026-11-16 代表の指定）
-    box.innerHTML = '<details open><summary class="lilo-head"><b>💼 ビジラボの様子</b><span class="lilo-sum">' + LILO_LIGHT[tone] + ' ' + esc(statusSum(bad, warn, 'ちゃんと回っています', tone)) + '</span>' +
+    var gh = goalHeadline('busilabo');
+    box.innerHTML = '<details open><summary class="lilo-head"><b>💼 ビジラボの様子</b><span class="lilo-sum">' + LILO_LIGHT[tone] + ' ' + esc(statusSum(bad, warn, 'ちゃんと回っています', tone)) + '</span>' + (gh ? '<span class="g-head">' + esc(gh) + '</span>' : '') +
       '<small class="lilo-at">運用は今の件数' + (m.at ? '・マーケティングは ' + esc(m.at) : '') + '</small></summary>' +
-      '<div class="lilo-body">' +
-      mktCardsHtml('busilabo', { inquiry: o.results[0] }) +
+      '<div class="lilo-body">' + growthTopHtml('busilabo') +
+      mktCardsHtml('busilabo', { inquiry: o.results[0] }) + effectHtml('busilabo') +
       '<div class="mk-ops">' + statusLightsHtml('運用状況', o.tiles) + '</div>' +
       (oIssues.length ? '<ul class="lilo-issues">' + oIssues.map(function (i) { return '<li>' + LILO_LIGHT[i.tone] + ' ' + esc(i.text) + '</li>'; }).join('') + '</ul>' : '') +
       '<div class="lilo-foot"><details class="lilo-help"><summary>ℹ️ 数字の見かた</summary><div>運用は、問い合わせ・成約後の構築タスク・運用中の顧客・仕事のカードを今数えたものです。マーケティングは毎朝の集計（Windsor.ai・busilabo.com）で、コラムの下書きは SharePoint のフォルダを今見た数です。目安：SNS は週1本（8日で🟡・14日で🔴）、コラムの公開は週1本（10日で🔴）。🔴 はだれでも受け取れる仕事になり、様子が戻ると自動で完了します</div></details></div></div></details>';
   }
-  // マーケティングの数字が変わったら、ビジラボと LILOCLE の両方を描き直す
-  function renderMktStatus() { renderBizStatus(); renderLiloStatus(); }
+  // ---- 成長の画面（2026-11-17 代表の指定。見本「成長の画面」の A〜D をそのまま。データは SharePoint の「目標と数字」「発信」「試していること」と毎朝の集計）----
+  var growthState = { loaded: false, goals: [], posts: [], tests: [] };
+  function setGrowth(g) { growthState = g || growthState; renderMktStatus(); }
+  var growthOpen = {};   // 「何が効いたか」を開いているか（描き直しても閉じないように）
+  function gMonth() { var d = new Date(); return d.getFullYear() + '-' + pad2(d.getMonth() + 1); }
+  function gMonthDays() { var d = new Date(); return { day: d.getDate(), days: new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate() }; }
+  function gInMonth(v) { return !!v && String(v).slice(0, 7) === gMonth(); }
+  function gNum(v) { var n = Number(String(v || '').replace(/[,，円¥\s]/g, '')); return String(v || '').trim() !== '' && isFinite(n) ? n : null; }
+  var GOAL_DEFS = {
+    busilabo: [{ code: 'busilabo_meetings', icon: '🤝', label: '商談', unit: '件' }, { code: 'busilabo_inquiries', icon: '📨', label: '問い合わせ', unit: '件' },
+      { code: 'busilabo_contracts', icon: '✍️', label: '成約', unit: '件' }, { code: 'busilabo_sales', icon: '💴', label: '売上（契約日）', unit: '円' }],
+    lilocle: [{ code: 'lilocle_sales', icon: '💴', label: '売上', unit: '円' }, { code: 'lilocle_orders', icon: '🛒', label: '注文', unit: '件' }]
+  };
+  var GROWTH_BIZ = { busilabo: '業務改善・DX支援', lilocle: 'LILOCLE運営' };
+  function gInquiries() { return liveCards('inquiry').filter(function (c) { return !spamSuspect(c) && spamDecision(c) !== SPAM_MOVE; }); }
+  // 今月の実績。数え方は「目標と数字」の HowToCount と同じ（問い合わせ・商談・成約・売上はカードから、LILOCLE は毎朝の集計の month）
+  function gActual(code) {
+    var a = mktState.loaded ? mktState.data : null, mo = a && a.month && String(a.month.from || '').slice(0, 7) === gMonth() ? a.month : null;
+    switch (code) {
+      case 'busilabo_inquiries': return gInquiries().filter(function (c) { return gInMonth(roleVal(c, 'receivedAt')); }).length;
+      case 'busilabo_meetings': return gInquiries().filter(function (c) { return gInMonth(roleVal(c, 'meetingAt')); }).length;
+      case 'busilabo_contracts': return liveCards('wontask').filter(function (c) { return gInMonth(roleVal(c, 'contractDate')); }).length;
+      case 'busilabo_sales': return liveCards('wontask').filter(function (c) { return gInMonth(roleVal(c, 'contractDate')); }).reduce(function (s, c) { return s + (gNum(roleVal(c, 'contractAmount')) || 0); }, 0);
+      case 'lilocle_sales': return mo && typeof mo.lilocleSales === 'number' ? mo.lilocleSales : null;
+      case 'lilocle_orders': return mo && typeof mo.lilocleOrders === 'number' ? mo.lilocleOrders : null;
+    }
+    return null;
+  }
+  function gGoalRow(code) { return growthState.goals.filter(function (r) { return r.MetricCode === code && r.TargetMonth === gMonth(); })[0]; }
+  function gGoalDef(code) { return growthState.goals.filter(function (r) { return r.MetricCode === code && !r.TargetMonth; })[0]; }
+  function gFmt(v, unit) { return v === null || v === undefined ? '－' : unit === '円' ? yen(v) : v + '件'; }
+  // 見出しの一言（例：「🎯 今月の商談まで あと 3件」）。目標が入っていて、まだ届いていない最初のもの
+  function goalHeadline(biz) {
+    var defs = GOAL_DEFS[biz] || [];
+    for (var i = 0; i < defs.length; i++) {
+      var g = gGoalRow(defs[i].code), t = g && typeof g.Target === 'number' ? g.Target : null, v = gActual(defs[i].code);
+      if (t !== null && v !== null && v < t) return '🎯 今月の' + defs[i].label.replace(/（.*）/, '') + 'まで あと ' + gFmt(t - v, defs[i].unit);
+    }
+    return '';
+  }
+  // A：今月の目標と進み具合。目安の線は「今日までに、ここまで来ていれば順調」
+  function goalPanelHtml(biz) {
+    var md = gMonthDays(), mon = gMonth();
+    var rows = (GOAL_DEFS[biz] || []).map(function (d) {
+      var g = gGoalRow(d.code), def = gGoalDef(d.code) || {};
+      var target = g && typeof g.Target === 'number' ? g.Target : null, actual = gActual(d.code);
+      var setBtn = '<button type="button" class="gl-set' + (target === null ? '' : ' gl-num') + '" data-goal-set="' + d.code + '" data-goal-label="' + esc(d.label) + '" data-goal-unit="' + d.unit + '" title="押すと今月の目標を入れられます">' + (target === null ? '目標を入れる' : esc(gFmt(target, d.unit))) + '</button>';
+      var head = '<div class="gl-row"><span title="' + esc(def.HowToCount || '') + '">' + d.icon + ' ' + esc(d.label) + '</span><b>' + esc(gFmt(actual, d.unit)) + ' <small>/ </small>' + setBtn + '</b></div>';
+      if (actual === null) return '<div class="gl">' + head + '<small class="gl-note">今月の数字は、毎朝の集計（7:20）から入ります</small></div>';
+      if (target === null) return '<div class="gl">' + head + '</div>';
+      var pace = target * md.day / md.days, pct = target > 0 ? Math.min(100, actual / target * 100) : 100, pacePct = Math.min(100, md.day / md.days * 100);
+      var late = actual < pace, paceTxt = d.unit === '円' ? yen(Math.round(pace)) : (Math.round(pace * 10) / 10) + '件';
+      return '<div class="gl">' + head + '<div class="gl-meter' + (late ? ' late' : '') + '"><i style="width:' + pct.toFixed(1) + '%"></i><span class="gl-pace" style="left:' + pacePct.toFixed(1) + '%" title="今日の目安"></span></div>' +
+        '<small class="' + (late ? 'gl-late' : 'gl-ok') + '">' + (actual >= target ? '🎉 今月の目標に届きました' : late ? '今日の目安（' + paceTxt + '）より遅れています' : '今日の目安（' + paceTxt + '）を超えています') + '</small></div>';
+    }).join('');
+    return '<div class="g-panel"><div class="g-sec"><span class="g-tag" data-k="A">A</span> 今月の目標 <small>（' + (+mon.slice(5)) + '月・' + md.day + '日目。数字を押すと目標を入れられます）</small></div>' + rows + '</div>';
+  }
+  // C：先週の振り返り（毎朝の集計の review。Claude が数字だけを根拠に書く）。次の一手はボタンで仕事に入れる
+  function reviewPanelHtml(biz) {
+    var a = mktState.loaded ? mktState.data : null, r = a && a.review, b = r && r[biz];
+    var head = '<div class="g-sec"><span class="g-tag" data-k="C">C</span> 先週の振り返り' + (r && r.from ? ' <small>（' + esc(mktMd(r.from) + '〜' + mktMd(r.to)) + '）</small>' : '') + '</div>';
+    if (!b) return '<div class="g-panel">' + head + '<div class="mk-none">先週の振り返りは、次の毎朝の集計（7:20）から出ます。</div></div>';
+    var nexts = (Array.isArray(b.next) ? b.next : []).slice(0, 2).map(function (t, i) {
+      var key = 'growth:' + biz + ':' + (r.from || '') + ':' + i, has = window.__growth && window.__growth.hasTask(key);
+      return '<div class="rv-next"><span>' + '①②'.charAt(i) + ' ' + esc(t) + '</span>' + (has ? '<span class="rv-btn done">✓ 仕事に入れました</span>' : '<button type="button" class="rv-btn" data-next-add="' + esc(key) + '" data-next-biz="' + biz + '" data-next-text="' + esc(t) + '" data-next-week="' + esc(mktMd(r.from) + '〜' + mktMd(r.to)) + '">＋ 仕事に入れる</button>') + '</div>';
+    }).join('');
+    return '<div class="g-panel">' + head + '<div class="rv-by">📋 Claude のまとめ（毎朝の集計の数字から）</div><dl class="rv">' +
+      (b.good ? '<dt class="rv-good">良かった</dt><dd>' + esc(b.good) + '</dd>' : '') + (b.bad ? '<dt class="rv-bad">悪かった</dt><dd>' + esc(b.bad) + '</dd>' : '') +
+      (nexts ? '<dt class="rv-nx">次の一手</dt><dd>' + nexts + '</dd>' : '') + '</dl></div>';
+  }
+  // B：やったこと → 成果の流れ（直近28日）。いちばん細いところを赤くし、何を見直すとよいかを一言
+  function flowHtml(biz) {
+    var a = mktState.loaded ? mktState.data : null;
+    var sns = function (id) { return a && Array.isArray(a.sns) ? a.sns.filter(function (x) { return x.id === id; })[0] || {} : {}; };
+    var sum4 = function (ids) {
+      var wc = weeklyChannels(biz), tot = 0, any = false;
+      ids.forEach(function (id) { var c = wc.list.filter(function (x) { return x.id === id; })[0]; (c && Array.isArray(c.series) ? c.series.slice(-4) : []).forEach(function (p) { if (p && typeof p.value === 'number') { tot += p.value; any = true; } }); });
+      return any ? tot : null;
+    };
+    var steps, weak = -1, say = '', note = '';
+    if (biz === 'busilabo') {
+      var did = (sns('ig-busilabo').posts28d || 0) + (sns('fb-busilabo').posts28d || 0) + (a && a.column ? a.column.published28d || 0 : 0);
+      var seen = sum4(['ig', 'fb', 'site']);
+      var inq = gInquiries().filter(function (c) { var v = roleVal(c, 'receivedAt'); return v && -dayDiffFromToday(v.slice(0, 10)) < 28; });
+      var meet = inq.filter(function (c) { var s = statusOf(c); return s === '商談中' || s === '成約'; }).length;
+      var won = inq.filter(function (c) { return statusOf(c) === '成約'; }).length;
+      var org = {}; inq.forEach(function (c) { var o = roleVal(c, 'origin') || '未記入'; org[o] = (org[o] || 0) + 1; });
+      steps = [{ k: 'やったこと', v: did, u: '本', d: '投稿・コラム' }, { k: '見られた', v: seen, d: 'リーチ・表示・訪問' },
+        { k: '問い合わせ', v: inq.length, u: '件', d: Object.keys(org).map(function (o) { return o + ' ' + org[o]; }).join('・') || 'どこから来たか' }, { k: '商談・成約', v: meet, u: '件', d: '商談 ' + meet + '・成約 ' + won }];
+      if (seen !== null) {
+        if (!inq.length || inq.length / seen < 0.01) { weak = 2; say = '見られた数のわりに、問い合わせが少ない。投稿やホームページから相談への入り口（プロフィールのリンク・無料相談の案内）を見直すと、成果が増えやすい。'; }
+        else if (!meet || meet / inq.length < 0.3) { weak = 3; say = '問い合わせのわりに、商談が少ない。返事の早さと、商談への誘い方を見直すと、成果が増えやすい。'; }
+      }
+      if (inq.some(function (c) { return !roleVal(c, 'origin'); })) note = '問い合わせの「どこから来たか」が未記入のものがあります（案件管理の問い合わせのカードで選べます）';
+    } else {
+      var L = a && a.lilocle || {};
+      var did2 = (sns('ig-lilocle').posts28d || 0) + ((L.yomimono || {}).count28d || 0) + ((L.feature || {}).count28d || 0) + ((L.newsletter || {}).count28d || 0);
+      var f = a && a.funnel && a.funnel.lilocle || {};
+      var num = function (v) { return typeof v === 'number' ? v : null; };
+      var ses = num(f.sessions), cart = num(f.cart), ord = num(f.orders);
+      if (ord === null && liloState.sales && liloState.sales.d28) ord = liloState.sales.d28.orders;
+      steps = [{ k: 'やったこと', v: did2, u: '本', d: '投稿・読みもの・紹介・メルマガ' }, { k: 'サイトへの訪問', v: ses, d: 'Shopify' }, { k: 'カートに入れた', v: cart, d: '' }, { k: '購入', v: ord, u: '件', d: '' }];
+      if (ses !== null && cart !== null && ord !== null) {
+        if (!cart || cart / ses < 0.03) { weak = 2; say = 'カートに入れる人が少ない。商品ページの写真・説明・値段の見せ方を見直すと、成果が増えやすい。'; }
+        else if (ord / cart < 0.3) { weak = 3; say = 'カートに入れたあと、買わずに帰る人が多い。送料の見せ方や、カートに残した人へのお知らせメールを見直すと、成果が増えやすい。'; }
+      } else note = 'サイトへの訪問とカートの数は、次の毎朝の集計（7:20）から入ります';
+    }
+    var html = steps.map(function (s, i) {
+      var prev = i > 0 ? steps[i - 1].v : null, rate = '';
+      if (i === 1 && s.v !== null && prev) rate = '1本 ' + Math.round(s.v / prev);
+      else if (i > 1 && s.v !== null && prev) rate = (Math.round(s.v / prev * 1000) / 10) + '%';
+      return '<div class="fl-step' + (i === weak ? ' weak' : '') + '">' + (i ? '<span class="fl-rate">' + esc(rate || '→') + '</span>' : '') + '<span class="fl-k">' + esc(s.k) + '</span><span class="fl-v">' + (s.v === null ? '－' : esc(s.v.toLocaleString('ja-JP'))) + (s.u && s.v !== null ? '<small>' + s.u + '</small>' : '') + '</span><span class="fl-d">' + (i === weak ? 'いちばん細いところ' : esc(s.d || '')) + '</span></div>';
+    }).join('');
+    return '<div class="g-sec"><span class="g-tag" data-k="B">B</span> やったこと → 成果の流れ <small>（直近28日）</small></div><div class="fl">' + html + '</div>' +
+      (say ? '<p class="fl-say">→ <b>' + esc(say.split('。')[0]) + '</b>。' + esc(say.split('。').slice(1).join('。')) + '</p>' : '') + (note ? '<p class="fl-note">' + esc(note) + '</p>' : '');
+  }
+  // D：何が効いたか（直近8週の「発信」の表を、種類・テーマごとに1本あたりで比べる）と、試していること
+  var EFFECT_MAIN = { ig: ['Reach', 'リーチ'], fb: ['Views', '表示'], column: ['Views', '閲覧'], yomimono: ['Views', '閲覧'], feature: ['Views', '閲覧'], mail: ['Clicks', 'クリック'] };
+  var CH_LABEL = { ig: 'Instagram', fb: 'Facebook', column: 'コラム', yomimono: '読みもの', feature: 'メーカー紹介', mail: 'メルマガ' };
+  function gAvg(list, col) { var v = list.map(function (p) { return p[col]; }).filter(function (x) { return typeof x === 'number'; }); return v.length ? Math.round(v.reduce(function (s, x) { return s + x; }, 0) / v.length) : null; }
+  function effectTable(title, groups, label) {
+    var max = Math.max.apply(null, groups.map(function (g) { return g.avg || 0; }).concat([1]));
+    return '<div class="ef-t"><div class="ef-h">' + esc(title) + '</div><table class="ef"><thead><tr><th>' + label + '</th><th>本数</th><th>1本あたり</th></tr></thead><tbody>' +
+      groups.map(function (g) { return '<tr><td>' + esc(g.name) + '</td><td class="n">' + g.n + '</td><td><span class="ef-bar" style="width:' + Math.round((g.avg || 0) / max * 90) + 'px"></span>' + (g.avg === null ? '－' : g.avg.toLocaleString('ja-JP')) + '</td></tr>'; }).join('') + '</tbody></table></div>';
+  }
+  function testResult(t, posts) {
+    var m = EFFECT_MAIN[t.Channel]; if (!m || !t.StartDate) return null;
+    var end = t.EndDate || todayStr, start = t.StartDate;
+    var before = new Date(start); before.setDate(before.getDate() - 28); var bs = before.getFullYear() + '-' + pad2(before.getMonth() + 1) + '-' + pad2(before.getDate());
+    var inP = posts.filter(function (p) { return p.Channel === t.Channel && p.PostDate >= start && p.PostDate <= end; }), preP = posts.filter(function (p) { return p.Channel === t.Channel && p.PostDate >= bs && p.PostDate < start; });
+    var a1 = gAvg(inP, m[0]), a0 = gAvg(preP, m[0]);
+    if (a1 === null || a0 === null) return { text: '比べる投稿がまだ足りません（試している間 ' + inP.length + '本・前の4週 ' + preP.length + '本）' };
+    var p = a0 ? Math.round((a1 - a0) / a0 * 100) : null;
+    return { text: '1本あたりの' + m[1] + ' ' + a0.toLocaleString('ja-JP') + ' → ' + a1.toLocaleString('ja-JP') + (p === null ? '' : '（' + (p >= 0 ? '+' : '') + p + '%）') + '・試した投稿 ' + inP.length + '本', pct: p };
+  }
+  function effectHtml(biz) {
+    var posts = growthState.posts.filter(function (p) { return p.Business === biz; });
+    var tests = growthState.tests.filter(function (t) { return t.Business === biz; });
+    var running = tests.filter(function (t) { return t.Status === '試している'; }).length;
+    var chs = Object.keys(EFFECT_MAIN).filter(function (c) { return posts.some(function (p) { return p.Channel === c; }); });
+    var body = chs.map(function (c) {
+      var m = EFFECT_MAIN[c], cp = posts.filter(function (p) { return p.Channel === c; });
+      var by = function (key) {
+        var o = {}; cp.forEach(function (p) { var k = p[key] || '（なし）'; (o[k] = o[k] || []).push(p); });
+        return Object.keys(o).map(function (k) { return { name: k, n: o[k].length, avg: gAvg(o[k], m[0]) }; }).sort(function (x, y) { return (y.avg || 0) - (x.avg || 0); }).slice(0, 5);
+      };
+      return '<div class="ef-ch"><div class="ef-cht">' + esc(CH_LABEL[c] || c) + '（' + cp.length + '本・1本あたりの' + m[1] + '）</div><div class="ef-grid">' + effectTable('種類ごと', by('PostType'), '種類') + effectTable('テーマごと', by('Theme'), 'テーマ') + '</div></div>';
+    }).join('') || '<div class="mk-none">「発信」の表に、まだ投稿がたまっていません。毎朝の集計（7:20）から、直近60日の投稿が入ります。</div>';
+    var tl = tests.sort(function (x, y) { return (y.StartDate || '').localeCompare(x.StartDate || ''); }).slice(0, 6).map(function (t) {
+      var r = t.Status === '試している' ? testResult(t, growthState.posts.filter(function (p) { return p.Business === biz; })) : null, due = t.Status === '試している' && t.EndDate && t.EndDate <= todayStr;
+      var st = t.Status === '効いた' ? '✓ 効いた' : t.Status === '効かなかった' ? '× 効かなかった' : t.Status === 'やめた' ? 'やめた' : '🧪 試している';
+      return '<div class="ts" data-st="' + esc(t.Status || '') + '"><div class="ts-h"><span class="ts-st">' + st + '</span><small>' + esc((CH_LABEL[t.Channel] || t.Channel || '') + '・' + mktMd(t.StartDate) + '〜' + mktMd(t.EndDate)) + '</small></div><div>' + esc(t.Change || t.Title || '') + '</div>' +
+        (t.Result ? '<div class="ts-r">' + esc(t.Result) + '</div>' : r ? '<div class="ts-r">' + (due ? '結果：' : 'いまのところ：') + esc(r.text) + '</div>' : '') +
+        (due ? '<div class="ts-b"><button type="button" class="rv-btn" data-test-set="' + t.id + '" data-test-st="効いた" data-test-res="' + esc(r ? r.text : '') + '">効いた</button><button type="button" class="rv-btn" data-test-set="' + t.id + '" data-test-st="効かなかった" data-test-res="' + esc(r ? r.text : '') + '">効かなかった</button></div>' : '') + '</div>';
+    }).join('');
+    var chOpts = Object.keys(EFFECT_MAIN).filter(function (c) { return biz === 'lilocle' ? c !== 'fb' && c !== 'column' : c === 'ig' || c === 'fb' || c === 'column'; })
+      .map(function (c) { return '<option value="' + c + '">' + esc(CH_LABEL[c]) + '</option>'; }).join('');
+    var form = '<div class="ts-form"><select data-test-ch="' + biz + '">' + chOpts + '</select><input type="text" data-test-change="' + biz + '" placeholder="何を変えて試すか（例：複数の写真の1枚目を包んだ姿にする）"><button type="button" class="rv-btn" data-test-add="' + biz + '">＋ 試すことを足す（4週）</button></div>';
+    return '<details class="g-d" data-g-open="' + biz + '"' + (growthOpen[biz] ? ' open' : '') + '><summary><span class="g-tag" data-k="D">D</span> 何が効いたか <small>（直近8週の発信 ' + posts.length + '本・試していること ' + running + '件）</small></summary>' +
+      '<div class="ef-wrap"><div class="ef-main">' + body + '</div><div class="ts-list"><div class="ef-cht">試していること</div>' + (tl || '<div class="mk-none">まだありません。下から足せます。</div>') + form + '</div></div></details>';
+  }
+  function growthTopHtml(biz) {
+    return '<div class="g-row2">' + goalPanelHtml(biz) + reviewPanelHtml(biz) + '</div>' + flowHtml(biz);
+  }
+  // 今日の画面は短く：事業ごとに一言と、🔴 のことだけ（2026-11-17 代表の指定。くわしくは「📈 成長」）
+  function renderTodayAlerts() {
+    var box = document.querySelector('[data-today-alerts]');
+    if (!box) return;
+    var rows = [['[data-biz-status]', '💼 ビジラボ', 'busilabo'], ['[data-lilo-status]', '🌿 LILOCLE', 'lilocle'], ['[data-amz-status]', '📦 Amazon', '']].map(function (x) {
+      var b = document.querySelector(x[0]); if (!b) return '';
+      var tone = b.getAttribute('data-tone') || 'ok', sum = b.querySelector('.lilo-sum'), gh = x[2] ? goalHeadline(x[2]) : '';
+      var reds = Array.prototype.map.call(b.querySelectorAll('.lilo-issues li'), function (li) { return li.textContent.trim(); }).filter(function (t) { return t.indexOf('🔴') === 0; })
+        .concat(Array.prototype.map.call(b.querySelectorAll('.mk-card[data-tone="bad"]'), function (c) { var t = c.querySelector('.mk-top'), g = c.querySelector('.mk-big'); return '🔴 ' + (t ? t.textContent.trim() : '') + ' ' + (g ? g.textContent.trim() : ''); }));
+      return '<li><b>' + x[1] + '</b> ' + (sum ? esc(sum.textContent.trim()) : LILO_LIGHT[tone]) + (gh ? '<span class="ta-goal">' + esc(gh) + '</span>' : '') +
+        (reds.length ? '<ul>' + reds.slice(0, 4).map(function (t) { return '<li>' + esc(t) + '</li>'; }).join('') + (reds.length > 4 ? '<li class="ta-more">ほか ' + (reds.length - 4) + ' 件</li>' : '') + '</ul>' : '') + '</li>';
+    }).join('');
+    box.innerHTML = '<div class="ta-head"><b>様子</b><button type="button" class="link-inline" data-go-growth>📈 成長の画面をひらく</button></div><ul class="ta">' + rows + '</ul>';
+  }
+  document.addEventListener('click', function (e) {
+    var go = e.target.closest && e.target.closest('[data-go-growth]');
+    if (go) { e.preventDefault(); activateTab('growth'); window.scrollTo(0, 0); return; }
+    var gs = e.target.closest && e.target.closest('[data-goal-set]');
+    if (gs) {
+      e.preventDefault();
+      var unit = gs.getAttribute('data-goal-unit'), mon = gMonth();
+      var v = window.prompt((+mon.slice(5)) + '月の「' + gs.getAttribute('data-goal-label') + '」の目標を入れてください（' + (unit === '円' ? '円。例：150000' : '件数。例：3') + '）。空にすると目標を消します', '');
+      if (v === null) return;
+      var n = String(v).trim() === '' ? null : gNum(v);
+      if (String(v).trim() !== '' && n === null) { alert('数字で入れてください'); return; }
+      gs.disabled = true; gs.textContent = '保存しています…';
+      window.__growth.saveGoal(gs.getAttribute('data-goal-set'), mon, n).catch(function (err) { alert('保存できませんでした：' + err.message); renderMktStatus(); });
+      return;
+    }
+    var nx = e.target.closest && e.target.closest('[data-next-add]');
+    if (nx) {
+      e.preventDefault();
+      var biz = nx.getAttribute('data-next-biz'), text = nx.getAttribute('data-next-text');
+      nx.disabled = true; nx.textContent = '入れています…';
+      window.__growth.addNext(nx.getAttribute('data-next-add'), { Title: text, Business: GROWTH_BIZ[biz] || '', Category: '発信', Content: '先週（' + nx.getAttribute('data-next-week') + '）の振り返りの「次の一手」です。\n' + text })
+        .then(function () { renderMktStatus(); }, function (err) { alert('仕事に入れられませんでした：' + err.message); renderMktStatus(); });
+      return;
+    }
+    var ta = e.target.closest && e.target.closest('[data-test-add]');
+    if (ta) {
+      e.preventDefault();
+      var b2 = ta.getAttribute('data-test-add'), inp = document.querySelector('[data-test-change="' + b2 + '"]'), ch = document.querySelector('[data-test-ch="' + b2 + '"]');
+      var change = inp ? inp.value.trim() : '';
+      if (!change) { alert('何を変えて試すかを書いてください'); return; }
+      var d0 = new Date(), d1 = new Date(); d1.setDate(d1.getDate() + 28);
+      var f = function (d) { return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); };
+      ta.disabled = true; ta.textContent = '保存しています…';
+      window.__growth.addTest({ title: change.slice(0, 80), biz: b2, channel: ch ? ch.value : 'ig', start: f(d0), end: f(d1), change: change, measure: '1本あたりの' + ((EFFECT_MAIN[ch ? ch.value : 'ig'] || [])[1] || '数字') })
+        .catch(function (err) { alert('保存できませんでした：' + err.message); renderMktStatus(); });
+      return;
+    }
+    var tsb = e.target.closest && e.target.closest('[data-test-set]');
+    if (tsb) {
+      e.preventDefault();
+      tsb.disabled = true;
+      window.__growth.setTest(tsb.getAttribute('data-test-set'), tsb.getAttribute('data-test-st'), tsb.getAttribute('data-test-res') || '').catch(function (err) { alert('保存できませんでした：' + err.message); renderMktStatus(); });
+    }
+  });
+  document.addEventListener('toggle', function (e) {
+    var d = e.target; if (d && d.getAttribute && d.getAttribute('data-g-open')) growthOpen[d.getAttribute('data-g-open')] = d.open;
+  }, true);
+  // マーケティングの数字が変わったら、ビジラボと LILOCLE の両方を描き直す（今日の画面の短い様子も）
+  // 成長の画面で「試すこと」を書いている途中は描き直さない（数秒ごとの描き直しで、書いた文字が消えないように）。書きかけの文字は描き直しても残す
+  function renderMktStatus() {
+    var ae = document.activeElement;
+    if (ae && ae.closest && ae.closest('.lilo-status') && /^(INPUT|SELECT|TEXTAREA)$/.test(ae.tagName)) { renderTodayAlerts(); return; }
+    var keep = {};
+    var keyOf = function (el) { return el.getAttribute('data-test-change') ? 'c:' + el.getAttribute('data-test-change') : 'h:' + el.getAttribute('data-test-ch'); };
+    document.querySelectorAll('[data-test-change], [data-test-ch]').forEach(function (el) { keep[keyOf(el)] = el.value; });
+    renderBizStatus(); renderLiloStatus();
+    document.querySelectorAll('[data-test-change], [data-test-ch]').forEach(function (el) { if (keep[keyOf(el)]) el.value = keep[keyOf(el)]; });
+    renderTodayAlerts();
+  }
 
   document.addEventListener('click', function (e) {
     var b = e.target.closest && e.target.closest('[data-lilo-refresh]');
@@ -7552,7 +7871,7 @@
 
 
   // ---- 画面の切り替え ----
-  var PANEL_SECTION = { today: "work", contact: "work", task: "work", shift: "work", team: "work", skill: "work", customer: "work", inquiry: "deal", wontask: "build", ops: "ops" };
+  var PANEL_SECTION = { growth: "work", today: "work", contact: "work", task: "work", shift: "work", team: "work", skill: "work", customer: "work", inquiry: "deal", wontask: "build", ops: "ops" };
   var lastTabOf = { work: "today", deal: "inquiry", build: "wontask", ops: "ops" };
 
   function jumpToCard(card, focusRole) {
@@ -8082,6 +8401,7 @@
     setLiloStatus: setLiloStatus,
     setAmzStatus: setAmzStatus,
     setMktStatus: setMktStatus,
+    setGrowth: setGrowth,
     mktChecks: mktChecks,
     someoneWorksToday: someoneWorksToday,
     setTaskStatus: setTaskStatus,
@@ -8094,8 +8414,8 @@
 })();
 </script>
 <script src="vendor/msal-browser.min.js"></script>
-<script src="sync.js?v=7f875a9"></script>
-<script src="chat.js?v=7f875a9"></script>
+<script src="sync.js?v=601ad4f"></script>
+<script src="chat.js?v=601ad4f"></script>
 <script>
 // 新しい版が出たら知らせて切り替える（2026-11-17 代表の指摘：ブラウザが古い版を覚えていて、更新しても前の画面のままだった）。
 // 公開のたびに version.txt に版の番号が入る。5分ごとと、画面に戻ってきたときに見比べ、違えば上に帯を出す。押すと読み直す（入力中の内容を消さないよう、勝手には読み直さない）

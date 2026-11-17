@@ -1118,6 +1118,7 @@
     try { await ensureMarketingTasks(st); } catch (e) { log("marketing tasks failed: " + e.message); }
     try { await recordMetrics(st); } catch (e) { log("metrics record failed: " + e.message); }
     try { await recordPosts(st); } catch (e) { log("posts record failed: " + e.message); }
+    try { await loadGrowth(); } catch (e) { log("growth load failed: " + e.message); }
     mktBusy = false;
   }
   // ---- 数字の記録（2026-11-17 データベースの見直し 第1段）----
@@ -1206,6 +1207,65 @@
     log("posts recorded: +" + added + " / fixed " + fixed + " / rows " + rows.length);
     try { localStorage.setItem(doneKey, "1"); } catch (e) { /* 保存できない環境でも動く */ }
   }
+  // ---- 成長の画面（2026-11-17 代表の指定。見本 A〜D をそのまま）----
+  // 目標と数字（A）・発信（D の比較）・試していること（D）を読み、index.html の setGrowth に渡す。書き込みは window.__growth から
+  var GOAL_LIST = "目標と数字", TEST_LIST = "試していること";
+  var goalListId = null, testListId = null;
+  async function readAll(listId, select, maxPages) {
+    var out = [], url = "/sites/" + siteId + "/lists/" + listId + "/items?$expand=fields($select=" + select + ")&$top=500";
+    for (var page = 0; url && page < (maxPages || 10); page++) {
+      var r = await graph(url);
+      (r.value || []).forEach(function (it) { if (it.fields && !it.fields.Deleted) out.push(Object.assign({ id: it.id }, it.fields)); });
+      url = r["@odata.nextLink"] ? r["@odata.nextLink"].replace("https://graph.microsoft.com/v1.0", "") : "";
+    }
+    return out;
+  }
+  async function loadGrowth() {
+    if (!siteId || !window.__app || !window.__app.setGrowth) return;
+    if (!goalListId) goalListId = await findListId(GOAL_LIST);
+    if (!postListId) postListId = await findListId(POST_LIST);
+    if (!testListId) testListId = await findListId(TEST_LIST);
+    var g = { loaded: true, goals: [], posts: [], tests: [] };
+    if (goalListId) g.goals = await readAll(goalListId, "Title,MetricCode,Business,HowToCount,Period,TargetMonth,Target,Deleted");
+    if (postListId) {
+      var since = ymd(new Date(Date.now() - 56 * 86400000));
+      g.posts = (await readAll(postListId, "Title,PostDate,Business,Channel,PostType,Theme,Link,Reach,Views,Likes,Saves,Shares,Comments,Clicks,Experiment,Deleted", 20)).filter(function (p) { return (p.PostDate || "") >= since; });
+    }
+    if (testListId) g.tests = await readAll(testListId, "Title,Business,Channel,StartDate,EndDate,Change,Measure,Result,Status,Deleted");
+    window.__app.setGrowth(g);
+  }
+  window.__growth = {
+    refresh: function () { return loadGrowth(); },
+    // 月の目標を入れる・直す。同じ数字・同じ月の行があれば直し、なければ数え方の行を写して作る
+    saveGoal: async function (code, month, target) {
+      if (!goalListId) goalListId = await findListId(GOAL_LIST);
+      if (!goalListId) throw new Error("「目標と数字」の表が見つかりません");
+      var rows = await readAll(goalListId, "Title,MetricCode,Business,HowToCount,Period,TargetMonth,Target,Deleted");
+      var hit = rows.filter(function (r) { return r.MetricCode === code && r.TargetMonth === month; })[0];
+      var def = rows.filter(function (r) { return r.MetricCode === code && !r.TargetMonth; })[0] || {};
+      var val = target === null || target === "" ? null : Number(target);
+      if (hit) await graph("/sites/" + siteId + "/lists/" + goalListId + "/items/" + hit.id + "/fields", { method: "PATCH", body: { Target: val } });
+      else await graph("/sites/" + siteId + "/lists/" + goalListId + "/items", { method: "POST", body: { fields: { Title: def.Title || code, MetricCode: code, Business: def.Business || "", HowToCount: def.HowToCount || "", Period: "月", TargetMonth: month, Target: val, Deleted: false } } });
+      await loadGrowth();
+    },
+    // 試すことを足す（結果を見る日はふつう4週後）
+    addTest: async function (t) {
+      if (!testListId) testListId = await findListId(TEST_LIST);
+      if (!testListId) throw new Error("「試していること」の表が見つかりません");
+      await graph("/sites/" + siteId + "/lists/" + testListId + "/items", { method: "POST", body: { fields: { Title: t.title, Business: t.biz, Channel: t.channel, StartDate: t.start, EndDate: t.end, Change: t.change || t.title, Measure: t.measure || "", Status: "試している", Deleted: false } } });
+      await loadGrowth();
+    },
+    setTest: async function (id, status, result) {
+      if (!testListId) return;
+      var body = { Status: status };
+      if (result) body.Result = result;
+      await graph("/sites/" + siteId + "/lists/" + testListId + "/items/" + id + "/fields", { method: "PATCH", body: body });
+      await loadGrowth();
+    },
+    // 振り返りの「次の一手」を仕事に入れる（同じものは一度だけ。目印 growth:…）
+    addNext: function (key, fields) { return createTaskOnce(key, fields, "成長の画面の「次の一手」", ""); },
+    hasTask: function (key) { return taskCards().some(function (c) { return taskKeyOf(c) === key; }); }
+  };
   async function ensureMarketingTasks(st) {
     if (!listIds.task || !window.__app.mktChecks) return;
     var r = window.__app.mktChecks(st);
