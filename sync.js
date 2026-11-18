@@ -548,7 +548,7 @@
     try { if (window.__manuals) await migrateManualReviews(); } catch (e) { log("manual review merge failed: " + e.message); }
     try { await restoreDroppedInquiries(); } catch (e) { log("restore dropped inquiries failed: " + e.message); }
     try { await ensureRecurring(); } catch (e) { log("recurring task failed: " + e.message); }
-    try { await drainInbox(); } catch (e) { log("inbox failed: " + e.message); }
+    // Instagram・Facebook・LINE のメッセージは、Azure の台帳係（ledger.js）が5分ごとに仕事にする（2026-11-18）。アプリは受け取らない
   }
 
   // 成約管理タスクの「確認する」ボタン。ルーティンはSharePointリストを読めないため、
@@ -1527,7 +1527,8 @@
     var dm = String(addr || "").toLowerCase().split("@")[1] || "";
     if (!dm) return null;
     return dbRef.partners.filter(function (p) {
-      return String(p.Domains || "").toLowerCase().split(/[、,\s]+/).filter(Boolean).some(function (d) { return dm === d || dm.slice(-(d.length + 1)) === "." + d; });
+      var al = String(addr || "").toLowerCase();   // Gmail などはアドレスそのもので見分ける（2026-11-18）
+      return String(p.Domains || "").toLowerCase().split(/[、,\s]+/).filter(Boolean).some(function (d) { return d.indexOf("@") !== -1 ? al === d : dm === d || dm.slice(-(d.length + 1)) === "." + d; });
     })[0] || null;
   }
   function partnerByExternal(id) {
