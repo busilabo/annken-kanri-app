@@ -602,8 +602,9 @@
   }
 
   async function drainOne(file) {
-    var data = sentWaiting[file.id];
-    if (data) { await drainMailSent(file, data); return; }
+    // メール（mail-）と送った返信（sent-）は、Azure の台帳係（ledger.js）が5分ごとに仕事にする（2026-11-18）。アプリは読まない
+    if (/^(mail-|sent-)/.test(file.name || "")) return;
+    var data;
     try {
       data = await graph("/drives/" + QUEUE_DRIVE_ID + "/items/" + file.id + "/content");
     } catch (e) { log("queue read failed (" + file.name + "): " + e.message); return; }
@@ -613,8 +614,7 @@
     if (data.type === "verifyRequest") return;
     // Teams の依頼・FAX・お問い合わせ（Forms）は、Azure の台帳係（ledger.js）が5分ごとに仕事にする（2026-11-18）。アプリは読まない
     if (data.type === "teamsTask" || data.type === "faxNotice" || !data.type) return;
-    if (data.type === "mailTask") { await drainMailTask(file, data); return; }
-    if (data.type === "mailSent") { await drainMailSent(file, data); return; }
+    if (data.type === "mailTask" || data.type === "mailSent") return;
     // ルーティンの報告は、Azure の台帳係（ledger.js）が5分ごとに読んで、やり取りログと仕事にする（2026-11-18）。アプリは読まない
     if (data.type === "routineReport") return;
     if (data.type === "faxNotice") { await drainFaxNotice(file, data); return; }
