@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 公開のときに、公開の仕組み（.github/workflows/publish-annken-kanri-app.yml）がこの版の番号に書き換える。手元では dev のまま -->
-<meta name="app-version" content="cf5a95f">
+<meta name="app-version" content="9bbda46">
 <title>ビジラボ 仕事管理</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@500&display=swap">
 <style>
@@ -1746,6 +1746,37 @@
   .ts-form .rv-btn { justify-self: start; }
   .today-alerts { background: var(--surface, #fff); border: 1px solid var(--border); border-radius: 14px; padding: 10px 16px; margin: 4px 0 14px; display: grid; gap: 6px; }
   .today-alerts:empty { display: none; }
+  .deal-top { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; margin: 4px 0 12px; }
+  .deal-biz { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip-btn { border: 1px solid var(--border); background: var(--surface, #fff); border-radius: 999px; padding: 6px 14px; font: inherit; cursor: pointer; }
+  .chip-btn[data-local-active] { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .deal-red { color: var(--crit); font-weight: 700; }
+  .chip-btn[data-local-active] .deal-red { color: #fff; }
+  .deal-sum { font-size: 13px; color: var(--text-muted); }
+  .deal-board { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(200px, 1fr); gap: 10px; overflow-x: auto; padding-bottom: 6px; }
+  .deal-col { background: var(--surface-2, rgba(127,127,127,.08)); border-radius: 12px; padding: 8px; display: grid; gap: 8px; align-content: start; min-width: 0; }
+  .deal-col-head { font-weight: 700; font-size: 13.5px; display: flex; justify-content: space-between; color: var(--text-muted); }
+  .deal-card { text-align: left; font: inherit; background: var(--surface, #fff); border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; display: grid; gap: 2px; cursor: pointer; }
+  .deal-card[data-stuck] { border: 2px solid var(--crit); }
+  .deal-card[data-local-active] { outline: 3px solid var(--accent); }
+  .deal-card b { font-size: 14px; }
+  .deal-p { font-size: 12.5px; color: var(--text-muted); }
+  .deal-next { font-size: 13px; }
+  .deal-none { color: var(--warn); }
+  .deal-owner { font-size: 12px; color: var(--text-muted); }
+  .deal-empty { color: var(--text-muted); font-size: 13.5px; }
+  .deal-panel { margin-top: 14px; border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px; background: var(--surface, #fff); display: grid; gap: 12px; }
+  .deal-panel-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; }
+  .deal-panel-head .link-inline { margin-left: auto; }
+  .deal-why { color: var(--crit); font-weight: 700; font-size: 14px; }
+  .deal-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+  .deal-form label { display: grid; gap: 4px; font-size: 13px; color: var(--text-muted); }
+  .deal-actions { display: flex; gap: 10px; align-items: center; }
+  .deal-tasks ul, .deal-unlinked ul { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 4px; }
+  .deal-tasks small { color: var(--text-muted); margin-left: 8px; }
+  .deal-unlinked { margin-top: 14px; font-size: 14px; }
+  .s-deal { margin: 6px 0; font-size: 14px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .s-deal input { min-width: 0; width: 200px; }
   .s-related { margin: 8px 0; padding: 8px 12px; border: 1px dashed var(--border); border-radius: 10px; font-size: 14px; }
   .s-related ul { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 4px; }
   .s-related li { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
@@ -1821,6 +1852,7 @@
   <nav class="tabs" data-subnav="work">
     <button type="button" class="tab-btn" data-tab="today" data-local-active>🏠 今日 <span class="tab-count" data-local-count="today">0</span></button>
     <button type="button" class="tab-btn" data-tab="growth">📈 成長</button>
+    <button type="button" class="tab-btn" data-tab="deal">🤝 案件 <span class="tab-count" data-deal-count>0</span></button>
     <button type="button" class="tab-btn" data-tab="task">仕事一覧 <span class="tab-count" data-local-count="task">0</span></button>
     <button type="button" class="tab-btn" data-tab="shift">出勤予定</button>
     <button type="button" class="tab-btn" data-tab="team">チーム状況</button>
@@ -1883,6 +1915,17 @@
     <div class="lilo-status" data-amz-status></div>
     <!-- 数字のもとの新しさ（第3段。「データの置き場所」の表。renderFresh） -->
     <div class="fresh-box" data-fresh></div>
+  </section>
+
+  <!-- 案件（2026-11-18 データベース設計 第4段。代表の指定：段階の列で並べる）。事業を選ぶと、段階ごとの列に案件の札が並ぶ。止まっている札は赤い縁 -->
+  <section class="panel" data-panel="deal" data-local-hidden>
+    <div class="deal-top">
+      <div class="deal-biz" data-deal-biz></div>
+      <span class="deal-sum" data-deal-sum></span>
+    </div>
+    <div class="deal-board" data-deal-board></div>
+    <div class="deal-detail" data-deal-detail></div>
+    <div class="deal-unlinked" data-deal-unlinked></div>
   </section>
 
   <!-- チーム状況。代表が全体を見る画面（引き継ぎの準備・仕事の偏り・一人しかできないスキル） -->
@@ -2361,6 +2404,8 @@
           <div class="field wide teams-origin" data-teams-origin hidden></div>
           <input type="hidden" data-role="requester">
           <input type="hidden" data-role="teamsMessageId">
+          <input type="hidden" data-role="dealId">
+          <input type="hidden" data-role="partnerId">
           <input type="hidden" data-role="teamsLink">
           <div class="field wide">
             <label>仕事の内容</label>
@@ -4726,6 +4771,7 @@
     // 「返信先：」はアプリが使う控え。画面には出さない（送るときの欄に出る）
     descLines = descLines.filter(function (l) { return !/^返信先：/.test(l.trim()); });
     if (descLines.length) html += '<div class="s-desc">' + linkify(descLines.join('\n')) + '</div>';
+    html += dealLineHtml(card, key);
     // 同じ注文（ORDER〇〇〇〇）の仕事どうしを結ぶ（2026-11-18 代表の指摘：ORDER4638 の仕事が2つ出ていて、続きの仕事だと分からない）
     var rel = relatedOrderTasks(card);
     if (rel.list.length) {
@@ -7145,6 +7191,8 @@
         (opsLights ? '<div class="ta-ops">' + opsLights + '</div>' : '') +
         (reds.length ? '<ul>' + reds.slice(0, 4).map(function (t) { return '<li>' + esc(t) + '</li>'; }).join('') + (reds.length > 4 ? '<li class="ta-more">ほか ' + (reds.length - 4) + ' 件</li>' : '') + '</ul>' : '') + '</li>';
     }).join('');
+    var stuckN = dealState && dealState.loaded ? openDeals().filter(function (d) { return dealStuck(d).length; }).length : 0;
+    if (stuckN) rows += '<li><b>🤝 案件</b> 🔴 止まっている案件が ' + stuckN + ' 件あります <button type="button" class="link-inline" data-go-deal>案件の画面をひらく</button></li>';
     box.innerHTML = '<div class="ta-head"><b>様子</b><button type="button" class="link-inline" data-go-growth>📈 成長の画面をひらく</button></div><ul class="ta">' + rows + '</ul>';
   }
   document.addEventListener('click', function (e) {
@@ -8139,6 +8187,156 @@
     renderToday();
   }
 
+  // ======== 案件（2026-11-18 データベース設計 第4段）========
+  // 事業ごとの段階の列。ここにない段階は「そのほか」の列に入る。完了・取り消し・失注は出さない
+  var DEAL_BIZ = [
+    { key: 'LILOCLE運営', label: '🌿 LILOCLE', stages: ['対応中', '作り手さんへ報告', '作り手さんの確認', '発送', '支払いの確定'] },
+    { key: '業務改善・DX支援', label: '💼 DX 支援', stages: ['問い合わせ', '商談', '成約', '導入', '運用'] },
+    { key: '家電の卸販売', label: '🏭 卸', stages: ['配送案', '発注', '納期の FAX', '照らし合わせ', '綿半様へ報告', '請求', '報告を受けた', '交換・修理'] },
+    { key: 'Amazon販売', label: '📦 Amazon', stages: ['届いた', '返信した'] }
+  ];
+  var DEAL_END = ['完了', '取り消し', '失注'];
+  var dealState = { loaded: false, partners: [], deals: [] };
+  var dealBiz = 'LILOCLE運営', dealOpenId = '';
+  try { dealBiz = localStorage.getItem('busilabo.dealBiz') || dealBiz; } catch (e) { /* 保存できない環境でも動く */ }
+  function setDeals(st) { dealState = st || dealState; renderDeals(); renderTodayAlerts(); try { renderSimpleTasks(); } catch (e) { /* 読み込みの途中 */ } }
+  function openDeals() { return dealState.deals.filter(function (d) { return DEAL_END.indexOf(d.Stage) === -1; }); }
+  function partnerName(id) { var p = dealState.partners.filter(function (x) { return x.PartnerId === id; })[0]; return p ? p.Title : id; }
+  function dealPartners(d) { return String(d.PartnerIds || '').split(/[、,\s]+/).filter(Boolean).map(partnerName).join('・'); }
+  // この案件の仕事：案件番号が付いている仕事と、注文番号が書かれている仕事
+  function dealTasks(d) {
+    var re = /^ORDER\d+$/.test(d.DealId || '') ? new RegExp('ORDER\\s*0*' + d.DealId.slice(5) + '(?!\\d)', 'i') : null;
+    return Array.prototype.filter.call(document.querySelectorAll('[data-list="task"] > .card'), function (c) {
+      if (c.hasAttribute('data-deleted')) return false;
+      return roleVal(c, 'dealId') === d.DealId || (re && re.test(roleVal(c, 'content') || ''));
+    });
+  }
+  // 止まっている理由（空なら止まっていない）
+  function dealStuck(d) {
+    var why = [];
+    var open = dealTasks(d).filter(function (c) { return statusOf(c) !== '完了'; });
+    var due = String(d.NextDue || '').slice(0, 10);
+    if (d.BlockedReason) why.push(d.BlockedReason);
+    if (due && due < todayStr) why.push('期限（' + due.slice(5).replace('-', '/') + '）を過ぎています');
+    // 人の手が要る段階なのに、動いている仕事がない（作り手さんの確認・発送は相手待ちなので数えない）
+    var waiting = /確認|発送|返信した|運用/.test(d.Stage || '');
+    if (!open.length && !waiting && (due && due <= todayStr || d.BlockedReason)) why.push('動いている仕事がありません');
+    return why;
+  }
+  function renderDeals() {
+    if (!dealState) return;
+    var cnt = document.querySelector('[data-deal-count]');
+    var stuckAll = dealState.loaded ? openDeals().filter(function (d) { return dealStuck(d).length; }).length : 0;
+    if (cnt) { cnt.textContent = stuckAll ? '🔴' + stuckAll : String(openDeals().length); }
+    var bizBox = document.querySelector('[data-deal-biz]'), board = document.querySelector('[data-deal-board]');
+    if (!bizBox || !board) return;
+    if (!dealState.loaded) { board.innerHTML = '<p class="deal-empty">案件を読み込んでいます…（サインインしていないと出ません）</p>'; return; }
+    bizBox.innerHTML = DEAL_BIZ.map(function (b) {
+      var n = openDeals().filter(function (d) { return d.Business === b.key; }), st = n.filter(function (d) { return dealStuck(d).length; }).length;
+      return '<button type="button" class="chip-btn" data-deal-biz-pick="' + esc(b.key) + '"' + (b.key === dealBiz ? ' data-local-active' : '') + '>' + esc(b.label) + ' <b>' + n.length + '</b>' + (st ? ' <span class="deal-red">🔴' + st + '</span>' : '') + '</button>';
+    }).join('');
+    var biz = DEAL_BIZ.filter(function (b) { return b.key === dealBiz; })[0] || DEAL_BIZ[0];
+    var list = openDeals().filter(function (d) { return d.Business === biz.key; });
+    var cols = biz.stages.slice(), other = list.filter(function (d) { return cols.indexOf(d.Stage) === -1; });
+    if (other.length) cols.push('そのほか');
+    document.querySelector('[data-deal-sum]').textContent = '開いている案件 ' + list.length + ' 件・止まっている案件 ' + list.filter(function (d) { return dealStuck(d).length; }).length + ' 件';
+    board.innerHTML = cols.map(function (col) {
+      var items = list.filter(function (d) { return col === 'そのほか' ? cols.indexOf(d.Stage) === -1 || d.Stage === 'そのほか' : d.Stage === col; })
+        .sort(function (a, b) { return (dealStuck(b).length ? 1 : 0) - (dealStuck(a).length ? 1 : 0) || String(a.NextDue || '9').localeCompare(String(b.NextDue || '9')); });
+      return '<div class="deal-col"><div class="deal-col-head">' + esc(col) + ' <span>' + items.length + '</span></div>' + items.map(function (d) {
+        var why = dealStuck(d), due = String(d.NextDue || '').slice(5, 10).replace('-', '/');
+        return '<button type="button" class="deal-card"' + (why.length ? ' data-stuck' : '') + (String(d.id) === dealOpenId ? ' data-local-active' : '') + ' data-deal-open="' + esc(d.id) + '">' +
+          '<b>' + (why.length ? '🔴 ' : '') + esc(d.DealId) + '</b><span class="deal-p">' + esc(dealPartners(d) || d.Title || '') + '</span>' +
+          (d.NextAction ? '<span class="deal-next">次：' + esc(d.NextAction) + (due ? '（' + esc(due) + '）' : '') + '</span>' : '<span class="deal-next deal-none">次にやることが空です</span>') +
+          (d.Owner ? '<span class="deal-owner">' + esc(d.Owner) + '</span>' : '') + '</button>';
+      }).join('') + '</div>';
+    }).join('');
+    renderDealDetail();
+    renderUnlinked();
+  }
+  function renderDealDetail() {
+    var box = document.querySelector('[data-deal-detail]');
+    if (!box) return;
+    var d = dealState.deals.filter(function (x) { return String(x.id) === dealOpenId; })[0];
+    if (!d) { box.innerHTML = ''; return; }
+    var biz = DEAL_BIZ.filter(function (b) { return b.key === d.Business; })[0];
+    var stages = (biz ? biz.stages : []).concat(DEAL_END);
+    var tasks = dealTasks(d), why = dealStuck(d);
+    box.innerHTML = '<div class="deal-panel">' +
+      '<div class="deal-panel-head"><b>' + esc(d.DealId) + '</b> ' + esc(String(d.Title || '').replace(d.DealId, '').trim()) + '<span class="deal-p">' + esc(dealPartners(d)) + '</span>' +
+      '<button type="button" class="link-inline" data-deal-close>閉じる</button></div>' +
+      (why.length ? '<div class="deal-why">🔴 ' + why.map(esc).join('／') + '</div>' : '') +
+      '<div class="deal-form">' +
+      '<label>段階<select data-deal-f="Stage">' + stages.map(function (s) { return '<option' + (s === d.Stage ? ' selected' : '') + '>' + esc(s) + '</option>'; }).join('') + (stages.indexOf(d.Stage) === -1 ? '<option selected>' + esc(d.Stage || '') + '</option>' : '') + '</select></label>' +
+      '<label>次にやること<input type="text" data-deal-f="NextAction" value="' + esc(d.NextAction || '') + '"></label>' +
+      '<label>期限<input type="date" data-deal-f="NextDue" value="' + esc(String(d.NextDue || '').slice(0, 10)) + '"></label>' +
+      '<label>担当<select data-deal-f="Owner">' + [''].concat(STAFF.filter(function (n) { return n !== UNASSIGNED; })).map(function (n) { return '<option value="' + esc(n) + '"' + (n === (d.Owner || '') ? ' selected' : '') + '>' + esc(n || '（決めていない）') + '</option>'; }).join('') + '</select></label>' +
+      '<label>止まっている理由<input type="text" data-deal-f="BlockedReason" value="' + esc(d.BlockedReason || '') + '" placeholder="保留・相手待ちのときだけ"></label>' +
+      '<div class="deal-actions"><button type="button" class="s-btn s-primary" data-deal-save="' + esc(d.id) + '">保存</button><span data-deal-msg></span></div></div>' +
+      '<div class="deal-tasks"><b>この案件の仕事</b>' + (tasks.length ? '<ul>' + tasks.map(function (c) {
+        var st = statusOf(c), ow = ownerOf(c);
+        return '<li><button type="button" class="link-inline" data-jump-key="' + jumpKeyOf(c) + '">' + esc(cardTitle(c)) + '</button><small>' + esc(st) + (st !== '完了' ? '・' + (ow === UNASSIGNED ? '次の走者募集' : ow + 'さん') : '') + '</small></li>';
+      }).join('') + '</ul>' : '<p class="deal-empty">仕事はまだありません</p>') + '</div>' +
+      (d.Link ? '<div>' + linkify(d.Link) + '</div>' : '') + '</div>';
+  }
+  // 番号の付いていない開いた仕事（社内・共通は除く）。押すと、その仕事を開いて「案件に結ぶ」
+  function renderUnlinked() {
+    var box = document.querySelector('[data-deal-unlinked]');
+    if (!box) return;
+    var list = Array.prototype.filter.call(document.querySelectorAll('[data-list="task"] > .card'), function (c) {
+      return !c.hasAttribute('data-deleted') && statusOf(c) !== '完了' && !roleVal(c, 'dealId') && businessOf(c) === dealBiz && !/ORDER\s*\d{3,}/i.test(roleVal(c, 'content') || '') && !recurOf(c);
+    });
+    box.innerHTML = list.length ? '<details><summary>案件の番号が付いていない仕事 ' + list.length + ' 件（開いて「案件に結ぶ」）</summary><ul>' + list.slice(0, 40).map(function (c) {
+      return '<li><button type="button" class="link-inline" data-jump-key="' + jumpKeyOf(c) + '">' + esc(cardTitle(c)) + '</button></li>';
+    }).join('') + '</ul></details>' : '';
+  }
+  // 仕事の画面の「🤝 案件」の行（結ぶ・見る）
+  function dealLineHtml(card, key) {
+    if (!dealState || !dealState.loaded || businessOf(card) === '社内・共通') return '';
+    var id = roleVal(card, 'dealId') || orderTagOf(card);
+    var d = id && dealState.deals.filter(function (x) { return x.DealId === id; })[0];
+    if (d) return '<div class="s-deal">🤝 案件 <button type="button" class="link-inline" data-deal-goto="' + esc(d.id) + '">' + esc(d.DealId) + '</button> ' + esc(d.Stage || '') + (dealPartners(d) ? '・' + esc(dealPartners(d)) : '') + '</div>';
+    var opts = openDeals().filter(function (x) { return x.Business === businessOf(card); });
+    return '<div class="s-deal">🤝 案件に結ぶ <input type="text" list="deal-list-' + key + '" data-deal-link-input="' + key + '" placeholder="案件の番号（例：DX-0001）">' +
+      '<datalist id="deal-list-' + key + '">' + opts.map(function (x) { return '<option value="' + esc(x.DealId) + '">' + esc((x.Title || '') + ' ' + dealPartners(x)) + '</option>'; }).join('') + '</datalist>' +
+      '<button type="button" class="s-btn s-mini" data-deal-link="' + key + '">結ぶ</button></div>';
+  }
+  document.addEventListener('click', function (e) {
+    var t = e.target.closest && e.target.closest('[data-deal-biz-pick],[data-deal-open],[data-deal-close],[data-deal-save],[data-deal-goto],[data-deal-link],[data-go-deal]');
+    if (!t) return;
+    e.preventDefault();
+    if (t.hasAttribute('data-go-deal')) { activateTab('deal'); window.scrollTo(0, 0); return; }
+    if (t.hasAttribute('data-deal-biz-pick')) { dealBiz = t.getAttribute('data-deal-biz-pick'); dealOpenId = ''; try { localStorage.setItem('busilabo.dealBiz', dealBiz); } catch (x) { /* なくても動く */ } renderDeals(); return; }
+    if (t.hasAttribute('data-deal-open')) { dealOpenId = dealOpenId === t.getAttribute('data-deal-open') ? '' : t.getAttribute('data-deal-open'); renderDeals(); var p = document.querySelector('[data-deal-detail]'); if (dealOpenId && p) p.scrollIntoView({ block: 'nearest' }); return; }
+    if (t.hasAttribute('data-deal-close')) { dealOpenId = ''; renderDeals(); return; }
+    if (t.hasAttribute('data-deal-goto')) {
+      var g = dealState.deals.filter(function (x) { return String(x.id) === t.getAttribute('data-deal-goto'); })[0];
+      if (g) { dealBiz = g.Business || dealBiz; dealOpenId = String(g.id); activateTab('deal'); renderDeals(); window.scrollTo(0, 0); }
+      return;
+    }
+    if (t.hasAttribute('data-deal-link')) {
+      var k = t.getAttribute('data-deal-link'), card = jumpRegistry[k], inp = document.querySelector('[data-deal-link-input="' + k + '"]');
+      var v = inp ? inp.value.trim() : '';
+      var hit = dealState.deals.filter(function (x) { return x.DealId === v; })[0];
+      if (!card || !hit) { alert('案件の番号を一覧から選んでください'); return; }
+      setRoleValue(card, 'dealId', hit.DealId);
+      if (!roleVal(card, 'partnerId') && hit.PartnerIds) setRoleValue(card, 'partnerId', String(hit.PartnerIds).split(/[、,\s]+/)[0]);
+      addHistoryEntry(card, 'task', '案件に結んだ', statusOf(card), null, hit.DealId + (dealPartners(hit) ? '（' + dealPartners(hit) + '）' : ''));
+      var el = card.querySelector('[data-role="dealId"]'); if (el) el.dispatchEvent(userEvent('change'));
+      renderSimpleTasks(); renderDeals();
+      return;
+    }
+    if (t.hasAttribute('data-deal-save')) {
+      var id = t.getAttribute('data-deal-save'), box = document.querySelector('[data-deal-detail]'), f = {};
+      box.querySelectorAll('[data-deal-f]').forEach(function (x) { f[x.getAttribute('data-deal-f')] = x.value; });
+      f.NextDue = f.NextDue ? f.NextDue + 'T00:00:00Z' : null;
+      if (DEAL_END.indexOf(f.Stage) !== -1) f.ClosedAt = new Date().toISOString();
+      else if (!f.NextAction) { box.querySelector('[data-deal-msg]').textContent = '開いている案件には「次にやること」を入れてください'; return; }
+      t.disabled = true; box.querySelector('[data-deal-msg]').textContent = '保存しています…';
+      window.__db.updateDeal(id, f).then(function () { var m = document.querySelector('[data-deal-msg]'); if (m) m.textContent = '保存しました'; }, function (err) { t.disabled = false; box.querySelector('[data-deal-msg]').textContent = '保存できませんでした：' + err.message; });
+    }
+  });
+
   function passBaton(btn) {
     var passer = btn.closest('.passer');
     var card = jumpRegistry[btn.getAttribute('data-pass-card')];
@@ -8188,7 +8386,7 @@
 
 
   // ---- 画面の切り替え ----
-  var PANEL_SECTION = { growth: "work", today: "work", contact: "work", task: "work", shift: "work", team: "work", skill: "work", customer: "work", inquiry: "deal", wontask: "build", ops: "ops" };
+  var PANEL_SECTION = { deal: "work", growth: "work", today: "work", contact: "work", task: "work", shift: "work", team: "work", skill: "work", customer: "work", inquiry: "deal", wontask: "build", ops: "ops" };
   var lastTabOf = { work: "today", deal: "inquiry", build: "wontask", ops: "ops" };
 
   function jumpToCard(card, focusRole) {
@@ -8719,6 +8917,7 @@
     setAmzStatus: setAmzStatus,
     setMktStatus: setMktStatus,
     setGrowth: setGrowth,
+    setDeals: setDeals,
     mktChecks: mktChecks,
     someoneWorksToday: someoneWorksToday,
     setTaskStatus: setTaskStatus,
@@ -8731,8 +8930,8 @@
 })();
 </script>
 <script src="vendor/msal-browser.min.js"></script>
-<script src="sync.js?v=cf5a95f"></script>
-<script src="chat.js?v=cf5a95f"></script>
+<script src="sync.js?v=9bbda46"></script>
+<script src="chat.js?v=9bbda46"></script>
 <script>
 // 新しい版が出たら知らせて切り替える（2026-11-17 代表の指摘：ブラウザが古い版を覚えていて、更新しても前の画面のままだった）。
 // 公開のたびに version.txt に版の番号が入る。5分ごとと、画面に戻ってきたときに見比べ、違えば上に帯を出す。押すと読み直す（入力中の内容を消さないよう、勝手には読み直さない）

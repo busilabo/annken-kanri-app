@@ -100,6 +100,8 @@
       // Teams から来た仕事の出どころ（依頼した人・元の投稿）。進み具合を元の投稿のスレッドへ返すのに使う
       Requester: { role: "requester", kind: "input" },
       TeamsMessageId: { role: "teamsMessageId", kind: "input" },
+      DealId: { role: "dealId", kind: "input" },
+      PartnerId: { role: "partnerId", kind: "input" },
       TeamsLink: { role: "teamsLink", kind: "input" },
       Handover: { role: "handover", kind: "editable" },
       HandoverBy: { role: "handoverBy", kind: "editable" },
@@ -1346,8 +1348,10 @@
       }));
       var issues = [], counts = { waitReport: 0, unshipped: 0 };
       var add = function (cat, tone, o, text) { issues.push({ cat: cat, tone: tone, order: o.name, maker: (o.makers || []).join("・"), text: text }); };
+      var orderStages = [];
       orders.forEach(function (o) {
         var age = daysSince(o.createdAt);
+        var unconfirmed = false;
         var dItems = (o.items || []).filter(function (it) { return /^D\d{4}/i.test(String(it.sku || "")); });
         if (!o.shipped) counts.unshipped++;
         // 1. 注文の報告：作り手さんの明細が OPEN のまま（報告は注文から12時間後、10・14・18・22時）
@@ -1370,6 +1374,7 @@
           }
           var sts = rows.map(function (v) { return String(v[0] || "").trim(); });
           var st = sts.indexOf("未確認") !== -1 ? "未確認" : sts.indexOf("処理中") !== -1 ? "処理中" : sts[0];
+          if (st === "未確認") unconfirmed = true;
           var sent = rows.filter(function (v) { return String(v[3] || "").trim(); });
           var shipDate = sent.length ? excelDate(sent[0][1]) : null, tracking = sent.length ? String(sent[0][3]).trim() : "";
           var notified = sent.length && sent.every(function (v) { return String(v[20] || "").trim(); }) ? "済" : "";
@@ -1385,6 +1390,9 @@
           if (o.shipped && !notified && tracking && shipDate && daysSince(shipDate) >= 1) add("ship", "warn", o, "発送の登録は済みですが、エクセルの「発送通知済」が空です（お礼メールが抜けているかも）");
         });
         // 4. 支払いの確定：カードは7日、PayPal は29日、そのほかは約30日で確定できなくなる（Shopify Flow がカードは4日目に確定する）
+        // 案件の段階（2026-11-18 データベース設計 第4段）：報告 → 作り手さんの確認 → 発送 → 支払いの確定 → 完了
+        var stage = openFo.length && !o.shipped ? "作り手さんへ報告" : unconfirmed && !o.shipped ? "作り手さんの確認" : !o.shipped ? "発送" : o.financial === "AUTHORIZED" ? "支払いの確定" : "完了";
+        orderStages.push({ order: o.name, stage: stage, createdAt: o.createdAt, makerIds: makerIdsOf(o) });
         if (o.financial === "AUTHORIZED") {
           var card = (o.gateways || []).some(function (g) { return /shopify_payments/i.test(g); });
           var limit = card ? 7 : (o.gateways || []).some(function (g) { return /paypal/i.test(g); }) ? 29 : 30;
@@ -1403,6 +1411,7 @@
         { key: "pay", label: "支払いの確定", tone: worst("pay"), text: n("pay") ? "期限が近い注文が " + n("pay") + " 件" : "期限が近い注文はありません" }
       ];
       window.__app.setLiloStatus({ loaded: true, at: new Date(), checks: checks, issues: issues, total: orders.length, sales: await salesP });
+      try { await syncOrderDeals(orderStages, issues); } catch (e) { log("order deals failed: " + e.message); }
       // 報告が24時間以上止まっている注文は、代表あての仕事にする（注文・発送報告の「保留中」と同じ目印。もうあれば作らない）
       var stuck = issues.filter(function (i) { return i.cat === "report" && i.tone === "bad" && i.order; });
       for (var si = 0; si < stuck.length; si++) {
@@ -1751,7 +1760,60 @@
       dbRef.deals.push(Object.assign({ id: made.id }, row));
     } catch (e) { log("deal create failed (" + dealId + "): " + e.message); }
   }
-  window.__db = { load: loadDbRef, ref: function () { return dbRef; }, guess: guessLinks };
+  function pushDeals() { if (window.__app && window.__app.setDeals) window.__app.setDeals({ loaded: dbRef.loaded, partners: dbRef.partners, deals: dbRef.deals }); }
+  async function refreshDeals() { await loadDbRef(true); pushDeals(); }
+  // 案件の行を書き換える（段階・次にやること・期限など）。画面の「保存」から
+  async function updateDeal(itemId, fields) {
+    await loadDbRef();
+    if (!dbRef.dealListId) throw new Error("案件の表が見つかりません");
+    await graph("/sites/" + siteId + "/lists/" + dbRef.dealListId + "/items/" + itemId + "/fields", { method: "PATCH", body: fields });
+    var d = dbRef.deals.filter(function (x) { return String(x.id) === String(itemId); })[0];
+    if (d) Object.assign(d, fields);
+    pushDeals();
+  }
+  // LILOCLE：Shopify のまだ終わっていない注文を、案件の段階にそろえる。無い注文は作る。変わったときだけ書く。
+  // 一覧から消えた注文（発送・支払いまで済んだ）は完了にする
+  var ORDER_NEXT = { "作り手さんへ報告": ["作り手さんへ注文を報告する", 1], "作り手さんの確認": ["作り手さんの確認を待つ（エクセル）", 2], "発送": ["発送を待つ（追跡番号）", 10], "支払いの確定": ["支払いを確定する", 5], "完了": ["", 0] };
+  async function syncOrderDeals(list, issues) {
+    await loadDbRef();
+    if (!dbRef.dealListId) return;
+    var changed = false, seen = {};
+    for (var i = 0; i < list.length; i++) {
+      var o = list[i]; seen[o.order] = true;
+      var nx = ORDER_NEXT[o.stage] || ["", 0];
+      var due = nx[1] ? new Date(new Date(o.createdAt).getTime() + nx[1] * 86400000).toISOString() : null;
+      var bad = (issues || []).filter(function (x) { return x.order === o.order && x.tone === "bad"; })[0];
+      var pids = o.makerIds.map(function (id) { var p = id === "L0000" ? null : partnerByExternal(id); return p ? p.PartnerId : ""; }).filter(Boolean).join("、");
+      var d = dbRef.deals.filter(function (x) { return x.DealId === o.order; })[0];
+      var want = { Stage: o.stage, NextAction: nx[0], BlockedReason: bad ? bad.text.slice(0, 200) : "" };
+      if (due) want.NextDue = due;
+      if (!d) {
+        var row = Object.assign({ Title: o.order, DealId: o.order, Business: "LILOCLE運営", DealType: "注文", PartnerIds: pids, StartedAt: o.createdAt, Deleted: false }, want);
+        try { var made = await graph("/sites/" + siteId + "/lists/" + dbRef.dealListId + "/items", { method: "POST", body: { fields: row } }); dbRef.deals.push(Object.assign({ id: made.id }, row)); changed = true; }
+        catch (e) { log("deal create failed (" + o.order + "): " + e.message); }
+        continue;
+      }
+      var diff = {};
+      if (d.Stage !== want.Stage) diff.Stage = want.Stage;
+      if ((d.NextAction || "") !== want.NextAction && !d.Owner) diff.NextAction = want.NextAction;   // 人が書いた次にやること（担当あり）は残す
+      if ((d.BlockedReason || "") !== want.BlockedReason && !(d.BlockedReason && !bad && /問い合わせ|保留/.test(d.BlockedReason))) diff.BlockedReason = want.BlockedReason;
+      if (want.NextDue && String(d.NextDue || "").slice(0, 10) !== want.NextDue.slice(0, 10) && !d.Owner) diff.NextDue = want.NextDue;
+      if (!d.PartnerIds && pids) diff.PartnerIds = pids;
+      if (Object.keys(diff).length) {
+        try { await graph("/sites/" + siteId + "/lists/" + dbRef.dealListId + "/items/" + d.id + "/fields", { method: "PATCH", body: diff }); Object.assign(d, diff); changed = true; }
+        catch (e) { log("deal update failed (" + o.order + "): " + e.message); }
+      }
+    }
+    // 一覧から消えた注文 → 完了（取り消し・完了のものはそのまま）
+    var gone = dbRef.deals.filter(function (x) { return x.DealType === "注文" && /^ORDER\d+$/.test(x.DealId || "") && !seen[x.DealId] && x.Stage !== "完了" && x.Stage !== "取り消し"; });
+    for (var j = 0; j < gone.length; j++) {
+      var g = gone[j], fin = { Stage: "完了", ClosedAt: new Date().toISOString(), NextAction: "", BlockedReason: "" };
+      try { await graph("/sites/" + siteId + "/lists/" + dbRef.dealListId + "/items/" + g.id + "/fields", { method: "PATCH", body: fin }); Object.assign(g, fin); changed = true; }
+      catch (e) { log("deal close failed (" + g.DealId + "): " + e.message); }
+    }
+    if (changed) pushDeals();
+  }
+  window.__db = { load: loadDbRef, ref: function () { return dbRef; }, guess: guessLinks, refresh: refreshDeals, updateDeal: updateDeal };
 
   async function createTaskItem(fields, historyAction, historyMemo) {
     if (!listIds.task) return null;
@@ -3184,6 +3246,9 @@
     window.__mkt = { refresh: loadMarketingStatus };
     loadMarketingStatus();
     setInterval(loadMarketingStatus, LILO_REFRESH_MS);
+    // 取引先と案件（2026-11-18 第4段）
+    refreshDeals().catch(function (e) { log("deals failed: " + e.message); });
+    setInterval(function () { refreshDeals().catch(function (e) { log("deals failed: " + e.message); }); }, 10 * 60 * 1000);
     // LILOCLE のお客様の仕事の名前を、件名から「だれの・何の用件か」に付け直す（2026-11-17。今ある仕事は一度だけ）
     setTimeout(function () { retitleLiloTasks().catch(function (e) { log("retitle failed: " + e.message); }); }, 20000);
     setInterval(function () { retitleLiloTasks().catch(function (e) { log("retitle failed: " + e.message); }); }, 10 * 60 * 1000);
