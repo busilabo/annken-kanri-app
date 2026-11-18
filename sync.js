@@ -1259,7 +1259,7 @@
     g.fresh = {};
     try {
       if (!sourceListId) sourceListId = await findListId(SOURCE_LIST);
-      if (sourceListId) g.sources = await readAll(sourceListId, "Title,Content,Location,Method,IntervalDays,Owner,CheckKey,Note,Deleted");
+      if (sourceListId) g.sources = await readAll(sourceListId, "Title,Content,Location,Method,IntervalDays,Owner,CheckKey,Note,LastCollectedAt,LastResult,Deleted");
       var maxOf = function (rows) { return rows.map(function (r) { return r.MeasuredAt || ""; }).sort().pop() || ""; };
       if (postListId) g.fresh.posts = maxOf(await readAll(postListId, "MeasuredAt,Deleted", 20));
       if (!metricListId) metricListId = await findListId(METRIC_LIST);
