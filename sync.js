@@ -611,7 +611,8 @@
     // verifyRequestはルーティン向けの依頼ファイル。ブラウザ側では何もせず無視する
     // （ルーティンが処理後にprocessedへ移動するまで、ここで新規問い合わせと誤認しないようにする）。
     if (data.type === "verifyRequest") return;
-    if (data.type === "teamsTask") { await drainTeamsTask(file, data); return; }
+    // Teams の依頼・FAX・お問い合わせ（Forms）は、Azure の台帳係（ledger.js）が5分ごとに仕事にする（2026-11-18）。アプリは読まない
+    if (data.type === "teamsTask" || data.type === "faxNotice" || !data.type) return;
     if (data.type === "mailTask") { await drainMailTask(file, data); return; }
     if (data.type === "mailSent") { await drainMailSent(file, data); return; }
     // ルーティンの報告は、Azure の台帳係（ledger.js）が5分ごとに読んで、やり取りログと仕事にする（2026-11-18）。アプリは読まない
