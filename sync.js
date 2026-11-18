@@ -614,7 +614,8 @@
     if (data.type === "teamsTask") { await drainTeamsTask(file, data); return; }
     if (data.type === "mailTask") { await drainMailTask(file, data); return; }
     if (data.type === "mailSent") { await drainMailSent(file, data); return; }
-    if (data.type === "routineReport") { await drainRoutineReport(file, data); return; }
+    // ルーティンの報告は、Azure の台帳係（ledger.js）が5分ごとに読んで、やり取りログと仕事にする（2026-11-18）。アプリは読まない
+    if (data.type === "routineReport") return;
     if (data.type === "faxNotice") { await drainFaxNotice(file, data); return; }
     // 知らない種類のファイルは問い合わせとして登録しない（置いた側の書き間違いで、問い合わせが増えないように）
     if (data.type) { log("unknown queue type, skipped: " + data.type + " (" + file.name + ")"); return; }
@@ -2463,20 +2464,7 @@
       }, "納期の FAX が届いた", "");
       if (!created) return;   // 入れられなかったら、次の取り込みでもう一度試す
     }
-    postActivity({
-      Title: "FAX：" + summary.slice(0, 80),
-      OccurredAt: data.receivedAt && !isNaN(new Date(data.receivedAt).getTime()) ? new Date(data.receivedAt).toISOString() : new Date().toISOString(),
-      Channel: "FAX",
-      Business: "家電の卸販売",
-      Direction: "受信",
-      Customer: "日立",
-      CustomerId: "",
-      Staff: "",
-      Subject: summary.slice(0, 200),
-      Summary: memo,
-      SourceLink: /^https:\/\//.test(data.link || "") ? data.link : "",
-      SourceId: "fax:" + (data.id || file.name)
-    });
+    // FAX が届いた事実は、Azure の台帳係がやり取りログに記録する（2026-11-18。目印 fax:〜 で2つにならない）
     await moveToProcessed(file, "fax notice");
   }
 
