@@ -120,7 +120,7 @@
   var TOOL_LABEL = {
     list_tasks: "仕事一覧を確認", get_task: "仕事の中身を確認", get_today: "今日の出勤・予定・報告を確認",
     get_contacts: "連絡先を確認", add_task: "仕事を追加", update_task: "仕事を更新", ask_rep: "代表に質問を回す",
-    db_lists: "データベースの表を確認", db_search: "データベースを探す", db_add: "データベースに追加", db_update: "データベースを直す", db_delete: "ごみ箱に移す",
+    db_overview: "データベースのいまの要約を確認", db_lists: "データベースの表を確認", db_search: "データベースを探す", db_add: "データベースに追加", db_update: "データベースを直す", db_delete: "ごみ箱に移す",
     manual_search: "マニュアルを探す", manual_save: "マニュアルを書く"
   };
   // 書き込みの道具は、何をしたかを1行で会話に残す
@@ -245,19 +245,31 @@
       return hit;
     },
     // データベース（SharePoint のリスト）。表の名前と列を見る
+    // いまの要約（開いている案件・止まっているもの・7日分の数字・集める道の新しさ）。まずこれを見る
+    db_overview: async function () {
+      var s = await window.__chatOps.summary();
+      if (typeof s === "string") { try { s = JSON.parse(s); } catch (e) { /* そのまま */ } }
+      return s;
+    },
     db_lists: async function () {
       var lists = window.__chatOps.lists(), out = [];
       for (var name in lists) out.push({ list: name, columns: await columnsOf(name) });
       return out;
     },
+    // 表から探す。keyword は中身のどこかに含む、field＋value は列の値が同じ（例：DealId＝ORDER4638・PartnerId＝C-0029）。新しい行から
     db_search: async function (a) {
-      var id = listId(a.list);
-      var res = await window.__chatOps.graph("/sites/" + window.__chatOps.siteId() + "/lists/" + id + "/items?expand=fields&$top=500");
-      var kw = String(a.keyword || "").trim();
-      var rows = (res.value || []).map(function (it) { return { id: it.id, fields: cleanFields(it.fields) }; }).filter(function (r) {
+      var id = listId(a.list), url = "/sites/" + window.__chatOps.siteId() + "/lists/" + id + "/items?expand=fields&$top=500", items = [];
+      for (var page = 0; url && page < 6; page++) {
+        var res = await window.__chatOps.graph(url);
+        items = items.concat(res.value || []);
+        url = res["@odata.nextLink"] ? res["@odata.nextLink"].replace("https://graph.microsoft.com/v1.0", "") : "";
+      }
+      var kw = String(a.keyword || "").trim(), fld = String(a.field || "").trim(), val = String(a.value == null ? "" : a.value).trim();
+      var rows = items.map(function (it) { return { id: it.id, fields: cleanFields(it.fields) }; }).filter(function (r) {
         if (!a.include_deleted && r.fields.Deleted) return false;
+        if (fld && String(r.fields[fld] == null ? "" : r.fields[fld]).split(/[、,\s]+/).indexOf(val) === -1 && String(r.fields[fld] == null ? "" : r.fields[fld]) !== val) return false;
         return !kw || JSON.stringify(r.fields).indexOf(kw) !== -1;
-      });
+      }).sort(function (x, y) { return (+y.id || 0) - (+x.id || 0); });
       return { count: rows.length, items: rows.slice(0, Math.min(+a.limit || 20, 50)) };
     },
     manual_search: function (a) {
@@ -272,6 +284,11 @@
   };
 
   // ---- データベースの手伝い ----
+  // 台帳係（Azure）が外の正本から写す表は、チャットからは書かない（2026-11-18）
+  var READ_ONLY_LISTS = ["注文", "日ごとの数字"];
+  function readOnlyGuard(name) {
+    if (READ_ONLY_LISTS.indexOf(name) !== -1) throw new Error("「" + name + "」は台帳係が Shopify などから自動で写す表なので、ここからは直せません（元の Shopify などで直してください）");
+  }
   var colCache = {};
   function listId(name) {
     var id = window.__chatOps.lists()[name];
@@ -346,6 +363,7 @@
       return { ok: true };
     },
     db_add: async function (a) {
+      readOnlyGuard(a.list);
       var k = await onlyKnownFields(a.list, a.fields);
       if (!Object.keys(k.fields).length) throw new Error("書ける列がありません（db_lists で列の名前を確かめてください）");
       var res = await window.__chatOps.graph("/sites/" + window.__chatOps.siteId() + "/lists/" + listId(a.list) + "/items", { method: "POST", body: { fields: k.fields } });
@@ -353,6 +371,7 @@
       return { ok: true, id: res.id, skipped_columns: k.skipped };
     },
     db_update: async function (a) {
+      readOnlyGuard(a.list);
       var k = await onlyKnownFields(a.list, a.fields);
       if (!Object.keys(k.fields).length) throw new Error("書ける列がありません（db_lists で列の名前を確かめてください）");
       await window.__chatOps.graph("/sites/" + window.__chatOps.siteId() + "/lists/" + listId(a.list) + "/items/" + encodeURIComponent(a.id) + "/fields", { method: "PATCH", body: k.fields });
@@ -361,6 +380,7 @@
     },
     // 削除はごみ箱へ（Deleted の印）。印の列が無い表は消さない
     db_delete: async function (a) {
+      readOnlyGuard(a.list);
       var cols = await columnsOf(a.list);
       if (!cols.some(function (c) { return c.name === "Deleted"; })) throw new Error("この表にはごみ箱が無いので消せません。代表に頼んでください");
       await window.__chatOps.graph("/sites/" + window.__chatOps.siteId() + "/lists/" + listId(a.list) + "/items/" + encodeURIComponent(a.id) + "/fields", { method: "PATCH", body: { Deleted: true } });

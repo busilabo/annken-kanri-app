@@ -2401,7 +2401,8 @@
       } catch (e) { log("list lookup failed (" + CHAT_ONLY_LISTS[i] + "): " + e.message); }
     }
   }
-  var CHAT_ONLY_LISTS = ["作業サイト"];
+  // マネージャー（チャット）が読める表。仕事管理の画面に出ない表も、データベースとして読めるようにする（2026-11-18 代表の指定）
+  var CHAT_ONLY_LISTS = ["作業サイト", "取引先", "案件", "注文", "日ごとの数字", "売上", "目標と数字", "数字の記録", "発信", "試していること", "マーケティングの道具", "ノウハウ", "データの置き場所"];
   var chatOnlyListIds = {};
 
   function snapshotActivity(card, f) {
@@ -3146,7 +3147,9 @@
       return out;
     },
     saveManual: saveManual,
-    reloadManuals: loadManuals
+    reloadManuals: loadManuals,
+    // データベースのいまの要約（Azure の台帳係が15分ごとに書く「データベース/いまの台帳.json」）
+    summary: function () { return graph("/drives/" + QUEUE_DRIVE_ID + "/root:/" + encodeURIComponent("データベース") + "/" + encodeURIComponent("いまの台帳.json") + ":/content"); }
   };
   // onComplete は「✅ 終わった」とチャットの「完了にする」から呼ぶ
   window.__manualOps = { save: saveManual, manualFor: manualFor, onComplete: manualOnComplete, review: reviewManual, reviewLine: REVIEW_LINE };
