@@ -16,6 +16,9 @@
 #   発信          … 投稿・記事・メルマガ 1件1行と反響（毎朝の集計の posts を、アプリが貯める。第2段）
 #   試していること … 発信で試していることと結果（何が効いたかを残す。第2段）
 #   売上          … ビジラボの事業の契約 1件1行。売上の日は契約日（成約管理タスクで契約金額を入れると自動でできる。第2段）
+#   注文          … LILOCLE の注文の控え（Shopify が正本。台帳係が15分ごとに写す。手で直さない）。2026-11-18
+#   日ごとの数字  … 事業ごとの1日の数字（売上・注文・問い合わせ・仕事・やり取りなど。台帳係が毎晩書く）。2026-11-18
+#   データの置き場所 … 「最後に集めた時刻」「結果」を足す（台帳係が集める道ごとに書く）
 #   取引先        … 全事業の相手（お客様・卸先・仕入れ先・作り手さん・パートナー）を1つの元帳に。番号 C-0001（2026-11-18 データベース設計 第1段）
 #   案件          … 事業ごとの取引のまとまり（DX の問い合わせ〜運用／LILOCLE の注文／卸の配送案・初期不良／Amazon の購入者対応）。次にやること・期限を必ず持つ
 #   （タスク・やり取りログ・連絡先・売上・問い合わせ管理・成約管理タスク・運用状況・顧客台帳には「案件番号」「取引先番号」の列を足す）
@@ -220,7 +223,36 @@ $Plan = [ordered]@{
     @{ name = 'Memo';          type = 'multiline'; desc = 'メモ' }
     $Deleted
   )}
+  '注文' = @{ create = $true; columns = @(
+    @{ name = 'OrderId';     type = 'text';      desc = '注文番号（ORDER4638）。Shopify が正本'; indexed = $true }
+    $DealId
+    @{ name = 'Business';    type = 'text';      desc = '事業（LILOCLE運営）' }
+    @{ name = 'OrderedAt';   type = 'dateTime';  desc = '注文日時' }
+    @{ name = 'Total';       type = 'number';    desc = '金額（税込・円。キャンセル・返金を引いたあと）' }
+    @{ name = 'Financial';   type = 'text';      desc = '支払いの状態（Shopify の表示のまま）' }
+    @{ name = 'Fulfillment'; type = 'text';      desc = '発送の状態（Shopify の表示のまま）' }
+    @{ name = 'Stage';       type = 'text';      desc = '段階（作り手さんへ報告／作り手さんの確認／発送／支払いの確定／完了／取り消し）' }
+    @{ name = 'Makers';      type = 'text';      desc = '作り手さん（名前）' }
+    @{ name = 'MakerIds';    type = 'text';      desc = '作り手さんの番号（D0027 など）' }
+    @{ name = 'PartnerIds';  type = 'text';      desc = '取引先番号'; indexed = $true }
+    @{ name = 'Items';       type = 'multiline'; desc = '明細（SKU×数 商品名。お客様の名前・住所・電話は入れない）' }
+    @{ name = 'Tracking';    type = 'multiline'; desc = '追跡番号' }
+    @{ name = 'CancelledAt'; type = 'dateTime';  desc = 'キャンセル日時' }
+    @{ name = 'SyncedAt';    type = 'dateTime';  desc = '写した日時（台帳係）' }
+    $Deleted
+  )}
+  '日ごとの数字' = @{ create = $true; columns = @(
+    @{ name = 'RecordKey';   type = 'text';      desc = '日|事業|数字の名前（同じ行を二重に入れないための鍵）'; indexed = $true }
+    @{ name = 'Day';         type = 'text';      desc = '日（YYYY-MM-DD・日本時間）'; indexed = $true }
+    @{ name = 'Business';    type = 'text';      desc = '事業（家電の卸販売／Amazon販売／LILOCLE運営／業務改善・DX支援／社内・共通）' }
+    @{ name = 'MetricCode';  type = 'text';      desc = '数字の名前（sales_yen／orders／units／inquiries／tasks_new／tasks_done／tasks_open／messages など）' }
+    @{ name = 'Value';       type = 'number';    desc = '値' }
+    @{ name = 'Source';      type = 'text';      desc = '出所（Shopify／セラーセントラル／問い合わせ管理 など）' }
+    @{ name = 'MeasuredAt';  type = 'dateTime';  desc = '数えた日時（台帳係）' }
+  )}
   'データの置き場所' = @{ create = $true; columns = @(
+    @{ name = 'LastCollectedAt'; type = 'dateTime'; desc = '最後に集めた時刻（台帳係が書く）' }
+    @{ name = 'LastResult';  type = 'text';      desc = '最後の結果（ok／遅れ／止まっている と一言）' }
     @{ name = 'Content';      type = 'multiline'; desc = '何のデータか' }
     @{ name = 'Location';     type = 'text';      desc = '置き場所（サービス名・フォルダ。パスワードや鍵は書かない）' }
     @{ name = 'Method';       type = 'text';      desc = '取り方（自動・毎朝の集計／自動・アプリが開くたび／手で など）' }
@@ -518,6 +550,17 @@ Add-RowsIfMissing -ListName '取引先' -KeyField 'PartnerId' -Rows @(
 Add-RowsIfMissing -ListName '案件' -KeyField 'DealId' -Rows @(
   @{ Title = '坂中商店 できるAIチーム＋'; DealId = 'DX-0001'; Business = '業務改善・DX支援'; DealType = '問い合わせから運用'; PartnerIds = 'C-0007'; Stage = '運用'; NextAction = '運用状況を確かめる'; Owner = '坂中'; Memo = '顧客台帳の 坂中商店（④活用）・成約管理タスク #1 と同じお客様'; Deleted = $false }
   @{ Title = 'ORDER4638 七久里農園'; DealId = 'ORDER4638'; Business = 'LILOCLE運営'; DealType = '注文'; PartnerIds = 'C-0029'; Stage = '作り手さんへ報告'; NextAction = 'ORDER4638 を作り手さんへ報告する'; NextDue = '2026-11-18T00:00:00Z'; Owner = '坂中'; BlockedReason = 'お問い合わせあり（領収書。宛名 ANDCOCO株式会社）'; Memo = '仕事 #198・#207・#209'; Deleted = $false }
+)
+
+# ---- 2026-11-18 集める道（台帳係が「最後に集めた時刻」を書く。CheckKey で見分ける）----
+Add-RowsIfMissing -ListName 'データの置き場所' -KeyField 'CheckKey' -Rows @(
+  @{ Title = '集める道：メール'; CheckKey = 'route-mail'; Content = 'busilabo@・staff@・contact@・lilocle@・order@ に届いたメール'; Location = 'Outlook → Power Automate（メール記録フロー）→ 案件管理キュー'; Method = '自動・届くたび'; IntervalDays = 1; Owner = '坂中'; Note = '止まったら Power Automate の「メール記録」フローの実行履歴を見る'; Deleted = $false }
+  @{ Title = '集める道：送った返信'; CheckKey = 'route-sent'; Content = '送ったメール（返信で仕事を終わらせる）'; Location = 'Outlook の送信済み → Power Automate → 案件管理キュー'; Method = '自動・送るたび'; IntervalDays = 2; Owner = '坂中'; Note = ''; Deleted = $false }
+  @{ Title = '集める道：お問い合わせ'; CheckKey = 'route-forms'; Content = 'ホームページのお問い合わせ・資料請求'; Location = 'Microsoft Forms → Power Automate → 案件管理キュー'; Method = '自動・届くたび'; IntervalDays = 14; Owner = '坂中'; Note = '件数が少ないので、2週間なくても止まっているとは限らない'; Deleted = $false }
+  @{ Title = '集める道：ルーティンの報告'; CheckKey = 'route-report'; Content = 'Amazon・LILOCLE・問い合わせ・AI ニュースなどの報告'; Location = '報告メール → 今日の報告 取り込み（8:40・12:40・18:40）→ 案件管理キュー'; Method = '自動・1日3回'; IntervalDays = 1; Owner = '坂中'; Note = ''; Deleted = $false }
+  @{ Title = '集める道：取り込み口の片付け'; CheckKey = 'route-queue'; Content = '案件管理キュー/queue に置かれたものを表へ書く'; Location = '仕事管理アプリ（だれかが開いているとき）'; Method = '自動・アプリが開くたび'; IntervalDays = 1; Owner = '坂中'; Note = '30分より古いファイルが残っていれば、だれもアプリを開いていない（台帳係の第2段で Azure に移す）'; Deleted = $false }
+  @{ Title = '集める道：Shopify の注文'; CheckKey = 'route-orders'; Content = 'LILOCLE の注文（注文の表・案件）'; Location = 'Shopify → 台帳係（Azure・15分ごと）'; Method = '自動・15分ごと'; IntervalDays = 1; Owner = '坂中'; Note = '止まったら Azure の Function App busilabo-work-chat の ledger の記録を見る'; Deleted = $false }
+  @{ Title = '集める道：日ごとの数字'; CheckKey = 'route-daily'; Content = '事業ごとの1日の数字'; Location = '台帳係（Azure・毎晩 23:10）'; Method = '自動・毎晩'; IntervalDays = 1; Owner = '坂中'; Note = ''; Deleted = $false }
 )
 
 Write-Host ''
