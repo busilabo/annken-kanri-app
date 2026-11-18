@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 公開のときに、公開の仕組み（.github/workflows/publish-annken-kanri-app.yml）がこの版の番号に書き換える。手元では dev のまま -->
-<meta name="app-version" content="4d277f8">
+<meta name="app-version" content="34f010f">
 <title>ビジラボ 仕事管理</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@500&display=swap">
 <style>
@@ -4649,10 +4649,15 @@
 
   function parseTaskContent(card) {
     var lines = roleVal(card, 'content').split('\n');
-    var out = { title: (lines[0] || '').trim(), desc: [], steps: [], draft: [], draftNote: '', needsRep: false };
-    var inSteps = false, inDraft = false;
+    var out = { title: (lines[0] || '').trim(), desc: [], steps: [], draft: [], draftNote: '', needsRep: false, pastes: [] };
+    var inSteps = false, inDraft = false, paste = null;
     for (var i = 1; i < lines.length; i++) {
       var line = lines[i];
+      // 【貼り付ける文：Cowork】〜【貼り付ける文ここまで】は、コピーできる箱として別に出す（2026-11-18 代表の指定：Cowork への依頼文をアプリからコピーしたい）
+      var pm = /^【貼り付ける文(?:[：:]\s*(.+?))?】\s*$/.exec(line.trim());
+      if (pm) { paste = { label: pm[1] || '', lines: [] }; continue; }
+      if (paste && /^【貼り付ける文ここまで】/.test(line.trim())) { out.pastes.push({ label: paste.label, text: paste.lines.join('\n').trim() }); paste = null; continue; }
+      if (paste) { paste.lines.push(line); continue; }
       // 【返信の下書き】〜【下書きここまで】は、コピーできる下書きとして別に出す
       if (/^【返信の下書き】/.test(line.trim())) { inDraft = true; continue; }
       if (/^【下書きここまで】/.test(line.trim())) { inDraft = false; continue; }
@@ -4700,6 +4705,11 @@
     // 「返信先：」はアプリが使う控え。画面には出さない（送るときの欄に出る）
     descLines = descLines.filter(function (l) { return !/^返信先：/.test(l.trim()); });
     if (descLines.length) html += '<div class="s-desc">' + linkify(descLines.join('\n')) + '</div>';
+    c.pastes.forEach(function (p, pi) {
+      html += '<div class="s-draft"><div class="s-draft-head"><b>📋 ' + esc(p.label ? p.label + ' に貼り付ける文' : '貼り付ける文') + '</b><span class="s-actions">' +
+        '<button type="button" class="s-btn s-primary s-copy" data-s-copy="' + key + '" data-s-copy-paste="' + pi + '">📋 コピー</button></span></div>' +
+        '<details><summary>中身を見る</summary><div class="s-draft-text">' + esc(p.text) + '</div></details></div>';
+    });
     // 流れの決まっていない仕事は、流れにする（裏で。決まると描き直す）
     if (!c.flow) needFlow(card, c, status);
     var draft = c.flow ? '' : c.draft.join('\n').trim();
@@ -5978,7 +5988,8 @@
     var cp = e.target.closest && e.target.closest('[data-s-copy]');
     if (cp) {
       var cpCard = jumpRegistry[cp.getAttribute('data-s-copy')];
-      var text = cpCard ? parseTaskContent(cpCard).draft.join('\n').trim() : '';
+      var pIdx = cp.getAttribute('data-s-copy-paste');
+      var text = !cpCard ? '' : pIdx !== null ? ((parseTaskContent(cpCard).pastes[+pIdx] || {}).text || '') : parseTaskContent(cpCard).draft.join('\n').trim();
       var shown = function (ok) { cp.textContent = ok ? '✅ コピーしました' : 'コピーできませんでした'; setTimeout(function () { cp.textContent = '📋 コピー'; }, 2000); };
       var fallback = function () {
         var ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
@@ -8690,8 +8701,8 @@
 })();
 </script>
 <script src="vendor/msal-browser.min.js"></script>
-<script src="sync.js?v=4d277f8"></script>
-<script src="chat.js?v=4d277f8"></script>
+<script src="sync.js?v=34f010f"></script>
+<script src="chat.js?v=34f010f"></script>
 <script>
 // 新しい版が出たら知らせて切り替える（2026-11-17 代表の指摘：ブラウザが古い版を覚えていて、更新しても前の画面のままだった）。
 // 公開のたびに version.txt に版の番号が入る。5分ごとと、画面に戻ってきたときに見比べ、違えば上に帯を出す。押すと読み直す（入力中の内容を消さないよう、勝手には読み直さない）
