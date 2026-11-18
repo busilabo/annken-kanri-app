@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 公開のときに、公開の仕組み（.github/workflows/publish-annken-kanri-app.yml）がこの版の番号に書き換える。手元では dev のまま -->
-<meta name="app-version" content="fe4835a">
+<meta name="app-version" content="3971efc">
 <title>ビジラボ 仕事管理</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@500&display=swap">
 <style>
@@ -1798,7 +1798,7 @@
   .deal-tasks small { color: var(--text-muted); margin-left: 8px; }
   .deal-unlinked { margin-top: 14px; font-size: 14px; }
   /* 案件の画面（2026-11-18 代表の指定：パッと見て分かり、やる気が出る形） */
-  .d-list { display: grid; gap: 10px; }
+  .d-list { display: grid; gap: 10px; max-width: 860px; margin-inline: auto; }
   .d-tile { font: inherit; color: inherit; text-align: left; width: 100%; display: grid; grid-template-columns: auto 1fr auto; gap: 14px; align-items: center; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--border); background: var(--surface); cursor: pointer; }
   .d-tile[data-tone="red"] { border: 2px solid var(--crit); }
   .d-tile:hover { border-color: var(--accent); }
@@ -1816,7 +1816,7 @@
   .d-sig::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
   .d-sig[data-tone="warn"] { background: var(--warn-soft); color: var(--warn); }
   .d-sig[data-tone="red"] { background: var(--crit-soft); color: var(--crit); }
-  .d-page { display: grid; gap: 18px; max-width: 720px; }
+  .d-page { display: grid; gap: 18px; max-width: 760px; margin-inline: auto; }
   .d-back { justify-self: start; font-weight: 700; }
   .d-hero { display: grid; grid-template-columns: auto 1fr; gap: 18px; align-items: center; }
   @media (max-width: 520px) { .d-hero { grid-template-columns: 1fr; justify-items: start; } }
@@ -1937,7 +1937,7 @@
   .tile.dragging { opacity: .45; }
   .band.drop-over { outline: 3px dashed var(--accent); outline-offset: -3px; background: var(--accent-soft); }
 </style>
-<script src="rules.js?v=fe4835a"></script>
+<script src="rules.js?v=3971efc"></script>
 </head>
 <body>
 
@@ -9282,8 +9282,8 @@
 })();
 </script>
 <script src="vendor/msal-browser.min.js"></script>
-<script src="sync.js?v=fe4835a"></script>
-<script src="chat.js?v=fe4835a"></script>
+<script src="sync.js?v=3971efc"></script>
+<script src="chat.js?v=3971efc"></script>
 <script>
 // 新しい版が出たら知らせて切り替える（2026-11-17 代表の指摘：ブラウザが古い版を覚えていて、更新しても前の画面のままだった）。
 // 公開のたびに version.txt に版の番号が入る。5分ごとと、画面に戻ってきたときに見比べ、違えば上に帯を出す。押すと読み直す（入力中の内容を消さないよう、勝手には読み直さない）
