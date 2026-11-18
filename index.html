@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 公開のときに、公開の仕組み（.github/workflows/publish-annken-kanri-app.yml）がこの版の番号に書き換える。手元では dev のまま -->
-<meta name="app-version" content="1e2bc5d">
+<meta name="app-version" content="dee68f5">
 <title>ビジラボ 仕事管理</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@500&display=swap">
 <style>
@@ -1821,6 +1821,7 @@
   .tile.dragging { opacity: .45; }
   .band.drop-over { outline: 3px dashed var(--accent); outline-offset: -3px; background: var(--accent-soft); }
 </style>
+<script src="rules.js?v=dee68f5"></script>
 </head>
 <body>
 
@@ -7588,70 +7589,26 @@
   // スタッフが「仕事にする」（ボードに戻す）か「不要」（完了にして片付ける）を押して決める。決めた記録は履歴に残る。
   // キーワードで決めるので、誤判定の指摘があれば SPAM_STRONG・SPAM_WEAK を直す。sync.js も取り込むときにこれで見て、返信の下書きを作らない
   // 1つでも入っていれば営業・迷惑メールとみなす言葉
-  var SPAM_STRONG = ["突然のご連絡", "突然のメール", "突然ご連絡", "初めてご連絡", "はじめてご連絡", "初めてメール", "配信停止", "配信解除", "メルマガ", "メールマガジン", "unsubscribe", "newsletter",
-    "営業代行", "テレアポ", "アポイント獲得", "リード獲得", "商談獲得", "seo対策", "meo対策", "上位表示", "広告運用", "ホームページ制作", "サイト制作のご提案",
-    "業務提携のご提案", "協業のご提案", "代理店募集", "パートナー募集", "人材紹介", "採用支援", "融資のご案内",
-    "アカウントが停止", "アカウントを停止", "アカウントの一時停止", "異常なログイン", "不正なログイン", "本人確認のお願い", "支払い方法の更新", "お支払い方法を更新", "パスワードの有効期限",
-    "仮想通貨", "ビットコイン", "副業", "稼げる",
-    // 一斉配信の決まり文句・出店の勧誘（2026-11-06）
-    "受信を停止", "受信停止", "配信を希望されない", "配信をご希望でない", "受信方法を変更", "出店しませんか", "shopに出店", "体験してみませんか",
-    // 代表を名乗って LINE に誘うなりすまし（2026-11-06 #113）。小文字で書く（本文を小文字にしてから比べるため）
-    "lineアカウントのqrコード", "qrコードを本メール", "今後の連絡はlineで",
-    // 協業・提携の誘い（2026-11-06。sync.js PARTNER_PITCH と同じ。すでに入った問い合わせを振分けに移す）
-    "連携の可能性", "協業", "業務提携", "資本提携", "代理店", "パートナーシップ", "共同事業"];
-  // 2つ以上入っていれば営業メールとみなす言葉（1つだけならふつうのメールにもある）
-  var SPAM_WEAK = ["ご担当者様", "ご担当者さま", "代表者様", "経営者様", "社長様", "ご提案", "ご紹介させて", "無料", "無償", "お試し", "セミナー", "ウェビナー", "導入事例", "資料請求",
-    "お打ち合わせ", "オンライン面談", "15分", "30分", "集客", "売上アップ", "売上向上", "コスト削減", "業務効率化", "今だけ", "当選", "出会い",
-    "補助金", "助成金", "資金調達"];   // 見込みのお客様も「補助金を使って導入したい」と書くので、1つだけでは振り分けない（2026-10-21）
-  // 代表が「営業メール」と決めた相手。社名（署名・送り主の名前）かドメインが入っていれば、言葉に関係なく振り分ける
-  var SPAM_SENDERS = ["ビットライト",   // 株式会社ビットライト（2026-10-21 代表の指定）
-    "bonloyalty.com",
-    "virtuousepics",   // 飾り文字のメールを番号を変えて何度も送ってくる gmail（virtuousepics011・063… 2026-11-06）
-    // LILOCLE（contact@）に届く出店・広告・売り込み（2026-11-06 代表の指定「このような営業メール全て」）
-    // chocoreko.com は外した（LILOCLE から送ったメールへのお返事で、やり取りのある相手だった 2026-11-06）
-    "shop.tiktok.com", "arcwld.com", "bizmiseru.jp", "plus-shipping.net", "hiyaku-inc.com", "risingsun-assist.com",
-    "knowlinear.com"];   // TikTok 広告代行の英語メール（2026-11-11）
-  // 迷惑メールによく使われる海外のドメイン。お客様・取引先は使わない（2026-11-06）
-  var SPAM_FOREIGN_DOMAIN = /\.(cn|ru|top|xyz|icu|buzz|cfd|sbs)$/i;
-  var SPAM_EN_PITCH = /\b(ads|advertising|marketing|seo|leads|traffic|roi|influencers?|ugc|agency|campaigns?)\b/i;   // Shopify アプリ BON Loyalty のお知らせ（2026-11-06 代表の指定）
-  var SPAM_SENDER_REASON = "営業メールの相手";
-  var SPAM_FANCY_LETTERS = /\uD835[\uDC00-\uDFFF]/;   // U+1D400〜1D7FF（𝐀 𝚊 𝙸 など）
-  var SPAM_TINY_LETTERS = /[ᴬ-ᵪᶛ-ᶿʰ-ʸˠ-ˤ⁰-ₜ]/g;   // 上付き・下付きの英字（ᵃ ʷ ˡ ⁿ など 2026-11-06）
-  // 代表が「迷惑メールではない」と決めたもの。手で振り分けていても、元の場所に戻す。
-  // このファイルは公開されるのでお客様の名前は書かず、目印（mail:… / inquiry:… の後ろ、問い合わせの SrcId）で書く
-  var SPAM_NOT_IDS = ["forms-13"];   // お問い合わせフォーム 10/15 の件（2026-10-21 代表の指定）
+  // 「SPAM_STRONG・SPAM_WEAK・SPAM_SENDERS・SPAM_FOREIGN_DOMAIN・SPAM_EN_PITCH・SPAM_SENDER_REASON・SPAM_FANCY_LETTERS・SPAM_TINY_LETTERS・SPAM_NOT_IDS・SPAM_SAFE_FROM・SPAM_KEEP・SPAM_DROP・spamReason」は rules.js（アプリと Azure の台帳係が同じ決まりを使う。2026-11-18）
+  var SPAM_STRONG = window.BusilaboRules.SPAM_STRONG;
+  var SPAM_WEAK = window.BusilaboRules.SPAM_WEAK;
+  var SPAM_SENDERS = window.BusilaboRules.SPAM_SENDERS;
+  var SPAM_FOREIGN_DOMAIN = window.BusilaboRules.SPAM_FOREIGN_DOMAIN;
+  var SPAM_EN_PITCH = window.BusilaboRules.SPAM_EN_PITCH;
+  var SPAM_SENDER_REASON = window.BusilaboRules.SPAM_SENDER_REASON;
+  var SPAM_FANCY_LETTERS = window.BusilaboRules.SPAM_FANCY_LETTERS;
+  var SPAM_TINY_LETTERS = window.BusilaboRules.SPAM_TINY_LETTERS;
+  var SPAM_NOT_IDS = window.BusilaboRules.SPAM_NOT_IDS;
   function spamExempt(card) {
     // LILOCLE の退会希望（「配信停止」「メルマガ」と書かれるが、お客様からの依頼。sync.js isTaikai）
     if (roleVal(card, 'teamsMessageId').indexOf('mail:taikai:') === 0) return true;
     var id =card.getAttribute('data-kind') === 'inquiry' ? card.getAttribute('data-src-id') || "" : roleVal(card, 'teamsMessageId').replace(/^(inquiry|mail):/, "");
     return SPAM_NOT_IDS.indexOf(id) !== -1;
   }
-  // 取引先・Amazon など、営業・迷惑メールではない相手
-  var SPAM_SAFE_FROM = /(^|\.)(watahan\.co\.jp|kaitorikensakukun\.com|hitachi\.co\.jp|amazon\.co\.jp|amazon\.com|marketplace\.amazon\.co\.jp)$/i;
-  var SPAM_KEEP = "迷惑メールではないので仕事にする";
-  var SPAM_DROP = "迷惑メールとして片付ける";
-  // 営業・迷惑メールらしければ理由（当たった言葉）を返す。from はドメインかメールアドレス。
-  // noWeak：お問い合わせフォームは Azure で仕分け済みで、見込みのお客様も「ご提案」「無料」などを書くので、SPAM_WEAK では見ない
-  function spamReason(from, text, noWeak) {
-    from = String(from || "").toLowerCase();
-    if (SPAM_SAFE_FROM.test(from.split("@").pop())) return "";
-    var t = String(text || "").toLowerCase();
-    var sender = SPAM_SENDERS.filter(function (w) { w = w.toLowerCase(); return from.indexOf(w) !== -1 || t.indexOf(w) !== -1; });
-    if (sender.length) return SPAM_SENDER_REASON + "（" + sender[0] + "）";
-    if (SPAM_FOREIGN_DOMAIN.test(from.split("@").pop())) return "「海外の迷惑メールのドメイン」";
-    // 日本語がひとつもない、広告・マーケティングの英語のメールは売り込み（2026-11-11 TikTok 広告代行の英語メール）。
-    // 頭の「LILOCLEお客様：」などアプリが付けた見出しは除いて見る
-    var raw = String(text || "").replace(/^[^\n：]{0,30}：/, "");
-    if (!/[぀-ヿ一-鿿]/.test(raw) && SPAM_EN_PITCH.test(raw)) return "「英語の売り込み」";
-    // 𝚊𝚖 𝙸 のような飾り文字（数学用の英字）で書いたメールは、迷惑メールの書き方（2026-11-06 代表の指定。お客様は使わない）
-    // ᶜᵃⁿ ʷᵉ のような小さい上付きの英字も同じ（記号の ˆ ˜ などがたまに入るので、3文字以上のときだけ）
-    if (SPAM_FANCY_LETTERS.test(String(text || "")) || (String(text || "").match(SPAM_TINY_LETTERS) || []).length >= 3) return "「飾り文字の英語」";
-    var strong =SPAM_STRONG.filter(function (w) { return t.indexOf(w) !== -1; });
-    if (strong.length) return "「" + strong.slice(0, 3).join("」「") + "」";
-    if (noWeak) return "";
-    var weak = SPAM_WEAK.filter(function (w) { return t.indexOf(w.toLowerCase()) !== -1; });
-    return weak.length >= 2 ? "「" + weak.slice(0, 3).join("」「") + "」" : "";
-  }
+  var SPAM_SAFE_FROM = window.BusilaboRules.SPAM_SAFE_FROM;
+  var SPAM_KEEP = window.BusilaboRules.SPAM_KEEP;
+  var SPAM_DROP = window.BusilaboRules.SPAM_DROP;
+  var spamReason = window.BusilaboRules.spamReason;
   // お問い合わせフォームから入ると、案件管理の問い合わせと「問い合わせの確認と報告」の仕事の2枚ができる（目印 inquiry:<SrcId>）。片方を決めたらもう片方も同じにする
   function spamPartner(card) {
     if (card.getAttribute('data-kind') === 'inquiry') {
@@ -8931,8 +8888,8 @@
 })();
 </script>
 <script src="vendor/msal-browser.min.js"></script>
-<script src="sync.js?v=1e2bc5d"></script>
-<script src="chat.js?v=1e2bc5d"></script>
+<script src="sync.js?v=dee68f5"></script>
+<script src="chat.js?v=dee68f5"></script>
 <script>
 // 新しい版が出たら知らせて切り替える（2026-11-17 代表の指摘：ブラウザが古い版を覚えていて、更新しても前の画面のままだった）。
 // 公開のたびに version.txt に版の番号が入る。5分ごとと、画面に戻ってきたときに見比べ、違えば上に帯を出す。押すと読み直す（入力中の内容を消さないよう、勝手には読み直さない）
