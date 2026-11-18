@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 公開のときに、公開の仕組み（.github/workflows/publish-annken-kanri-app.yml）がこの版の番号に書き換える。手元では dev のまま -->
-<meta name="app-version" content="f90d3d6">
+<meta name="app-version" content="e9df1fe">
 <title>ビジラボ 仕事管理</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@500&display=swap">
 <style>
@@ -1797,6 +1797,87 @@
   .deal-tasks ul, .deal-unlinked ul { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 4px; }
   .deal-tasks small { color: var(--text-muted); margin-left: 8px; }
   .deal-unlinked { margin-top: 14px; font-size: 14px; }
+  /* 案件の画面（2026-11-18 代表の指定：パッと見て分かり、やる気が出る形） */
+  .d-list { display: grid; gap: 10px; }
+  .d-tile { font: inherit; color: inherit; text-align: left; width: 100%; display: grid; grid-template-columns: auto 1fr auto; gap: 14px; align-items: center; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--border); background: var(--surface); cursor: pointer; }
+  .d-tile[data-tone="red"] { border: 2px solid var(--crit); }
+  .d-tile:hover { border-color: var(--accent); }
+  .d-tile-main { display: grid; gap: 3px; min-width: 0; }
+  .d-tile-name { font-weight: 700; font-size: 15.5px; line-height: 1.4; overflow-wrap: anywhere; }
+  .d-tile-sub { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; font-size: 12.5px; color: var(--text-muted); }
+  .d-tile-next { font-size: 13px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .d-avs { display: flex; }
+  .d-avs .avatar + .avatar { margin-left: -8px; }
+  .d-ring { position: relative; display: inline-grid; place-items: center; flex: none; }
+  .d-ring > b { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .d-ring-big > b { font-size: 28px; }
+  .d-ring-big small { display: block; font-size: 11.5px; font-weight: 400; color: var(--text-muted); }
+  .d-sig { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 700; padding: 2px 10px; border-radius: 999px; background: var(--ok-soft); color: var(--ok); }
+  .d-sig::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+  .d-sig[data-tone="warn"] { background: var(--warn-soft); color: var(--warn); }
+  .d-sig[data-tone="red"] { background: var(--crit-soft); color: var(--crit); }
+  .d-page { display: grid; gap: 18px; max-width: 720px; }
+  .d-back { justify-self: start; font-weight: 700; }
+  .d-hero { display: grid; grid-template-columns: auto 1fr; gap: 18px; align-items: center; }
+  @media (max-width: 520px) { .d-hero { grid-template-columns: 1fr; justify-items: start; } }
+  .d-hero-txt { display: grid; gap: 6px; min-width: 0; }
+  .d-hero-tags { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .d-kind { font-size: 12.5px; color: var(--text-muted); }
+  .d-title { margin: 0; font-size: 21px; line-height: 1.35; overflow-wrap: anywhere; }
+  .d-goal { font-size: 13.5px; color: var(--text-muted); }
+  .d-cheer { font-size: 14px; font-weight: 700; color: var(--accent); }
+  .d-cheer[data-tone="red"] { color: var(--crit); }
+  .d-road { position: relative; display: grid; grid-template-columns: repeat(var(--n), 1fr); }
+  .d-road::before, .d-road::after { content: ""; position: absolute; top: 15px; height: 4px; border-radius: 2px; left: calc(50% / var(--n)); }
+  .d-road::before { right: calc(50% / var(--n)); background: var(--border); }
+  .d-road::after { width: calc((100% - 100% / var(--n)) * var(--pct-n)); background: var(--accent); }
+  .d-st { position: relative; z-index: 1; display: grid; justify-items: center; gap: 4px; text-align: center; font-size: 12px; color: var(--text-muted); line-height: 1.35; }
+  .d-st i { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-style: normal; font-size: 14px; background: var(--surface); border: 3px solid var(--border); color: #fff; }
+  .d-st[data-st="done"] i { background: var(--accent); border-color: var(--accent); }
+  .d-st[data-st="cur"] i { border-color: var(--accent); animation: d-pulse 1.8s ease-in-out infinite; }
+  .d-st[data-st="cur"] { color: var(--text); font-weight: 700; }
+  .d-st:last-child i { background: var(--warn-soft); border-color: var(--warn); }
+  @keyframes d-pulse { 0%, 100% { box-shadow: 0 0 0 0 var(--accent-soft); } 50% { box-shadow: 0 0 0 7px var(--accent-soft); } }
+  .d-next { font: inherit; text-align: left; display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: center; padding: 12px 16px; border-radius: 14px; border: 0; background: var(--accent); color: #fff; cursor: pointer; }
+  .d-next > span { display: grid; gap: 2px; min-width: 0; }
+  .d-next b { font-size: 16px; line-height: 1.4; overflow-wrap: anywhere; }
+  .d-next small { font-size: 12.5px; opacity: .92; }
+  .d-next-plain { background: var(--accent-soft); color: var(--text); cursor: default; grid-template-columns: 1fr; }
+  .d-team { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+  .d-mem { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: center; padding: 8px 12px; border-radius: 12px; background: var(--surface-2); font-size: 14px; }
+  .d-mem > span:last-child { display: grid; }
+  .d-mem-open { background: var(--warn-soft); }
+  .d-mem-open small { font-size: 12px; color: var(--text-muted); }
+  .d-stars { color: #D99A00; letter-spacing: 1px; font-size: 13px; }
+  .d-stars span { color: var(--border); }
+  .d-sec h3 { margin: 0 0 6px; font-size: 13px; color: var(--text-muted); }
+  .d-tasks { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--border); }
+  .d-tasks button { font: inherit; color: inherit; width: 100%; text-align: left; background: none; border: 0; border-bottom: 1px solid var(--border); padding: 9px 2px; display: grid; grid-template-columns: 24px 1fr auto auto; gap: 10px; align-items: center; cursor: pointer; font-size: 14.5px; }
+  .d-tasks button:hover { background: var(--surface-2); }
+  .d-ck { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--border); display: grid; place-items: center; font-size: 11px; color: #fff; }
+  .d-tasks li[data-done] .d-ck { background: var(--ok); border-color: var(--ok); }
+  .d-tasks li[data-done] .d-t { text-decoration: line-through; color: var(--text-muted); }
+  .d-tasks li[data-next] .d-t { font-weight: 700; }
+  .d-tasks li[data-next] .d-ck { border-color: var(--accent); }
+  .d-t { min-width: 0; overflow-wrap: anywhere; }
+  .d-dt { font-size: 12.5px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+  .d-feed { display: grid; gap: 6px; }
+  .d-ev { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: center; padding: 8px 12px; border-radius: 12px; background: var(--warn-soft); font-size: 14px; }
+  .d-em { font-size: 19px; }
+  .d-edit { border: 1px solid var(--border); border-radius: 12px; padding: 0 12px; }
+  .d-edit > summary { padding: 9px 0; cursor: pointer; font-size: 13.5px; color: var(--text-muted); }
+  .d-edit .deal-form { padding-bottom: 12px; }
+  .s-deal-go { font: inherit; color: inherit; text-align: left; display: flex; align-items: center; gap: 8px; padding: 5px 14px 5px 5px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); cursor: pointer; font-size: 13.5px; align-self: flex-start; max-width: 100%; }
+  .s-deal-go > span:nth-child(2) { min-width: 0; overflow-wrap: anywhere; }
+  .s-deal-go:hover { border-color: var(--accent); }
+  .d-toast { position: fixed; left: 50%; top: calc(16px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); z-index: 9999; background: var(--text); color: var(--surface); padding: 10px 20px; border-radius: 16px; font-weight: 700; font-size: 15px; text-align: center; box-shadow: 0 6px 24px rgba(0, 0, 0, .2); }
+  .d-toast small { display: block; font-weight: 400; font-size: 12.5px; opacity: .85; }
+  .d-conf { position: fixed; top: -12px; width: 8px; height: 12px; border-radius: 2px; z-index: 9998; animation: d-fall 1.5s ease-in forwards; pointer-events: none; background: var(--accent); }
+  .d-conf[data-c="1"] { background: #D99A00; }
+  .d-conf[data-c="2"] { background: #2F6FB5; }
+  .d-conf[data-c="3"] { background: #C2577A; }
+  @keyframes d-fall { to { transform: translateY(70vh) rotate(540deg); opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { .d-st[data-st="cur"] i { animation: none; } }
   .s-deal { margin: 6px 0; font-size: 14px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
   .s-deal input { min-width: 0; width: 200px; }
   .s-related { margin: 8px 0; padding: 8px 12px; border: 1px dashed var(--border); border-radius: 10px; font-size: 14px; }
@@ -1843,7 +1924,7 @@
   .tile.dragging { opacity: .45; }
   .band.drop-over { outline: 3px dashed var(--accent); outline-offset: -3px; background: var(--accent-soft); }
 </style>
-<script src="rules.js?v=f90d3d6"></script>
+<script src="rules.js?v=e9df1fe"></script>
 </head>
 <body>
 
@@ -4811,7 +4892,7 @@
       '<span class="s-status" data-tone="' + toneForStatus('task', status) + '">' + esc(status) + '</span>' +
       (due ? '<span class="row-badge" data-tone="' + due.tone + '">' + esc(due.text) + '</span>' : '') +
       '<span class="s-owner">' + (owner === UNASSIGNED ? '次の走者募集' : avatarHtml(owner) + ' ' + esc(owner) + 'さんが担当') + '</span></div>' +
-      '<div class="s-what"><small>何の仕事</small><b class="s-title">' + esc(c.title || '（名前のない仕事）') + '</b></div>';
+      '<div class="s-what"><small>何の仕事</small><b class="s-title">' + esc(c.title || '（名前のない仕事）') + '</b></div>' + dealGoHtml(card);
 
     if (c.flow) {
       // 流れのある仕事：流れの「いまやること」をそのまま札に入れる
@@ -6189,6 +6270,7 @@
       // その種類のマニュアルが無ければ下書き、あれば直したほうがよい点を書き足す（裏で動く）
       if (window.__manualOps && window.__manualOps.onComplete) window.__manualOps.onComplete(card);
       finalCheckSoon(card);
+      celebrateDone(card);
       // 終わったら最初の画面（今日）に戻る
       activateTab('today');
       window.scrollTo(0, 0);
@@ -8248,7 +8330,9 @@
     { key: 'LILOCLE運営', label: '🌿 LILOCLE', stages: ['対応中', '作り手さんへ報告', '作り手さんの確認', '発送', '支払いの確定'] },
     { key: '業務改善・DX支援', label: '💼 DX 支援', stages: ['問い合わせ', '商談', '成約', '導入', '運用'] },
     { key: '家電の卸販売', label: '🏭 卸', stages: ['配送案', '発注', '納期の FAX', '照らし合わせ', '綿半様へ報告', '請求', '報告を受けた', '交換・修理'] },
-    { key: 'Amazon販売', label: '📦 Amazon', stages: ['届いた', '返信した'] }
+    { key: 'Amazon販売', label: '📦 Amazon', stages: ['届いた', '返信した'] },
+    // 社内の取り組み（寺尾さんとのお題・しくみづくりなど。2026-11-18）
+    { key: '社内・共通', label: '🏢 社内の取り組み', stages: ['始める', '取り組む', '発表・確認'] }
   ];
   var DEAL_END = ['完了', '取り消し', '失注'];
   var dealState = { loaded: false, partners: [], deals: [] };
@@ -8278,6 +8362,58 @@
     if (!open.length && !waiting && (due && due <= todayStr || d.BlockedReason)) why.push('動いている仕事がありません');
     return why;
   }
+  // ---- 案件の画面（2026-11-18 代表の指定：パッと見て分かり、やる気が出る形）----
+  // 一覧：案件ごとに1枚（進みの輪・信号・名前・ゴールの日・担当の顔）。🔴 止まっている → 期限の近い順。
+  // 1つの案件：大きな輪とひと言／ゴールまでの道（段階）／次の1手／だれがどこまで（輪と★）／仕事の一覧／できたこと。直す欄はたたむ
+  function dealProgress(d) {
+    var ts = dealTasks(d);
+    var done = ts.filter(function (c) { return statusOf(c) === '完了'; });
+    return { tasks: ts, done: done, open: ts.filter(function (c) { return statusOf(c) !== '完了'; }), n: done.length, total: ts.length };
+  }
+  function dealSignal(d, pr) {
+    if (dealStuck(d).length) return { tone: 'red', text: '止まっている' };
+    var due = String(d.NextDue || '').slice(0, 10);
+    var soon = due && (new Date(due) - new Date(todayStr)) / 86400000 <= 2;
+    if (soon && pr.total && pr.n / pr.total < 0.5) return { tone: 'warn', text: '気をつける' };
+    return { tone: 'ok', text: '順調' };
+  }
+  function ringSvg(n, total, size, stroke, color) {
+    var r = 15.5, c = 2 * Math.PI * r, len = total ? c * n / total : 0;
+    return '<svg class="d-ring-svg" viewBox="0 0 36 36" width="' + size + '" height="' + size + '"><circle cx="18" cy="18" r="' + r + '" fill="none" stroke="var(--track, var(--border))" stroke-width="' + stroke + '"/>' +
+      (len ? '<circle cx="18" cy="18" r="' + r + '" fill="none" stroke="' + (color || 'var(--accent)') + '" stroke-width="' + stroke + '" stroke-linecap="round" stroke-dasharray="' + len.toFixed(1) + ' ' + c.toFixed(1) + '" transform="rotate(-90 18 18)"/>' : '') + '</svg>';
+  }
+  function daysLeft(d) {
+    var due = String(d.NextDue || '').slice(0, 10);
+    if (!due) return null;
+    return Math.round((new Date(due) - new Date(todayStr)) / 86400000);
+  }
+  function dueText(d) {
+    var n = daysLeft(d), due = String(d.NextDue || '').slice(5, 10).replace('-', '/').replace(/^0/, '');
+    if (n === null) return '';
+    return n < 0 ? due + '（' + (-n) + '日過ぎ）' : n === 0 ? due + '（今日）' : due + '（あと' + n + '日）';
+  }
+  function cheerText(d, pr) {
+    if (dealStuck(d).length) return '🚦 ' + dealStuck(d)[0];
+    if (!pr.total) return '📝 まだ仕事がありません。「＋ 仕事を足す」から始めましょう';
+    var r = pr.n / pr.total, left = daysLeft(d), dl = left === null ? '' : left < 0 ? '' : left === 0 ? '　今日がゴールの日' : '　ゴールまであと' + left + '日';
+    if (r >= 1) return '🏁 ぜんぶできました！ おつかれさまでした';
+    if (r >= 0.7) return '✨ あと少し！ ゴールが見えてきました' + dl;
+    if (r >= 0.5) return '🚀 半分こえました！ このまま行きましょう' + dl;
+    if (pr.n >= 1) return '🔥 いいスタート！' + dl;
+    return '🌱 さあ、はじめましょう！' + dl;
+  }
+  function dealOwners(pr, d) {
+    var names = [];
+    pr.tasks.forEach(function (c) { var o = ownerOf(c); if (o && o !== UNASSIGNED && names.indexOf(o) === -1) names.push(o); });
+    if (!names.length && d.Owner) names.push(d.Owner);
+    return names;
+  }
+  function dealName(d) { return String(d.Title || d.DealId || '').replace(d.DealId, '').trim() || d.DealId; }
+  // 次の1手：開いている仕事のうち、期限の早いもの（期限なしは後ろ）
+  function dealNextTask(pr) {
+    return pr.open.slice().sort(function (a, b) { return String(cardDue(a) || '9').localeCompare(String(cardDue(b) || '9')); })[0] || null;
+  }
+
   function renderDeals() {
     if (!dealState) return;
     var cnt = document.querySelector('[data-deal-count]');
@@ -8285,55 +8421,130 @@
     if (cnt) { cnt.textContent = stuckAll ? '🔴' + stuckAll : String(openDeals().length); }
     var bizBox = document.querySelector('[data-deal-biz]'), board = document.querySelector('[data-deal-board]');
     if (!bizBox || !board) return;
+    var top = document.querySelector('.deal-top'), unl = document.querySelector('[data-deal-unlinked]');
     if (!dealState.loaded) { board.innerHTML = '<p class="deal-empty">案件を読み込んでいます…（サインインしていないと出ません）</p>'; return; }
+    var open = dealOpenId && dealState.deals.filter(function (x) { return String(x.id) === dealOpenId; })[0];
+    // 1つの案件を開いているときは、一覧の代わりにその案件だけ
+    if (top) top.hidden = !!open;
+    if (unl) unl.hidden = !!open;
+    if (open) { board.innerHTML = ''; renderDealDetail(); return; }
+    var detail = document.querySelector('[data-deal-detail]'); if (detail) detail.innerHTML = '';
     bizBox.innerHTML = DEAL_BIZ.map(function (b) {
       var n = openDeals().filter(function (d) { return d.Business === b.key; }), st = n.filter(function (d) { return dealStuck(d).length; }).length;
       return '<button type="button" class="chip-btn" data-deal-biz-pick="' + esc(b.key) + '"' + (b.key === dealBiz ? ' data-local-active' : '') + '>' + esc(b.label) + ' <b>' + n.length + '</b>' + (st ? ' <span class="deal-red">🔴' + st + '</span>' : '') + '</button>';
     }).join('');
     var biz = DEAL_BIZ.filter(function (b) { return b.key === dealBiz; })[0] || DEAL_BIZ[0];
-    var list = openDeals().filter(function (d) { return d.Business === biz.key; });
-    var cols = biz.stages.slice(), other = list.filter(function (d) { return cols.indexOf(d.Stage) === -1; });
-    if (other.length) cols.push('そのほか');
-    document.querySelector('[data-deal-sum]').textContent = '開いている案件 ' + list.length + ' 件・止まっている案件 ' + list.filter(function (d) { return dealStuck(d).length; }).length + ' 件';
-    board.innerHTML = cols.map(function (col) {
-      var items = list.filter(function (d) { return col === 'そのほか' ? cols.indexOf(d.Stage) === -1 || d.Stage === 'そのほか' : d.Stage === col; })
-        .sort(function (a, b) { return (dealStuck(b).length ? 1 : 0) - (dealStuck(a).length ? 1 : 0) || String(a.NextDue || '9').localeCompare(String(b.NextDue || '9')); });
-      return '<div class="deal-col"><div class="deal-col-head">' + esc(col) + ' <span>' + items.length + '</span></div>' + items.map(function (d) {
-        var why = dealStuck(d), due = String(d.NextDue || '').slice(5, 10).replace('-', '/');
-        return '<button type="button" class="deal-card"' + (why.length ? ' data-stuck' : '') + (String(d.id) === dealOpenId ? ' data-local-active' : '') + ' data-deal-open="' + esc(d.id) + '">' +
-          '<b>' + (why.length ? '🔴 ' : '') + esc(d.DealId) + '</b><span class="deal-p">' + esc(dealPartners(d) || d.Title || '') + '</span>' +
-          (d.NextAction ? '<span class="deal-next">次：' + esc(d.NextAction) + (due ? '（' + esc(due) + '）' : '') + '</span>' : '<span class="deal-next deal-none">次にやることが空です</span>') +
-          (d.Owner ? '<span class="deal-owner">' + esc(d.Owner) + '</span>' : '') + '</button>';
-      }).join('') + '</div>';
-    }).join('');
-    renderDealDetail();
+    var list = openDeals().filter(function (d) { return d.Business === biz.key; })
+      .sort(function (a, b) { return (dealStuck(b).length ? 1 : 0) - (dealStuck(a).length ? 1 : 0) || String(a.NextDue || '9').localeCompare(String(b.NextDue || '9')); });
+    var stuckN = list.filter(function (d) { return dealStuck(d).length; }).length;
+    document.querySelector('[data-deal-sum]').textContent = '開いている案件 ' + list.length + ' 件' + (stuckN ? '・🔴 止まっている ' + stuckN + ' 件' : '');
+    var tile = function (d) {
+      var pr = dealProgress(d), sg = dealSignal(d, pr), owners = dealOwners(pr, d), nx = dealNextTask(pr);
+      return '<button type="button" class="d-tile" data-tone="' + sg.tone + '" data-deal-open="' + esc(d.id) + '">' +
+        '<span class="d-ring">' + ringSvg(pr.n, pr.total, 52, 4) + '<b>' + (pr.total ? pr.n + '/' + pr.total : '—') + '</b></span>' +
+        '<span class="d-tile-main"><span class="d-tile-name">' + esc(dealName(d)) + '</span>' +
+        '<span class="d-tile-sub"><span class="d-sig" data-tone="' + sg.tone + '">' + sg.text + '</span>' + (d.NextDue ? '<span>🏁 ' + esc(dueText(d)) + '</span>' : '') + (d.Stage ? '<span>🛤️ ' + esc(d.Stage) + '</span>' : '') + '</span>' +
+        '<span class="d-tile-next">' + (nx ? '▶ 次：' + esc(cardTitle(nx)) : d.NextAction ? '▶ 次：' + esc(d.NextAction) : '') + '</span></span>' +
+        '<span class="d-avs">' + owners.slice(0, 4).map(function (o) { return avatarHtml(o); }).join('') + '</span></button>';
+    };
+    board.innerHTML = list.length ? '<div class="d-list">' + list.map(tile).join('') + '</div>' : '<p class="deal-empty">開いている案件はありません</p>';
     renderUnlinked();
   }
+
   function renderDealDetail() {
     var box = document.querySelector('[data-deal-detail]');
     if (!box) return;
     var d = dealState.deals.filter(function (x) { return String(x.id) === dealOpenId; })[0];
     if (!d) { box.innerHTML = ''; return; }
     var biz = DEAL_BIZ.filter(function (b) { return b.key === d.Business; })[0];
-    var stages = (biz ? biz.stages : []).concat(DEAL_END);
-    var tasks = dealTasks(d), why = dealStuck(d);
-    box.innerHTML = '<div class="deal-panel">' +
-      '<div class="deal-panel-head"><b>' + esc(d.DealId) + '</b> ' + esc(String(d.Title || '').replace(d.DealId, '').trim()) + '<span class="deal-p">' + esc(dealPartners(d)) + '</span>' +
-      '<button type="button" class="link-inline" data-deal-close>閉じる</button></div>' +
-      (why.length ? '<div class="deal-why">🔴 ' + why.map(esc).join('／') + '</div>' : '') +
-      '<div class="deal-form">' +
-      '<label>段階<select data-deal-f="Stage">' + stages.map(function (s) { return '<option' + (s === d.Stage ? ' selected' : '') + '>' + esc(s) + '</option>'; }).join('') + (stages.indexOf(d.Stage) === -1 ? '<option selected>' + esc(d.Stage || '') + '</option>' : '') + '</select></label>' +
+    var stages = (biz ? biz.stages : []);
+    var pr = dealProgress(d), sg = dealSignal(d, pr), nx = dealNextTask(pr), owners = dealOwners(pr, d);
+    var goal = (/^ゴール[：:]\s*(.+)$/m.exec(String(d.Memo || '')) || [])[1] || '';
+    var html = '<div class="d-page">' +
+      '<button type="button" class="link-inline d-back" data-deal-close>← 案件の一覧</button>' +
+      '<div class="d-hero"><span class="d-ring d-ring-big">' + ringSvg(pr.n, pr.total, 116, 3.2) + '<b>' + (pr.total ? pr.n + '/' + pr.total : '—') + '<small>できた</small></b></span>' +
+      '<div class="d-hero-txt"><div class="d-hero-tags"><span class="d-sig" data-tone="' + sg.tone + '">' + sg.text + '</span><span class="d-kind">' + esc((biz ? biz.label : d.Business || '') + (d.DealType ? '・' + d.DealType : '')) + '</span>' + (dealPartners(d) ? '<span class="d-kind">相手：' + esc(dealPartners(d)) + '</span>' : '') + '</div>' +
+      '<h2 class="d-title">' + esc(dealName(d)) + '</h2>' +
+      (goal ? '<div class="d-goal">🎯 ' + esc(goal) + '</div>' : '') +
+      '<div class="d-cheer" data-tone="' + sg.tone + '">' + esc(cheerText(d, pr)) + '</div></div></div>';
+    // ゴールまでの道（段階）
+    if (stages.length) {
+      var cur = stages.indexOf(d.Stage), road = stages.concat(['完了']);
+      var pct = road.length > 1 ? Math.max(0, cur) / (road.length - 1) * 100 : 0;
+      html += '<div class="d-road" style="--n:' + road.length + ';--pct-n:' + (pct / 100).toFixed(3) + '">' + road.map(function (s, i) {
+        var st = i < cur ? 'done' : i === cur ? 'cur' : '';
+        return '<div class="d-st" data-st="' + st + '"><i>' + (i === road.length - 1 ? '🏁' : i < cur ? '✓' : i === cur ? '🏃' : '') + '</i><span>' + esc(s) + (i === cur ? '<br><b>いまここ</b>' : i === road.length - 1 && d.NextDue ? '<br>' + esc(String(d.NextDue).slice(5, 10).replace('-', '/').replace(/^0/, '')) : '') + '</span></div>';
+      }).join('') + '</div>';
+    }
+    // 次の1手
+    if (nx) {
+      var nxo = ownerOf(nx), nxd = cardDue(nx);
+      html += '<button type="button" class="d-next" data-jump-key="' + jumpKeyOf(nx) + '">' + avatarHtml(nxo, { big: true }) +
+        '<span><small>次にやること</small><b>▶ ' + esc(cardTitle(nx)) + '</b><small>' + (nxo === UNASSIGNED ? '🙋 走者募集' : esc(nxo) + 'さん') + (nxd ? '・' + esc(String(nxd).slice(5, 10).replace('-', '/').replace(/^0/, '')) + ' まで' : '') + '</small></span></button>';
+    } else if (d.NextAction && DEAL_END.indexOf(d.Stage) === -1) {
+      html += '<div class="d-next d-next-plain"><span><small>次にやること</small><b>' + esc(d.NextAction) + '</b></span></div>';
+    }
+    // だれがどこまで
+    var nobody = pr.open.filter(function (c) { return ownerOf(c) === UNASSIGNED; }).length;
+    if (owners.length || nobody) {
+      html += '<div class="d-team">' + owners.map(function (o) {
+        var mine = pr.tasks.filter(function (c) { return ownerOf(c) === o; }), md = mine.filter(function (c) { return statusOf(c) === '完了'; }).length;
+        return '<div class="d-mem">' + '<span class="d-ring">' + ringSvg(md, mine.length, 46, 4) + '<b>' + md + '/' + mine.length + '</b></span>' +
+          '<span><b>' + esc(o) + 'さん</b><span class="d-stars">' + '★'.repeat(md) + '<span>' + '★'.repeat(Math.max(0, mine.length - md)) + '</span></span></span></div>';
+      }).join('') + (nobody ? '<div class="d-mem d-mem-open"><span class="d-ring"><b style="position:static;font-size:20px">🙋</b></span><span><b>走者募集 ' + nobody + '件</b><small>受け取る人を待っています</small></span></div>' : '') + '</div>';
+    }
+    // 仕事の一覧（開いているもの → 済んだもの。押すと仕事が開く）
+    var order = pr.open.slice().sort(function (a, b) { return String(cardDue(a) || '9').localeCompare(String(cardDue(b) || '9')); }).concat(pr.done);
+    html += '<div class="d-sec"><h3>仕事（押すと開きます）</h3>' + (order.length ? '<ul class="d-tasks">' + order.map(function (c) {
+      var dn = statusOf(c) === '完了', ow = ownerOf(c), du = cardDue(c);
+      return '<li' + (dn ? ' data-done' : c === nx ? ' data-next' : '') + '><button type="button" data-jump-key="' + jumpKeyOf(c) + '"><span class="d-ck">' + (dn ? '✓' : '') + '</span>' +
+        '<span class="d-t">' + esc(cardTitle(c)) + '</span><span class="d-dt">' + (dn ? '済み' : du ? esc(String(du).slice(5, 10).replace('-', '/').replace(/^0/, '')) : '') + '</span>' + avatarHtml(ow) + '</button></li>';
+    }).join('') + '</ul>' : '<p class="deal-empty">仕事はまだありません</p>') + '</div>';
+    // できたこと
+    if (pr.done.length) {
+      html += '<div class="d-sec"><h3>できたこと</h3><div class="d-feed">' + pr.done.slice(0, 6).map(function (c) {
+        var ow = ownerOf(c);
+        return '<div class="d-ev"><span class="d-em">🎉</span><span>' + (ow && ow !== UNASSIGNED ? '<b>' + esc(ow) + 'さん</b>が' : '') + '「' + esc(cardTitle(c)) + '」を済ませました</span></div>';
+      }).join('') + '</div></div>';
+    }
+    // 直す（たたむ）
+    var all = stages.concat(DEAL_END);
+    html += '<details class="d-edit"><summary>✏️ 案件を直す（段階・次にやること・期限・担当・止まっている理由）</summary><div class="deal-form">' +
+      '<label>段階<select data-deal-f="Stage">' + all.map(function (s) { return '<option' + (s === d.Stage ? ' selected' : '') + '>' + esc(s) + '</option>'; }).join('') + (all.indexOf(d.Stage) === -1 ? '<option selected>' + esc(d.Stage || '') + '</option>' : '') + '</select></label>' +
       '<label>次にやること<input type="text" data-deal-f="NextAction" value="' + esc(d.NextAction || '') + '"></label>' +
-      '<label>期限<input type="date" data-deal-f="NextDue" value="' + esc(String(d.NextDue || '').slice(0, 10)) + '"></label>' +
+      '<label>ゴールの日<input type="date" data-deal-f="NextDue" value="' + esc(String(d.NextDue || '').slice(0, 10)) + '"></label>' +
       '<label>担当<select data-deal-f="Owner">' + [''].concat(STAFF.filter(function (n) { return n !== UNASSIGNED; })).map(function (n) { return '<option value="' + esc(n) + '"' + (n === (d.Owner || '') ? ' selected' : '') + '>' + esc(n || '（決めていない）') + '</option>'; }).join('') + '</select></label>' +
       '<label>止まっている理由<input type="text" data-deal-f="BlockedReason" value="' + esc(d.BlockedReason || '') + '" placeholder="保留・相手待ちのときだけ"></label>' +
-      '<div class="deal-actions"><button type="button" class="s-btn s-primary" data-deal-save="' + esc(d.id) + '">保存</button><span data-deal-msg></span></div></div>' +
-      '<div class="deal-tasks"><b>この案件の仕事</b>' + (tasks.length ? '<ul>' + tasks.map(function (c) {
-        var st = statusOf(c), ow = ownerOf(c);
-        return '<li><button type="button" class="link-inline" data-jump-key="' + jumpKeyOf(c) + '">' + esc(cardTitle(c)) + '</button><small>' + esc(st) + (st !== '完了' ? '・' + (ow === UNASSIGNED ? '次の走者募集' : ow + 'さん') : '') + '</small></li>';
-      }).join('') + '</ul>' : '<p class="deal-empty">仕事はまだありません</p>') + '</div>' +
-      (d.Link ? '<div>' + linkify(d.Link) + '</div>' : '') + '</div>';
+      '<div class="deal-actions"><button type="button" class="s-btn s-primary" data-deal-save="' + esc(d.id) + '">保存</button><span data-deal-msg></span></div></div></details>' +
+      (d.Link ? '<div class="d-link">' + linkify(d.Link) + '</div>' : '') + '</div>';
+    box.innerHTML = html;
   }
+
+  // 案件の仕事を「終わった」にしたとき：おつかれさまと、案件の進み（2026-11-18 代表の指定：やる気が出るように）
+  function celebrateDone(card) {
+    try {
+      if (!dealState || !dealState.loaded) return;
+      var id = roleVal(card, 'dealId') || orderTagOf(card);
+      var d = id && dealState.deals.filter(function (x) { return x.DealId === id; })[0];
+      if (!d) return;
+      var pr = dealProgress(d);
+      var who = ownerOf(card);
+      var box = document.createElement('div');
+      box.className = 'd-toast';
+      box.innerHTML = '🎉 ' + (who && who !== UNASSIGNED ? esc(who) + 'さん、' : '') + 'おつかれさま！' + (pr && pr.total ? '<small>' + esc(dealName(d)) + '　' + pr.n + ' / ' + pr.total + ' できた</small>' : '');
+      document.body.appendChild(box);
+      var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (!reduce) for (var i = 0; i < 28; i++) {
+        var c = document.createElement('i'); c.className = 'd-conf';
+        c.style.left = (Math.random() * 100) + 'vw'; c.style.animationDelay = (Math.random() * 0.3) + 's';
+        c.setAttribute('data-c', String(i % 4));
+        document.body.appendChild(c);
+        setTimeout(function (x) { return function () { x.remove(); }; }(c), 2000);
+      }
+      setTimeout(function () { box.remove(); }, 2600);
+    } catch (e) { /* お祝いが出なくても仕事は終わっている */ }
+  }
+
   // 番号の付いていない開いた仕事（社内・共通は除く）。押すと、その仕事を開いて「案件に結ぶ」
   function renderUnlinked() {
     var box = document.querySelector('[data-deal-unlinked]');
@@ -8345,9 +8556,18 @@
       return '<li><button type="button" class="link-inline" data-jump-key="' + jumpKeyOf(c) + '">' + esc(cardTitle(c)) + '</button></li>';
     }).join('') + '</ul></details>' : '';
   }
+  // 仕事の札の上：この仕事の案件へ移るボタン（2026-11-18 代表の指定：案件のある仕事を開くと案件へ移れる）
+  function dealGoHtml(card) {
+    if (!dealState || !dealState.loaded) return '';
+    var id = roleVal(card, 'dealId') || orderTagOf(card);
+    var d = id && dealState.deals.filter(function (x) { return x.DealId === id; })[0];
+    if (!d) return '';
+    var pr = dealProgress(d);
+    return '<button type="button" class="s-deal-go" data-deal-goto="' + esc(d.id) + '"><span class="d-ring">' + ringSvg(pr.n, pr.total, 30, 4) + '</span><span>🤝 案件：<b>' + esc(dealName(d)) + '</b>' + (pr.total ? '（' + pr.n + ' / ' + pr.total + ' できた）' : '') + '</span><span>›</span></button>';
+  }
   // 仕事の画面の「🤝 案件」の行（結ぶ・見る）
   function dealLineHtml(card, key) {
-    if (!dealState || !dealState.loaded || businessOf(card) === '社内・共通') return '';
+    if (!dealState || !dealState.loaded) return '';
     var id = roleVal(card, 'dealId') || orderTagOf(card);
     var d = id && dealState.deals.filter(function (x) { return x.DealId === id; })[0];
     if (d) return '<div class="s-deal">🤝 案件 <button type="button" class="link-inline" data-deal-goto="' + esc(d.id) + '">' + esc(d.DealId) + '</button> ' + esc(d.Stage || '') + (dealPartners(d) ? '・' + esc(dealPartners(d)) : '') + '</div>';
@@ -8985,8 +9205,8 @@
 })();
 </script>
 <script src="vendor/msal-browser.min.js"></script>
-<script src="sync.js?v=f90d3d6"></script>
-<script src="chat.js?v=f90d3d6"></script>
+<script src="sync.js?v=e9df1fe"></script>
+<script src="chat.js?v=e9df1fe"></script>
 <script>
 // 新しい版が出たら知らせて切り替える（2026-11-17 代表の指摘：ブラウザが古い版を覚えていて、更新しても前の画面のままだった）。
 // 公開のたびに version.txt に版の番号が入る。5分ごとと、画面に戻ってきたときに見比べ、違えば上に帯を出す。押すと読み直す（入力中の内容を消さないよう、勝手には読み直さない）

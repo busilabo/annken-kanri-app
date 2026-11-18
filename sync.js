@@ -1518,7 +1518,7 @@
       if (!dbRef.partnerListId) dbRef.partnerListId = await findListId(PARTNER_LIST);
       if (!dbRef.dealListId) dbRef.dealListId = await findListId(DEAL_LIST);
       if (dbRef.partnerListId) dbRef.partners = await readAll(dbRef.partnerListId, "Title,PartnerId,Roles,Businesses,Domains,ExternalIds,PartnerStatus,Deleted");
-      if (dbRef.dealListId) dbRef.deals = await readAll(dbRef.dealListId, "Title,DealId,Business,DealType,PartnerIds,Stage,NextAction,NextDue,Owner,BlockedReason,Deleted");
+      if (dbRef.dealListId) dbRef.deals = await readAll(dbRef.dealListId, "Title,DealId,Business,DealType,PartnerIds,Stage,NextAction,NextDue,Owner,BlockedReason,Memo,Link,StartedAt,Deleted");
       dbRef.loaded = true; dbRef.at = Date.now();
     } catch (e) { log("db ref load failed: " + e.message); }
     return dbRef;
