@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 公開のときに、公開の仕組み（.github/workflows/publish-annken-kanri-app.yml）がこの版の番号に書き換える。手元では dev のまま -->
-<meta name="app-version" content="011d989">
+<meta name="app-version" content="f90d3d6">
 <title>ビジラボ 仕事管理</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@500&display=swap">
 <style>
@@ -1403,6 +1403,28 @@
   .s-status[data-tone="ok"] { background: var(--ok-soft); color: var(--ok); }
   .s-title { font-size: 17px; line-height: 1.4; flex: 1 1 260px; min-width: 0; overflow-wrap: anywhere; }
   .s-owner { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; margin-left: auto; }
+  /* 仕事を開いたときの札（2026-11-18）：何の仕事・いまやること・手順の進み。くわしいことは .s-fold にたたむ */
+  .s-card { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; border-radius: 12px; background: var(--surface-2); border-left: 6px solid var(--border); }
+  .s-card[data-biz-i="1"] { background: var(--biz1-bg); border-left-color: var(--biz1); }
+  .s-card[data-biz-i="2"] { background: var(--biz2-bg); border-left-color: var(--biz2); }
+  .s-card[data-biz-i="3"] { background: var(--biz3-bg); border-left-color: var(--biz3); }
+  .s-card[data-biz-i="4"] { background: var(--biz4-bg); border-left-color: var(--biz4); }
+  .s-card[data-biz-i="5"] { background: var(--biz5-bg); border-left-color: var(--biz5); }
+  .s-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; }
+  .s-biz { font-size: 13px; }
+  .s-chip { font-size: 12px; padding: 2px 10px; border-radius: 999px; background: var(--surface); color: var(--text-muted); }
+  .s-what { display: flex; flex-direction: column; gap: 2px; }
+  .s-what small { font-size: 12px; color: var(--text-muted); letter-spacing: .04em; }
+  .s-what .s-title { font-size: 18px; flex: none; }
+  .s-now .f-now-title { font-size: 18px; overflow-wrap: anywhere; }
+  .s-progress { font-size: 13px; color: var(--text-muted); }
+  .s-progress b { color: var(--text); }
+  .s-more { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .s-fold + .s-fold { border-top: 1px solid var(--border); }
+  .s-fold > summary { padding: 9px 12px; cursor: pointer; font-size: 14px; color: var(--text-muted); }
+  .s-fold[open] > summary { color: var(--text); font-weight: 700; }
+  .s-fold-in { padding: 0 12px 12px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .s-foot { padding-top: 4px; border-top: 1px dashed var(--border); }
   .s-origin { font-size: 12.5px; color: var(--accent); font-weight: 700; }
   .s-origin a { color: var(--accent); }
   .s-desc { font-size: 14px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; padding: 0 2px; }
@@ -1821,7 +1843,7 @@
   .tile.dragging { opacity: .45; }
   .band.drop-over { outline: 3px dashed var(--accent); outline-offset: -3px; background: var(--accent-soft); }
 </style>
-<script src="rules.js?v=011d989"></script>
+<script src="rules.js?v=f90d3d6"></script>
 </head>
 <body>
 
@@ -4750,6 +4772,9 @@
     return out;
   }
 
+  // 仕事を開いたときの画面（2026-11-18 代表の指定：パッと見て「何の仕事で、いま何をすればよいか」が分かるように）
+  // 上の札：事業・種類・期限・担当／何の仕事（1文）／いまやること（1つだけ・大きいボタン）／手順の進み。
+  // くわしいこと（元の内容・下書き・手順のぜんぶ・同じ注文・送ったメール など）は下にたたみ、ボタン類はいちばん下に小さく
   function simpleTaskHtml(card) {
     var key = jumpKeyOf(card);
     var owner = ownerOf(card);
@@ -4759,63 +4784,111 @@
     var bizI = BUSINESSES.indexOf(businessOf(card)) + 1;
     var originBox = card.querySelector('[data-teams-origin]');
     var origin = originBox && !originBox.hidden ? originBox.innerHTML : '';
-    var doneCount = c.steps.filter(function (s) { return s.decided; }).length;
-    var html = '<div class="s-head"' + (bizI ? ' data-biz-i="' + bizI + '"' : '') + '>' +
-      '<span class="s-status" data-tone="' + toneForStatus('task', status) + '">' + esc(status) + '</span>' +
-      '<b class="s-title">' + esc(c.title || '（名前のない仕事）') + '</b>' +
-      (due ? '<span class="row-badge" data-tone="' + due.tone + '">' + esc(due.text) + '</span>' : '') +
-      '<span class="s-owner">' + (owner === UNASSIGNED ? '次の走者募集' : avatarHtml(owner) + ' ' + esc(owner) + 'さんが担当') + '</span></div>';
-    if (origin) html += '<div class="s-origin">' + origin + '</div>';
-    // 「マニュアルの確認」は、一覧の行（・番号｜…）を説明から外し、下で1件ずつボタン付きで出す
-    var reviewRe = window.__manualOps && window.__manualOps.reviewLine;
-    var descLines = reviewRe ? c.desc.filter(function (l) { return !reviewRe.test(l.trim()) && l.trim() !== '【確認するマニュアル】'; }) : c.desc;
-    // 「返信先：」はアプリが使う控え。画面には出さない（送るときの欄に出る）
-    descLines = descLines.filter(function (l) { return !/^返信先：/.test(l.trim()); });
-    if (descLines.length) html += '<div class="s-desc">' + linkify(descLines.join('\n')) + '</div>';
-    html += dealLineHtml(card, key);
-    // 同じ注文（ORDER〇〇〇〇）の仕事どうしを結ぶ（2026-11-18 代表の指摘：ORDER4638 の仕事が2つ出ていて、続きの仕事だと分からない）
-    var rel = relatedOrderTasks(card);
-    if (rel.list.length) {
-      html += '<div class="s-related"><b>🔗 同じ注文（' + esc(rel.order) + '）の仕事</b><ul>' + rel.list.map(function (o) {
-        var st = statusOf(o), ow = ownerOf(o);
-        return '<li><button type="button" class="link-inline" data-jump-key="' + jumpKeyOf(o) + '">' + esc(cardTitle(o)) + '</button>' +
-          '<small>' + esc(st) + (st !== '完了' ? '・' + (ow === UNASSIGNED ? '次の走者募集' : ow + 'さん') : '') + '</small></li>';
-      }).join('') + '</ul></div>';
-    }
-    c.pastes.forEach(function (p, pi) {
-      html += '<div class="s-draft"><div class="s-draft-head"><b>📋 ' + esc(p.label ? p.label + ' に貼り付ける文' : '貼り付ける文') + '</b><span class="s-actions">' +
-        '<button type="button" class="s-btn s-primary s-copy" data-s-copy="' + key + '" data-s-copy-paste="' + pi + '">📋 コピー</button></span></div>' +
-        '<details><summary>中身を見る</summary><div class="s-draft-text">' + esc(p.text) + '</div></details></div>';
-    });
-    // 流れの決まっていない仕事は、流れにする（裏で。決まると描き直す）
-    if (!c.flow) needFlow(card, c, status);
-    var draft = c.flow ? '' : c.draft.join('\n').trim();
-    if (draft) {
-      // この箱は読むだけ。直すときは「✏️ 直して返信する」で、直せる欄を開く（2026-11-08 代表「下書きを編集できない」）
-      var canReply = status !== '完了' && !hasFlow(c) && (function () { var ri = replyInfoOf(card, c); return ri && !ri.blocked; })();
-      html += '<div class="s-draft"><div class="s-draft-head"><b>✉️ 返信の下書き（AI チームのスキルで作成）</b><span class="s-actions">' +
-        (canReply ? '<button type="button" class="s-btn s-primary" data-s-reply="' + key + '">✏️ 直して返信する</button>' : '') +
-        '<button type="button" class="s-btn s-copy" data-s-copy="' + key + '">📋 コピー</button></span></div>' +
-        (c.needsRep ? '<div class="s-draft-warn">⚠️ 代表に確認してから送る：' + esc(c.draftNote) + '</div>' : (c.draftNote ? '<div class="s-draft-note">' + esc(c.draftNote) + '</div>' : '')) +
-        '<div class="s-draft-text">' + esc(draft) + '</div>' +
-        '<small class="s-draft-hint">' + (canReply ? 'ここは読むだけです。直すときは「✏️ 直して返信する」を押すと、直せる欄が下に開きます' : '読んで、直すところがあれば直してから送ってください') + '</small></div>';
-    }
-    if (!c.flow) html += replyBarHtml(card, c, status);
-    // マニュアル：確認の仕事なら下書きと「正式にする」、ふつうの仕事なら正式なマニュアルを開けるように
+    var recur = recurOf(card);
+    var handover = roleVal(card, 'handover');
     var mkey = roleVal(card, 'teamsMessageId');
     var manuals = window.__manuals || [];
     var mm = /^manual:(\d+)/.exec(mkey);
-    html += sentMailsHtml(card);
-    // 問い合わせ：案件管理に入れるかは人が決める（2026-11-12 代表の指定）
+    var reviewRe = window.__manualOps && window.__manualOps.reviewLine;
     var inqHold = /^inquiry:/.test(mkey) && window.__inquiryOps ? window.__inquiryOps.hold(card) : null;
-    if (inqHold) {
-      var inCase = inqHold.srcId && document.querySelector('.card[data-kind="inquiry"][data-src-id="' + inqHold.srcId + '"]');
-      // 横に「📭 迷惑メールへ」「✅ 完了にする」も並べる（2026-11-12 代表の指定。どれにするかをここで決められるように）
-      html += '<div class="s-actions">' + (inCase ? '<span class="s-done-note">📁 案件管理に入っています</span>' :
-        '<button type="button" class="s-btn" data-s-promote="' + key + '" title="できるAIチーム＋の見込みのお客様なら、案件管理の問い合わせに入れます">📁 案件管理に入れる</button>') +
-        (status !== '完了' && spamMovable(card) && !spamExempt(card) ? '<button type="button" class="s-btn" data-spam-move="' + key + '" title="営業・迷惑メールなら、迷惑メール振分け分に移します">📭 迷惑メールへ</button>' : '') +
-        (status !== '完了' ? '<button type="button" class="s-btn" data-s-done="' + key + '">✅ 完了にする</button>' : '') + '</div>';
+    var closed = status === '完了';
+    var repOwns = owner === REP;
+    // 流れの決まっていない仕事は、流れにする（裏で。決まると描き直す）
+    if (!c.flow) needFlow(card, c, status);
+    var draft = c.flow ? '' : c.draft.join('\n').trim();
+    var ri = !closed && !c.flow && !hasFlow(c) ? replyInfoOf(card, c) : null;
+    var canReply = !!(ri && !ri.blocked);
+    var actState = c.steps.length && !c.flow ? actionStates(card, c, status) : [];
+    var shownSteps = c.steps.filter(function (s, si) { return !(actState[si] && actState[si].repHide); });
+    var curStep = null, curIdx = -1;
+    c.steps.forEach(function (s, si) { if (!curStep && !s.decided && !(actState[si] && (actState[si].repHide || actState[si].skip))) { curStep = s; curIdx = si; } });
+
+    // ---- 上の札 ----
+    var cat = roleVal(card, 'category');
+    var html = '<div class="s-card"' + (bizI ? ' data-biz-i="' + bizI + '"' : '') + '>' +
+      '<div class="s-meta"><b class="s-biz">' + esc(businessOf(card) || 'ビジラボ') + '</b>' +
+      (cat ? '<span class="s-chip">' + esc(cat) + '</span>' : '') +
+      '<span class="s-status" data-tone="' + toneForStatus('task', status) + '">' + esc(status) + '</span>' +
+      (due ? '<span class="row-badge" data-tone="' + due.tone + '">' + esc(due.text) + '</span>' : '') +
+      '<span class="s-owner">' + (owner === UNASSIGNED ? '次の走者募集' : avatarHtml(owner) + ' ' + esc(owner) + 'さんが担当') + '</span></div>' +
+      '<div class="s-what"><small>何の仕事</small><b class="s-title">' + esc(c.title || '（名前のない仕事）') + '</b></div>';
+
+    if (c.flow) {
+      // 流れのある仕事：流れの「いまやること」をそのまま札に入れる
+      var fh = flowHtml(card, c, status, key);
+      // 手順は全部済んだが、最終チェックで直すことが見つかって「進行中」に戻っているとき
+      if (!closed && fh.indexOf('class="f-now') === -1) fh += '<div class="f-now s-now"><div class="f-now-label">いまやること</div><b class="f-now-title">手順は全部済みました。下の最終チェックを見て、直すことがあれば直す</b>' +
+        '<div class="f-now-help">直し終わったら「終わった」を押すと、もう一度チェックします</div><div class="f-now-actions"><button type="button" class="s-btn s-primary f-big" data-s-done="' + key + '">✅ 終わった</button></div></div>';
+      html += fh;
+    } else if (!closed && !recur) {
+      var now = { text: '', why: '', btns: '' };
+      var why = handover ? '前の人から：' + handover : '';
+      if (owner === UNASSIGNED) {
+        now.text = curStep ? (repOwns ? repStepText(curStep.text) : curStep.text) : c.title;
+        now.why = why || 'まだだれも受け取っていません。受け取ると、あなたの仕事になります';
+        now.btns = '<button type="button" class="s-btn s-primary f-big" data-s-claim="' + key + '">🙋 受け取って始める</button>';
+      } else if (c.pastes.length) {
+        var pl = c.pastes[0].label;
+        now.text = '下の文をコピーして、' + (pl || '相手') + ' に貼り付ける';
+        now.why = why || '貼り付けたら、そちらで進めてもらいます。済んだら「終わった」を押します';
+        now.btns = '<button type="button" class="s-btn s-primary f-big s-copy" data-s-copy="' + key + '" data-s-copy-paste="0">📋 ' + esc(pl ? pl + ' に貼る文をコピー' : '貼る文をコピー') + '</button>';
+      } else if (inqHold) {
+        var inCase = inqHold.srcId && document.querySelector('.card[data-kind="inquiry"][data-src-id="' + inqHold.srcId + '"]');
+        now.text = inCase ? '中身を読んで、返事や対応が済んだら終わりにする' : '見込みのお客様か、営業・迷惑メールかを決める';
+        now.why = why || (inCase ? '案件管理に入っています' : 'できるAIチーム＋の見込みのお客様なら、案件管理に入れます');
+        now.btns = (inCase ? '' : '<button type="button" class="s-btn s-primary f-big" data-s-promote="' + key + '">📁 案件管理に入れる</button>') +
+          (spamMovable(card) && !spamExempt(card) ? '<button type="button" class="s-btn f-big" data-spam-move="' + key + '">📭 迷惑メールへ</button>' : '') +
+          '<button type="button" class="s-btn f-big" data-s-done="' + key + '">✅ 完了にする</button>';
+      } else if (/^manual-review:/.test(mkey) && reviewRe) {
+        now.text = '下のマニュアルを1件ずつ読んで、「これでよい」か「いらない」を決める';
+        now.why = why;
+      } else if (mm) {
+        now.text = '下のマニュアルを読んで、よければ正式にする';
+        now.why = why;
+      } else if (curStep && curStep.action) {
+        var cs = actState[curIdx] || {};
+        now.text = curStep.text;
+        now.why = why || cs.why || '';
+        now.btns = '<button type="button" class="s-btn s-primary f-big" data-s-act="' + esc(curStep.action) + '" data-s-act-key="' + key + '" data-s-act-line="' + curStep.line + '"' + (cs.mode ? ' data-s-act-mode="' + cs.mode + '"' : '') + (cs.why ? ' disabled' : '') + '>' + (cs.mode === 'refuse' ? '✉️ お断りの下書きを作って送る' : ACTIONS[curStep.action].label) + '</button>';
+      } else if (curStep && draft && canReply && curIdx === 0) {
+        // 最初の手順が返事なら、下書きを開くボタンにする
+        now.text = repOwns ? repStepText(curStep.text) : curStep.text;
+        now.why = why || (c.needsRep ? '⚠️ 代表に確認してから送る：' + c.draftNote : c.draftNote);
+        now.btns = '<button type="button" class="s-btn s-primary f-big" data-s-reply="' + key + '">✉️ 下書きを見て送る</button>' +
+          '<button type="button" class="s-btn f-big" data-s-step-do="' + key + '" data-s-step-line="' + curStep.line + '">✅ 実行した</button>';
+      } else if (curStep) {
+        now.text = repOwns ? repStepText(curStep.text) : curStep.text;
+        now.why = why || curStep.memo || '';
+        now.btns = '<button type="button" class="s-btn s-primary f-big" data-s-step-do="' + key + '" data-s-step-line="' + curStep.line + '">✅ 実行した</button>' +
+          '<button type="button" class="s-btn" data-s-step-skip="' + key + '" data-s-step-line="' + curStep.line + '">➖ この手順は不要</button>';
+      } else if (canReply) {
+        now.text = draft ? '返事の下書きを読んで、よければ送る' : '返事を書いて送る（AI が下書きします）';
+        now.why = why || (c.needsRep ? '⚠️ 代表に確認してから送る：' + c.draftNote : (c.draftNote || (fromLabel(ri.route) + ' から' + (ri.to ? ' ' + ri.to + ' へ' : '')))) ;
+        now.btns = '<button type="button" class="s-btn s-primary f-big" data-s-reply="' + key + '">✉️ ' + (draft ? '下書きを見て送る' : '返事を書く') + '</button>';
+      } else {
+        now.text = c.steps.length ? '手順は全部済みました。中身を確かめて終わりにする' : '中身を読んで、済んだら「終わった」を押す';
+        now.why = why || (ri && ri.blocked ? '📨 ' + ri.blocked : '');
+        now.btns = '<button type="button" class="s-btn s-primary f-big" data-s-done="' + key + '">✅ 終わった</button>';
+      }
+      html += '<div class="f-now s-now"><div class="f-now-label">いまやること</div><b class="f-now-title">' + linkify(now.text) + '</b>' +
+        (now.why ? '<div class="f-now-help">' + linkify(now.why) + '</div>' : '') +
+        (now.btns ? '<div class="f-now-actions">' + now.btns + '</div>' : '') + '</div>';
+      if (shownSteps.length) {
+        var nextStep = null;
+        c.steps.forEach(function (s, si) { if (!nextStep && si > curIdx && curStep && !s.decided && !(actState[si] && (actState[si].repHide || actState[si].skip))) nextStep = s; });
+        html += '<div class="s-progress">手順 <b>' + shownSteps.filter(function (s) { return s.decided; }).length + ' / ' + shownSteps.length + '</b>' +
+          (nextStep ? '　次は「' + esc((repOwns ? repStepText(nextStep.text) : nextStep.text).replace(/^⚡\[[^\]]+\]\s*/, '').slice(0, 40)) + '」' : '') + '</div>';
+      }
+    } else if (closed) {
+      html += '<div class="f-now f-finished"><b>✅ この仕事は終わっています</b></div>';
+    } else if (recur) {
+      var nd = nextRecurDate(recur);
+      html += '<div class="s-progress">🔁 ' + esc(recurLabel(recur)) + 'の仕事のひな形です。次は ' + (nd.getMonth() + 1) + '/' + nd.getDate() + '（' + WEEKDAYS[nd.getDay()] + '）。その回の仕事が近くなると自動で作られ、「今週」「急ぎ」に入ります</div>';
     }
+    html += '</div>';
+
+    // ---- 札のすぐ下に出すもの（見落とすと困るもの） ----
+    html += cancelSwitchHtml(card, c, status);
     if (/^manual-review:/.test(mkey) && reviewRe) {
       // 1件ずつ：何のマニュアルを、どう直したか（一言）→ 全体は開いたときだけ → これでよい／いらない
       var items = c.desc.map(function (l) { return reviewRe.exec(l.trim()); }).filter(Boolean);
@@ -4824,69 +4897,91 @@
         return '<div class="s-manual s-review-item"><b>📘 ' + esc(r[2]) + '</b> <span class="row-badge" data-tone="neutral">' + esc(r[3]) + '</span>' +
           '<div class="s-review-what">' + esc(r[4]) + '</div>' +
           (md ? '<details><summary>くわしく読む（読まなくても決められます）' + (md.state !== '正式' ? '・まだ下書き' : '') + '</summary><div class="s-draft-text">' + esc(md.body) + '</div></details>' : '<div class="s-draft-note">（このマニュアルは見つかりませんでした。「いらない」で消せます）</div>') +
-          (status !== '完了' ? '<div class="s-actions"><button type="button" class="s-btn s-primary" data-s-review-ok="' + esc(r[1]) + '" data-s-review-card="' + key + '">✅ これでよい</button>' +
+          (!closed ? '<div class="s-actions"><button type="button" class="s-btn s-primary" data-s-review-ok="' + esc(r[1]) + '" data-s-review-card="' + key + '">✅ これでよい</button>' +
             '<button type="button" class="s-btn" data-s-review-drop="' + esc(r[1]) + '" data-s-review-card="' + key + '">🗑 いらない</button></div>' : '') +
           '</div>';
       }).join('') : '<div class="s-done-note">✅ 確認するマニュアルはありません</div>') + '</div>';
     } else if (mm) {
       var md = manuals.filter(function (x) { return x.id === mm[1]; })[0];
       if (md) html += '<div class="s-manual"><b>📘 マニュアルの' + esc(md.state) + '：' + esc(md.title) + '</b><div class="s-draft-text">' + esc(md.body) + '</div>' +
-        '<div class="s-actions">' + (md.state !== '正式' && status !== '完了' ? '<button type="button" class="s-btn s-primary" data-s-manual-ok="' + esc(md.id) + '" data-s-manual-card="' + key + '">✅ 正式にする</button>' : '<span class="s-done-note">✅ 正式になっています</span>') +
+        '<div class="s-actions">' + (md.state !== '正式' && !closed ? '<button type="button" class="s-btn s-primary" data-s-manual-ok="' + esc(md.id) + '" data-s-manual-card="' + key + '">✅ 正式にする</button>' : '<span class="s-done-note">✅ 正式になっています</span>') +
         (md.webUrl ? '<a class="s-btn" href="' + esc(md.webUrl) + '" target="_blank" rel="noopener">✏️ SharePoint で直す</a>' : '') + '</div></div>';
-    } else {
-      var mf = manuals.filter(function (x) { return x.state === '正式' && x.business === businessOf(card) && x.category === roleVal(card, 'category'); })[0];
-      if (mf) html += '<details class="s-manual"><summary>📘 この仕事のマニュアルを見る（' + esc(mf.title) + '）</summary><div class="s-draft-text">' + esc(mf.body) + '</div></details>';
     }
-    html += orderBoxHtml(card, c);
-    if (c.flow) {
-      // 流れのある仕事：いまやることを1つだけ大きく。申し送り・バトンのボタンはその下
-      html += flowHtml(card, c, status, key);
-    } else {
-    html += cancelSwitchHtml(card, c, status);
-    if (c.steps.length) {
-      var actState = actionStates(card, c, status);
-      var repOwns = owner === REP;
-      var shown = c.steps.filter(function (s, si) { return !(actState[si] && actState[si].repHide); });
-      html += '<div class="s-steps-head">やること <span class="tab-count">' + shown.filter(function (s) { return s.decided; }).length + ' / ' + shown.length + '</span></div><ol class="s-steps">' +
+    html += finalCheckHtml(card, key, status);
+
+    // ---- たたむもの（開いたときだけ） ----
+    var more = '';
+    var descLines = reviewRe ? c.desc.filter(function (l) { return !reviewRe.test(l.trim()) && l.trim() !== '【確認するマニュアル】'; }) : c.desc;
+    // 「返信先：」はアプリが使う控え。画面には出さない（送るときの欄に出る）
+    descLines = descLines.filter(function (l) { return !/^返信先：/.test(l.trim()); });
+    if (origin || descLines.length) more += '<details class="s-fold"><summary>📩 くわしい中身（届いた内容・メモ）</summary><div class="s-fold-in">' +
+      (origin ? '<div class="s-origin">' + origin + '</div>' : '') + (descLines.length ? '<div class="s-desc">' + linkify(descLines.join('\n')) + '</div>' : '') + '</div></details>';
+    if (draft) {
+      more += '<details class="s-fold"><summary>✉️ 返事の下書きを読む' + (c.needsRep ? '（⚠️ 代表に確認）' : '') + '</summary><div class="s-fold-in"><div class="s-draft">' +
+        '<div class="s-draft-head"><b>AI チームのスキルで作った下書き</b><span class="s-actions">' +
+        (canReply ? '<button type="button" class="s-btn s-primary" data-s-reply="' + key + '">✏️ 直して返信する</button>' : '') +
+        '<button type="button" class="s-btn s-copy" data-s-copy="' + key + '">📋 コピー</button></span></div>' +
+        (c.needsRep ? '<div class="s-draft-warn">⚠️ 代表に確認してから送る：' + esc(c.draftNote) + '</div>' : (c.draftNote ? '<div class="s-draft-note">' + esc(c.draftNote) + '</div>' : '')) +
+        '<div class="s-draft-text">' + esc(draft) + '</div>' +
+        '<small class="s-draft-hint">直すときは「✏️ 直して返信する」を押すと、直せる欄と AI に直してもらう欄が開きます</small></div></div></details>';
+    }
+    c.pastes.forEach(function (p, pi) {
+      more += '<details class="s-fold"><summary>📄 ' + esc(p.label ? p.label + ' に貼り付ける文' : '貼り付ける文') + 'の中身</summary><div class="s-fold-in"><div class="s-draft">' +
+        '<div class="s-draft-head"><span class="s-actions"><button type="button" class="s-btn s-copy" data-s-copy="' + key + '" data-s-copy-paste="' + pi + '">📋 コピー</button></span></div>' +
+        '<div class="s-draft-text">' + esc(p.text) + '</div></div></div></details>';
+    });
+    if (!c.flow && c.steps.length) {
+      more += '<details class="s-fold"><summary>📋 手順をぜんぶ見る（' + shownSteps.filter(function (s) { return s.decided; }).length + ' / ' + shownSteps.length + '）</summary><div class="s-fold-in"><ol class="s-steps">' +
         c.steps.map(function (s, si) {
           if (actState[si] && actState[si].repHide) return '';
           if (repOwns) s = Object.assign({}, s, { text: repStepText(s.text) });
           if (s.action) return actionStepHtml(card, key, s, actState[si]);
           return plainStepHtml(key, s, actState[si], status);
-        }).join('') + '</ol>';
+        }).join('') + '</ol>' + (!closed ? '<button type="button" class="s-add" data-s-addstep="' + key + '">＋ 手順を足す</button>' : '') + '</div></details>';
+    } else if (!c.flow && !closed) {
+      more += '<details class="s-fold"><summary>📋 手順を足す</summary><div class="s-fold-in"><button type="button" class="s-add" data-s-addstep="' + key + '">＋ 手順を足す</button></div></details>';
     }
-    if (status !== '完了') html += '<button type="button" class="s-add" data-s-addstep="' + key + '">＋ 手順を足す</button>';
+    var ob = orderBoxHtml(card, c);
+    if (ob) more += '<details class="s-fold"' + (/data-tone="warn"/.test(ob) ? ' open' : '') + '><summary>🛒 Shopify の注文' + (/data-tone="warn"/.test(ob) ? '（⚠️ 確かめること）' : '') + '</summary><div class="s-fold-in">' + ob + '</div></details>';
+    // 同じ注文（ORDER〇〇〇〇）の仕事・案件とのつながり
+    var rel = relatedOrderTasks(card);
+    var link = dealLineHtml(card, key);
+    if (rel.list.length || link) {
+      more += '<details class="s-fold"><summary>🔗 つながり' + (rel.list.length ? '（同じ注文の仕事 ' + rel.list.length + '件）' : '') + '</summary><div class="s-fold-in">' + link +
+        (rel.list.length ? '<div class="s-related"><b>同じ注文（' + esc(rel.order) + '）の仕事</b><ul>' + rel.list.map(function (o) {
+          var st = statusOf(o), ow = ownerOf(o);
+          return '<li><button type="button" class="link-inline" data-jump-key="' + jumpKeyOf(o) + '">' + esc(cardTitle(o)) + '</button>' +
+            '<small>' + esc(st) + (st !== '完了' ? '・' + (ow === UNASSIGNED ? '次の走者募集' : ow + 'さん') : '') + '</small></li>';
+        }).join('') + '</ul></div>' : '') + '</div></details>';
     }
-    html += finalCheckHtml(card, key, status);
-    var recur = recurOf(card);
-    var handover = roleVal(card, 'handover');
-    if (handover) html += '<div class="s-handover"><b>申し送り</b>' + linkify(handover) + '<small>' + esc(roleVal(card, 'handoverBy')) + '</small></div>';
-    if (recur) {
-      // 繰り返しのひな形。ここでは作業せず、その回の仕事（自動で作られる）で進める
-      var nd = nextRecurDate(recur);
-      html += '<div class="s-actions"><span class="s-recur">🔁 ' + esc(recurLabel(recur)) + 'の仕事のひな形です。次は ' + (nd.getMonth() + 1) + '/' + nd.getDate() + '（' + WEEKDAYS[nd.getDay()] + '）。その回の仕事が近くなると自動で作られ、「今週」「急ぎ」に入ります</span></div>';
-    } else if (status === '完了') {
-      html += '<div class="s-actions"><span class="s-done-note">✅ この仕事は終わっています</span><button type="button" class="s-btn" data-s-reopen="' + key + '">まだ終わっていなかった</button></div>';
-    } else if (owner === UNASSIGNED) {
-      html += '<div class="s-actions"><button type="button" class="s-btn s-primary" data-s-claim="' + key + '">🙋 バトンを受け取る</button>' +
-        '<button type="button" class="s-btn" data-s-ask="' + key + '">❓ 代表に聞く</button></div>';
-    } else if (c.flow) {
-      // 流れのある仕事は、最後の手順が済むと自動で完了。ここは申し送り・代表に聞くだけ（「終わった」は流れを飛ばすときだけ小さく）
-      html += '<div class="s-actions"><button type="button" class="s-btn" data-s-pass="' + key + '">🏃 申し送りを書いて渡す</button>' +
-        (owner === REP ? '' : '<button type="button" class="s-btn" data-s-ask="' + key + '">❓ 代表に聞く</button>') +
-        '<button type="button" class="s-btn s-mini" data-s-release="' + key + '">↩ 担当を外す</button>' +
-        '<button type="button" class="s-btn s-mini" data-s-done="' + key + '">手順を飛ばして終わりにする</button></div>';
-    } else {
-      // 代表が持っている仕事に「代表に聞く」は出さない（2026-11-12）
-      html += '<div class="s-actions"><button type="button" class="s-btn s-primary" data-s-done="' + key + '">✅ 終わった</button>' +
-        '<button type="button" class="s-btn" data-s-pass="' + key + '">🏃 申し送りを書いて渡す</button>' +
-        (owner === REP ? '' : '<button type="button" class="s-btn" data-s-ask="' + key + '">❓ 代表に聞く</button>') +
-        '<button type="button" class="s-btn s-mini" data-s-release="' + key + '">↩ 担当を外す</button></div>';
+    if (handover) more += '<details class="s-fold"><summary>📝 申し送り（' + esc(roleVal(card, 'handoverBy') || '前の人') + '）</summary><div class="s-fold-in"><div class="s-handover">' + linkify(handover) + '</div></div></details>';
+    var sent = sentMailsHtml(card);
+    if (sent) more += '<details class="s-fold"><summary>📤 送ったメール</summary><div class="s-fold-in">' + sent + '</div></details>';
+    if (!mm && !/^manual-review:/.test(mkey)) {
+      var mf = manuals.filter(function (x) { return x.state === '正式' && x.business === businessOf(card) && x.category === roleVal(card, 'category'); })[0];
+      if (mf) more += '<details class="s-fold"><summary>📘 この仕事のマニュアル（' + esc(mf.title) + '）</summary><div class="s-fold-in"><div class="s-draft-text">' + esc(mf.body) + '</div></div></details>';
     }
-    // 急ぎにする（2026-11-18 代表の指定：ふつうの仕事を急ぎに回したいときがある）。期限を今日・優先を高にすると、ボードの今週の先頭に 🔥 急ぎで出る
-    if (status !== '完了' && !recur && (cardDue(card) || '9999') > todayStr) {
-      html += '<div class="s-actions s-urgent-row"><button type="button" class="s-btn s-mini" data-s-urgent="' + key + '">🔥 急ぎにする</button></div>';
+    if (more) html += '<div class="s-more">' + more + '</div>';
+
+    // ---- いちばん下：小さなボタン ----
+    var foot = [];
+    if (closed) {
+      foot.push('<button type="button" class="s-btn s-mini" data-s-reopen="' + key + '">まだ終わっていなかった</button>');
+    } else if (!recur) {
+      if (owner === UNASSIGNED) {
+        foot.push('<button type="button" class="s-btn s-mini" data-s-ask="' + key + '">❓ 代表に聞く</button>');
+      } else {
+        if (c.flow) foot.push('<button type="button" class="s-btn s-mini" data-s-done="' + key + '">手順を飛ばして終わりにする</button>');
+        else if (!inqHold) foot.push('<button type="button" class="s-btn s-mini" data-s-done="' + key + '">✅ 終わった</button>');
+        foot.push('<button type="button" class="s-btn s-mini" data-s-pass="' + key + '">🏃 申し送りを書いて渡す</button>');
+        // 代表が持っている仕事に「代表に聞く」は出さない（2026-11-12）
+        if (!repOwns) foot.push('<button type="button" class="s-btn s-mini" data-s-ask="' + key + '">❓ 代表に聞く</button>');
+        foot.push('<button type="button" class="s-btn s-mini" data-s-release="' + key + '">↩ 担当を外す</button>');
+      }
+      // 急ぎにする（2026-11-18 代表の指定）。期限を今日・優先を高にすると、ボードの今週の先頭に 🔥 急ぎで出る
+      if ((cardDue(card) || '9999') > todayStr) foot.push('<button type="button" class="s-btn s-mini" data-s-urgent="' + key + '">🔥 急ぎにする</button>');
     }
+    if (foot.length) html += '<div class="s-actions s-foot">' + foot.join('') + '</div>';
     return html;
   }
 
@@ -8890,8 +8985,8 @@
 })();
 </script>
 <script src="vendor/msal-browser.min.js"></script>
-<script src="sync.js?v=011d989"></script>
-<script src="chat.js?v=011d989"></script>
+<script src="sync.js?v=f90d3d6"></script>
+<script src="chat.js?v=f90d3d6"></script>
 <script>
 // 新しい版が出たら知らせて切り替える（2026-11-17 代表の指摘：ブラウザが古い版を覚えていて、更新しても前の画面のままだった）。
 // 公開のたびに version.txt に版の番号が入る。5分ごとと、画面に戻ってきたときに見比べ、違えば上に帯を出す。押すと読み直す（入力中の内容を消さないよう、勝手には読み直さない）
