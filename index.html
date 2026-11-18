@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 公開のときに、公開の仕組み（.github/workflows/publish-annken-kanri-app.yml）がこの版の番号に書き換える。手元では dev のまま -->
-<meta name="app-version" content="3971efc">
+<meta name="app-version" content="8d37f02">
 <title>ビジラボ 仕事管理</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@500&display=swap">
 <style>
@@ -1798,7 +1798,7 @@
   .deal-tasks small { color: var(--text-muted); margin-left: 8px; }
   .deal-unlinked { margin-top: 14px; font-size: 14px; }
   /* 案件の画面（2026-11-18 代表の指定：パッと見て分かり、やる気が出る形） */
-  .d-list { display: grid; gap: 10px; max-width: 860px; margin-inline: auto; }
+  .d-list { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(460px, 100%), 1fr)); }
   .d-tile { font: inherit; color: inherit; text-align: left; width: 100%; display: grid; grid-template-columns: auto 1fr auto; gap: 14px; align-items: center; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--border); background: var(--surface); cursor: pointer; }
   .d-tile[data-tone="red"] { border: 2px solid var(--crit); }
   .d-tile:hover { border-color: var(--accent); }
@@ -1816,7 +1816,12 @@
   .d-sig::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
   .d-sig[data-tone="warn"] { background: var(--warn-soft); color: var(--warn); }
   .d-sig[data-tone="red"] { background: var(--crit-soft); color: var(--crit); }
-  .d-page { display: grid; gap: 18px; max-width: 760px; margin-inline: auto; }
+  .d-page { display: grid; gap: 14px; }
+  .d-cols { display: grid; grid-template-columns: minmax(0, 1.8fr) minmax(280px, 1fr); gap: 28px; align-items: start; }
+  @media (max-width: 900px) { .d-cols { grid-template-columns: 1fr; } }
+  .d-main, .d-side { display: grid; gap: 18px; min-width: 0; }
+  .d-side { padding: 14px 16px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); }
+  .d-side .d-team { grid-template-columns: 1fr; }
   .d-back { justify-self: start; font-weight: 700; }
   .d-hero { display: grid; grid-template-columns: auto 1fr; gap: 18px; align-items: center; }
   @media (max-width: 520px) { .d-hero { grid-template-columns: 1fr; justify-items: start; } }
@@ -1853,6 +1858,7 @@
   .d-owner-opt { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px 4px 6px; border: 1px solid var(--border); border-radius: 999px; cursor: pointer; font-size: 14px; }
   .d-owner-opt:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
   .d-owner-pick .deal-actions { flex-basis: 100%; }
+  .d-owner-pick[hidden] { display: none; }
   .d-lead { font-size: 11px; font-weight: 700; color: var(--accent); background: var(--accent-soft); border-radius: 999px; padding: 0 7px; margin-left: 4px; }
   .d-mem small.d-kind { display: block; }
   .d-mem-open small { font-size: 12px; color: var(--text-muted); }
@@ -1937,7 +1943,7 @@
   .tile.dragging { opacity: .45; }
   .band.drop-over { outline: 3px dashed var(--accent); outline-offset: -3px; background: var(--accent-soft); }
 </style>
-<script src="rules.js?v=3971efc"></script>
+<script src="rules.js?v=8d37f02"></script>
 </head>
 <body>
 
@@ -8529,6 +8535,8 @@
     var goal = (/^ゴール[：:]\s*(.+)$/m.exec(String(d.Memo || '')) || [])[1] || '';
     var html = '<div class="d-page">' +
       '<button type="button" class="link-inline d-back" data-deal-close>← 案件の一覧</button>' +
+      // 横に広い画面では2列（左：何の案件・道・次の1手・仕事／右：だれがどこまで・できたこと・直す）。上の見出しと左の線をそろえる（2026-11-18 代表の指定）
+      '<div class="d-cols"><div class="d-main">' +
       '<div class="d-hero"><span class="d-ring d-ring-big">' + ringSvg(pr.n, pr.total, 116, 3.2) + '<b>' + (pr.total ? pr.n + '/' + pr.total : '—') + '<small>できた</small></b></span>' +
       '<div class="d-hero-txt"><div class="d-hero-tags"><span class="d-sig" data-tone="' + sg.tone + '">' + sg.text + '</span><span class="d-kind">' + esc((biz ? biz.label : d.Business || '') + (d.DealType ? '・' + d.DealType : '')) + '</span>' + (dealPartners(d) ? '<span class="d-kind">相手：' + esc(dealPartners(d)) + '</span>' : '') + '</div>' +
       '<h2 class="d-title">' + esc(dealName(d)) + '</h2>' +
@@ -8553,14 +8561,15 @@
     } else if (d.NextAction && DEAL_END.indexOf(d.Stage) === -1) {
       html += '<div class="d-next d-next-plain"><span><small>次にやること</small><b>' + esc(d.NextAction) + '</b></span></div>';
     }
+    var side = '';
     // だれがどこまで
     var nobody = pr.open.filter(function (c) { return ownerOf(c) === UNASSIGNED; }).length;
     if (owners.length || nobody) {
-      html += '<div class="d-team">' + owners.map(function (o) {
+      side += '<div class="d-sec"><h3>だれが、どこまで</h3><div class="d-team">' + owners.map(function (o) {
         var mine = pr.tasks.filter(function (c) { return ownerOf(c) === o; }), md = mine.filter(function (c) { return statusOf(c) === '完了'; }).length;
         return '<div class="d-mem">' + '<span class="d-ring">' + ringSvg(md, mine.length, 46, 4) + '<b>' + (mine.length ? md + '/' + mine.length : '—') + '</b></span>' +
           '<span><b>' + esc(o) + 'さん' + (dealOwnerList(d).indexOf(o) !== -1 ? ' <small class="d-lead">担当</small>' : '') + '</b>' + (mine.length ? '' : '<small class="d-kind">この案件の仕事はまだありません</small>') + '<span class="d-stars">' + '★'.repeat(md) + '<span>' + '★'.repeat(Math.max(0, mine.length - md)) + '</span></span></span></div>';
-      }).join('') + (nobody ? '<div class="d-mem d-mem-open"><span class="d-ring"><b style="position:static;font-size:20px">🙋</b></span><span><b>走者募集 ' + nobody + '件</b><small>受け取る人を待っています</small></span></div>' : '') + '</div>';
+      }).join('') + (nobody ? '<div class="d-mem d-mem-open"><span class="d-ring"><b style="position:static;font-size:20px">🙋</b></span><span><b>走者募集 ' + nobody + '件</b><small>受け取る人を待っています</small></span></div>' : '') + '</div></div>';
     }
     // 仕事の一覧（開いているもの → 済んだもの。押すと仕事が開く）
     var order = pr.open.slice().sort(function (a, b) { return String(cardDue(a) || '9').localeCompare(String(cardDue(b) || '9')); }).concat(pr.done);
@@ -8571,20 +8580,21 @@
     }).join('') + '</ul>' : '<p class="deal-empty">仕事はまだありません</p>') + '</div>';
     // できたこと
     if (pr.done.length) {
-      html += '<div class="d-sec"><h3>できたこと</h3><div class="d-feed">' + pr.done.slice(0, 6).map(function (c) {
+      side += '<div class="d-sec"><h3>できたこと</h3><div class="d-feed">' + pr.done.slice(0, 6).map(function (c) {
         var ow = ownerOf(c);
         return '<div class="d-ev"><span class="d-em">🎉</span><span>' + (ow && ow !== UNASSIGNED ? '<b>' + esc(ow) + 'さん</b>が' : '') + '「' + esc(cardTitle(c)) + '」を済ませました</span></div>';
       }).join('') + '</div></div>';
     }
     // 直す（たたむ）
     var all = stages.concat(DEAL_END);
-    html += '<details class="d-edit"><summary>✏️ 案件を直す（段階・次にやること・期限・担当・止まっている理由）</summary><div class="deal-form">' +
+    side += '<details class="d-edit"><summary>✏️ 案件を直す（段階・次にやること・期限・担当・止まっている理由）</summary><div class="deal-form">' +
       '<label>段階<select data-deal-f="Stage">' + all.map(function (s) { return '<option' + (s === d.Stage ? ' selected' : '') + '>' + esc(s) + '</option>'; }).join('') + (all.indexOf(d.Stage) === -1 ? '<option selected>' + esc(d.Stage || '') + '</option>' : '') + '</select></label>' +
       '<label>次にやること<input type="text" data-deal-f="NextAction" value="' + esc(d.NextAction || '') + '"></label>' +
       '<label>ゴールの日<input type="date" data-deal-f="NextDue" value="' + esc(String(d.NextDue || '').slice(0, 10)) + '"></label>' +
       '<label>止まっている理由<input type="text" data-deal-f="BlockedReason" value="' + esc(d.BlockedReason || '') + '" placeholder="保留・相手待ちのときだけ"></label>' +
       '<div class="deal-actions"><button type="button" class="s-btn s-primary" data-deal-save="' + esc(d.id) + '">保存</button><span data-deal-msg></span></div></div></details>' +
-      (d.Link ? '<div class="d-link">' + linkify(d.Link) + '</div>' : '') + '</div>';
+      (d.Link ? '<div class="d-link">' + linkify(d.Link) + '</div>' : '');
+    html += '</div><div class="d-side">' + side + '</div></div></div>';
     box.innerHTML = html;
   }
 
@@ -9282,8 +9292,8 @@
 })();
 </script>
 <script src="vendor/msal-browser.min.js"></script>
-<script src="sync.js?v=3971efc"></script>
-<script src="chat.js?v=3971efc"></script>
+<script src="sync.js?v=8d37f02"></script>
+<script src="chat.js?v=8d37f02"></script>
 <script>
 // 新しい版が出たら知らせて切り替える（2026-11-17 代表の指摘：ブラウザが古い版を覚えていて、更新しても前の画面のままだった）。
 // 公開のたびに version.txt に版の番号が入る。5分ごとと、画面に戻ってきたときに見比べ、違えば上に帯を出す。押すと読み直す（入力中の内容を消さないよう、勝手には読み直さない）
