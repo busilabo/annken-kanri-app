@@ -1682,8 +1682,82 @@
     } catch (e) { log("task lookup failed: " + e.message); return false; }
   }
 
+
+  // ---- 取引先と案件（2026-11-18 データベース設計 第1・2段）----
+  // 新しく入る仕事・やり取りに、取引先番号（C-0001）と案件番号（ORDER4638 など）を自動で付ける。
+  // 見分け方：注文番号（ORDER〇〇〇〇）→ 案件／作り手さんの番号（D0027）・メールのドメイン → 取引先。分からなければ空のまま（後で人が結ぶ）
+  var PARTNER_LIST = "取引先", DEAL_LIST = "案件";
+  var dbRef = { loaded: false, at: 0, partnerListId: null, dealListId: null, partners: [], deals: [] };
+  async function loadDbRef(force) {
+    if (!siteId) return dbRef;
+    if (dbRef.loaded && !force && Date.now() - dbRef.at < 10 * 60 * 1000) return dbRef;
+    try {
+      if (!dbRef.partnerListId) dbRef.partnerListId = await findListId(PARTNER_LIST);
+      if (!dbRef.dealListId) dbRef.dealListId = await findListId(DEAL_LIST);
+      if (dbRef.partnerListId) dbRef.partners = await readAll(dbRef.partnerListId, "Title,PartnerId,Roles,Businesses,Domains,ExternalIds,PartnerStatus,Deleted");
+      if (dbRef.dealListId) dbRef.deals = await readAll(dbRef.dealListId, "Title,DealId,Business,DealType,PartnerIds,Stage,NextAction,NextDue,Owner,BlockedReason,Deleted");
+      dbRef.loaded = true; dbRef.at = Date.now();
+    } catch (e) { log("db ref load failed: " + e.message); }
+    return dbRef;
+  }
+  function partnerByDomain(addr) {
+    var dm = String(addr || "").toLowerCase().split("@")[1] || "";
+    if (!dm) return null;
+    return dbRef.partners.filter(function (p) {
+      return String(p.Domains || "").toLowerCase().split(/[、,\s]+/).filter(Boolean).some(function (d) { return dm === d || dm.slice(-(d.length + 1)) === "." + d; });
+    })[0] || null;
+  }
+  function partnerByExternal(id) {
+    return dbRef.partners.filter(function (p) { return String(p.ExternalIds || "").split(/[、,\s]+/).indexOf(id) !== -1; })[0] || null;
+  }
+  // 文から番号を見つける。text：仕事の名前と中身・やり取りの件名と要約など
+  function guessLinks(text) {
+    text = String(text || "");
+    var out = { DealId: "", PartnerId: "" };
+    var om = /ORDER\s*0*(\d{3,})/i.exec(text);
+    if (om) {
+      out.DealId = "ORDER" + om[1];
+      var d = dbRef.deals.filter(function (x) { return x.DealId === out.DealId; })[0];
+      if (d && d.PartnerIds) out.PartnerId = String(d.PartnerIds).split(/[、,\s]+/)[0];
+    }
+    if (!out.PartnerId) {
+      var mm = /\b(D\d{4})\b/.exec(text);
+      var p = mm ? partnerByExternal(mm[1]) : null;
+      if (!p) {
+        var addrs = text.match(/[\w.+-]+@[\w-]+(\.[\w-]+)+/g) || [];
+        for (var i = 0; i < addrs.length && !p; i++) if (!/@(busilabo\.com|lilocle\.jp)$/i.test(addrs[i])) p = partnerByDomain(addrs[i]);
+      }
+      if (p) out.PartnerId = p.PartnerId;
+    }
+    return out;
+  }
+  async function linkFields(fields, text) {
+    if (fields.DealId && fields.PartnerId) return fields;
+    await loadDbRef();
+    var g = guessLinks(text);
+    if (!fields.DealId && g.DealId) fields.DealId = g.DealId;
+    if (!fields.PartnerId && g.PartnerId) fields.PartnerId = g.PartnerId;
+    return fields;
+  }
+  // 注文番号の案件がまだ無ければ作る（LILOCLE の注文の仕事が初めて入ったとき）。次にやることは、その仕事の名前
+  async function ensureDeal(dealId, fields) {
+    if (!dealId || !/^ORDER\d+$/.test(dealId)) return;
+    await loadDbRef();
+    if (!dbRef.dealListId || dbRef.deals.some(function (x) { return x.DealId === dealId; })) return;
+    var row = { Title: dealId, DealId: dealId, Business: "LILOCLE運営", DealType: "注文", PartnerIds: fields.PartnerId || "", Stage: "対応中",
+      NextAction: String(fields.Title || "").slice(0, 120), Owner: fields.Owner && fields.Owner !== "未定" ? fields.Owner : "", StartedAt: new Date().toISOString(), Deleted: false };
+    try {
+      var made = await graph("/sites/" + siteId + "/lists/" + dbRef.dealListId + "/items", { method: "POST", body: { fields: row } });
+      dbRef.deals.push(Object.assign({ id: made.id }, row));
+    } catch (e) { log("deal create failed (" + dealId + "): " + e.message); }
+  }
+  window.__db = { load: loadDbRef, ref: function () { return dbRef; }, guess: guessLinks };
+
   async function createTaskItem(fields, historyAction, historyMemo) {
     if (!listIds.task) return null;
+    // 取引先番号・案件番号を自動で付ける（列がまだ無ければ keepExistingColumns が外す）
+    try { await linkFields(fields, [fields.Title, fields.Content, fields.Requester, fields.TeamsMessageId].join("\n")); } catch (e) { log("link failed: " + e.message); }
+    if (fields.DealId) { try { await ensureDeal(fields.DealId, fields); } catch (e) { log("ensure deal failed: " + e.message); } }
     fields = keepExistingColumns("task", Object.assign({
       Status: "未着手",
       Priority: "中",
@@ -2629,6 +2703,7 @@
 
   async function postActivity(item) {
     if (!activityListId) return;
+    try { await linkFields(item, [item.Title, item.Subject, item.Summary, item.Customer].join("\n")); } catch (e) { log("link failed: " + e.message); }
     var cols = listColumns.__activity;
     if (cols) for (var k in item) if (!cols[k]) delete item[k];
     try {

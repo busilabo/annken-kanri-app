@@ -16,6 +16,9 @@
 #   発信          … 投稿・記事・メルマガ 1件1行と反響（毎朝の集計の posts を、アプリが貯める。第2段）
 #   試していること … 発信で試していることと結果（何が効いたかを残す。第2段）
 #   売上          … ビジラボの事業の契約 1件1行。売上の日は契約日（成約管理タスクで契約金額を入れると自動でできる。第2段）
+#   取引先        … 全事業の相手（お客様・卸先・仕入れ先・作り手さん・パートナー）を1つの元帳に。番号 C-0001（2026-11-18 データベース設計 第1段）
+#   案件          … 事業ごとの取引のまとまり（DX の問い合わせ〜運用／LILOCLE の注文／卸の配送案・初期不良／Amazon の購入者対応）。次にやること・期限を必ず持つ
+#   （タスク・やり取りログ・連絡先・売上・問い合わせ管理・成約管理タスク・運用状況・顧客台帳には「案件番号」「取引先番号」の列を足す）
 #   問い合わせ管理 … 「どこから来たか」「きっかけの発信」「見込金額」「失注の理由」を足す（成長の画面の「やったこと→成果の流れ」用）
 #
 # 使い方:
@@ -35,12 +38,16 @@ $SiteHost = 'busilabo.sharepoint.com'
 $SitePath = '/sites/msteams_f7ddf8'
 
 $Deleted = @{ name = 'Deleted'; type = 'boolean'; desc = '削除済み（元に戻せるようにするため実データは消さない）' }
+$DealId = @{ name = 'DealId'; type = 'text'; desc = '案件番号（案件の表の DealId。DX-0001／ORDER4638／WS-20261120 など）。2026-11-18'; indexed = $true }
+$PartnerId = @{ name = 'PartnerId'; type = 'text'; desc = '取引先番号（取引先の表の PartnerId。C-0001 など）。2026-11-18'; indexed = $true }
 $CustomerId = @{ name = 'CustomerId'; type = 'text'; desc = '顧客ID（顧客台帳の行のID）。会社名の表記ゆれに左右されずに顧客でつなぐ'; indexed = $true }
 
 # create = $true のリストは、無ければ作る。$false のリストは既存のものに列を足すだけ。
 $Plan = [ordered]@{
   '問い合わせ管理' = @{ create = $false; columns = @(
     $CustomerId
+    $DealId
+    $PartnerId
     @{ name = 'Origin';         type = 'text';      desc = 'どこから来たか（Instagram／Facebook／ホームページ／コラム／紹介／セミナー／その他／不明）。分からないときは「不明」で、空や「その他」で埋めない' }
     @{ name = 'SourcePost';     type = 'text';      desc = 'きっかけの発信（分かれば。発信の表ができたらその番号）' }
     @{ name = 'ExpectedAmount'; type = 'number';    desc = '見込金額（税抜・円）' }
@@ -49,11 +56,15 @@ $Plan = [ordered]@{
   )}
   '成約管理タスク' = @{ create = $false; columns = @(
     $CustomerId
+    $DealId
+    $PartnerId
     @{ name = 'ContractAmount'; type = 'number'; desc = '契約金額（税抜・円）。入れると「売上」の表に1行できる（第2段）' }
   )}
-  '運用状況' = @{ create = $false; columns = @( $CustomerId ) }
+  '運用状況' = @{ create = $false; columns = @( $CustomerId; $DealId; $PartnerId ) }
   'タスク' = @{ create = $false; columns = @(
     $CustomerId
+    $DealId
+    $PartnerId
     @{ name = 'Business';    type = 'text';      desc = '事業（家電の卸販売／Amazon販売／LILOCLE運営／業務改善・DX支援／社内・共通）' }
     @{ name = 'Category';    type = 'text';      desc = '仕事の種類（問い合わせ・営業／制作／発信／事務・その他）' }
     @{ name = 'RequiredSkill'; type = 'text';    desc = 'この仕事に必要なスキル（スキル表の項目名）' }
@@ -68,6 +79,7 @@ $Plan = [ordered]@{
     $Deleted
   )}
   '顧客台帳' = @{ create = $true; columns = @(
+    $PartnerId
     @{ name = 'Name';        type = 'text';      desc = '会社名' }
     @{ name = 'Business';    type = 'text';      desc = '事業（できるAIチーム＋／その他）' }
     @{ name = 'Stage';       type = 'text';      desc = '現在ステージ（①認知／②商談化／③契約／④活用／⑤紹介／終了（失注））' }
@@ -87,6 +99,7 @@ $Plan = [ordered]@{
     $Deleted
   )}
   '連絡先' = @{ create = $true; columns = @(
+    $PartnerId
     @{ name = 'Business';    type = 'text';      desc = '事業（家電の卸販売／Amazon販売／LILOCLE運営／業務改善・DX支援／社内・共通）' }
     @{ name = 'Side';        type = 'text';      desc = '区分（取引先／メーカー／社内／その他）' }
     @{ name = 'Company';     type = 'text';      desc = '会社名' }
@@ -99,6 +112,8 @@ $Plan = [ordered]@{
     $Deleted
   )}
   'やり取りログ' = @{ create = $true; columns = @(
+    $DealId
+    $PartnerId
     @{ name = 'OccurredAt';  type = 'dateTime';  desc = 'やり取りの日時' }
     @{ name = 'Channel';     type = 'text';      desc = '経路（Teams／メール／電話／その他）' }
     @{ name = 'Customer';    type = 'text';      desc = '顧客名（顧客台帳の会社名）' }
@@ -163,6 +178,8 @@ $Plan = [ordered]@{
   )}
   '売上' = @{ create = $true; columns = @(
     $CustomerId
+    $DealId
+    $PartnerId
     @{ name = 'InquiryId';    type = 'text';     desc = '元の問い合わせ（問い合わせ管理の行の ID）。どこから来たお客様の売上かを出すため'; indexed = $true }
     @{ name = 'WonTaskId';    type = 'text';     desc = '成約管理タスクの行の ID（そこで契約金額を入れたときに自動でできた行）'; indexed = $true }
     @{ name = 'Business';     type = 'text';     desc = '事業（業務改善・DX支援 など）' }
@@ -172,6 +189,35 @@ $Plan = [ordered]@{
     @{ name = 'PaidDate';     type = 'dateTime'; desc = '入金日（参考）' }
     @{ name = 'SaleStatus';   type = 'text';     desc = '見込み／確定／取り消し' }
     @{ name = 'Memo';         type = 'multiline'; desc = 'メモ' }
+    $Deleted
+  )}
+  '取引先' = @{ create = $true; columns = @(
+    $PartnerId
+    @{ name = 'Roles';         type = 'text';      desc = '役割（お客様／卸先／仕入れ先／作り手さん／パートナー。いくつでも「、」で区切る）' }
+    @{ name = 'Businesses';    type = 'text';      desc = '関わる事業（家電の卸販売／Amazon販売／LILOCLE運営／業務改善・DX支援。いくつでも）' }
+    @{ name = 'Domains';       type = 'text';      desc = 'メールのドメイン（届いたメールから相手を見分ける。いくつでも「、」で区切る）' }
+    @{ name = 'ExternalIds';   type = 'text';      desc = '外の番号（作り手さんの番号 D0027・Shopify の顧客番号など）'; indexed = $true }
+    @{ name = 'PartnerStatus'; type = 'text';      desc = '状態（取引中／休止／見込み）' }
+    @{ name = 'Origin';        type = 'text';      desc = 'どこから（Instagram／Facebook／ホームページ／コラム／紹介／セミナー／その他／不明）' }
+    @{ name = 'HowTo';         type = 'multiline'; desc = '連絡のしかた・注意' }
+    @{ name = 'Memo';          type = 'multiline'; desc = 'メモ' }
+    $Deleted
+  )}
+  '案件' = @{ create = $true; columns = @(
+    $DealId
+    @{ name = 'Business';      type = 'text';      desc = '事業（家電の卸販売／Amazon販売／LILOCLE運営／業務改善・DX支援）' }
+    @{ name = 'DealType';      type = 'text';      desc = '種類（DX：問い合わせから運用／LILOCLE：注文・作り手さんとの取引／卸：配送案・初期不良／Amazon：購入者対応）' }
+    @{ name = 'PartnerIds';    type = 'text';      desc = '取引先番号（いくつでも「、」で区切る）'; indexed = $true }
+    @{ name = 'Stage';         type = 'text';      desc = '段階（事業ごとの段階。完了・取り消しで終わり）' }
+    @{ name = 'NextAction';    type = 'text';      desc = '次にやること（開いているあいだは必ず入れる）' }
+    @{ name = 'NextDue';       type = 'dateTime';  desc = '次にやることの期限' }
+    @{ name = 'Owner';         type = 'text';      desc = '担当' }
+    @{ name = 'BlockedReason'; type = 'text';      desc = '止まっている理由（保留・相手待ちのとき）' }
+    @{ name = 'Amount';        type = 'number';    desc = '金額（税抜・円。見込みでもよい）' }
+    @{ name = 'StartedAt';     type = 'dateTime';  desc = '始まった日' }
+    @{ name = 'ClosedAt';      type = 'dateTime';  desc = '終わった日（完了・取り消し）' }
+    @{ name = 'Link';          type = 'multiline'; desc = '外のリンク（Shopify の注文・共有エクセルなど）' }
+    @{ name = 'Memo';          type = 'multiline'; desc = 'メモ' }
     $Deleted
   )}
   'データの置き場所' = @{ create = $true; columns = @(
@@ -428,6 +474,50 @@ Add-RowsIfMissing -ListName 'ノウハウ' -KeyField 'Title' -Rows @(
 Add-RowsIfMissing -ListName 'データの置き場所' -KeyField 'Title' -Rows @(
   @{ Title = '寺尾さんとの進行表'; Content = '毎週のお題と成果、営業の進み具合（3月末までの2つのミッション）'; Location = '寺尾さんのスプレッドシート（できたら場所を書く）'; Method = '手・毎週の打ち合わせ'; IntervalDays = 0; Owner = '川合'; CheckKey = ''; Note = '営業の進み具合は、仕事管理アプリの問い合わせ管理と成長の画面でも見られる（どちらで管理するかは寺尾さんと相談）'; Deleted = $false }
   @{ Title = 'サイトの行動（Microsoft Clarity）'; Content = 'ヒートマップ・デッドクリック・離脱'; Location = 'Microsoft Clarity（Google タグマネージャーで入れる）'; Method = '自動（入れたら）'; IntervalDays = 0; Owner = '川合'; CheckKey = ''; Note = '第1週のお題（2026-11-17）で入れる'; Deleted = $false }
+)
+
+# ---- 2026-11-18 データベース設計 第1段：取引先と案件の初めの行（番号は変えない。何度実行しても足りない行だけ足す）----
+$P = { param($id, $name, $roles, $biz, $domains, $ext, $st, $how) @{ Title = $name; PartnerId = $id; Roles = $roles; Businesses = $biz; Domains = $domains; ExternalIds = $ext; PartnerStatus = $st; HowTo = $how; Deleted = $false } }
+Add-RowsIfMissing -ListName '取引先' -KeyField 'PartnerId' -Rows @(
+  (& $P 'C-0001' '綿半ドットコム' '卸先' '家電の卸販売' 'watahan.co.jp、kaitorikensakukun.com' '' '取引中' '東中様（発注・配送案）。初期不良は名古屋支店（nagoya@kaitorikensakukun.com）から。返事は依頼が来たアドレスへ')
+  (& $P 'C-0002' 'ピュアクリエイト' '卸先' '家電の卸販売' '' '' '休止' '最近は取引なし')
+  (& $P 'C-0003' '日立' '仕入れ先' '家電の卸販売、Amazon販売' '' '' '取引中' '出口さん（発注・納期・不良対応）。Teams チャット／メール／電話。急ぎは電話')
+  (& $P 'C-0004' 'パナソニック' '仕入れ先' '家電の卸販売' '' '' '取引中' '')
+  (& $P 'C-0005' 'ソニー' '仕入れ先' '家電の卸販売' '' '' '取引中' '')
+  (& $P 'C-0006' 'デジマタクト' 'パートナー' '業務改善・DX支援' '' '' '取引中' '寺尾さん。マーケティング支援（2026-11-17〜2027-03-31）。連絡は Teams のチャット')
+  (& $P 'C-0007' '坂中商店' 'お客様' '業務改善・DX支援' 'sakanaka.net' '' '取引中' 'できるAIチーム＋ 導入済み。複合機の FAX は fax@sakanaka.net から転送される（坂中商店宛ても混ざる）')
+  (& $P 'C-0010' '自然と暮らすぐりーん' '作り手さん' 'LILOCLE運営' '' 'D0001' '取引中' '')
+  (& $P 'C-0011' 'LA PORTE BLEUE（ラポートブルー）' '作り手さん' 'LILOCLE運営' '' 'D0002' '取引中' '')
+  (& $P 'C-0012' 'Lagom sweets labo' '作り手さん' 'LILOCLE運営' '' 'D0003' '取引中' '')
+  (& $P 'C-0013' 'とらいあんぐる' '作り手さん' 'LILOCLE運営' '' 'D0004' '取引中' '')
+  (& $P 'C-0014' 'F&..' '作り手さん' 'LILOCLE運営' '' 'D0005' '取引中' '')
+  (& $P 'C-0015' '和のかし 巡' '作り手さん' 'LILOCLE運営' '' 'D0006' '取引中' '')
+  (& $P 'C-0016' 'seed' '作り手さん' 'LILOCLE運営' '' 'D0007' '取引中' '')
+  (& $P 'C-0017' 'グッドフォー' '作り手さん' 'LILOCLE運営' '' 'D0009' '取引中' '')
+  (& $P 'C-0018' 'ラサーヤナ工房' '作り手さん' 'LILOCLE運営' '' 'D0011' '取引中' '')
+  (& $P 'C-0019' 'ここく' '作り手さん' 'LILOCLE運営' '' 'D0012' '取引中' '')
+  (& $P 'C-0020' 'Ripple' '作り手さん' 'LILOCLE運営' '' 'D0013' '取引中' '')
+  (& $P 'C-0021' 'Beauty Life Designer RAW&VEGAN +wa essence' '作り手さん' 'LILOCLE運営' '' 'D0015' '取引中' '')
+  (& $P 'C-0022' 'ケイミー・オフィス' '作り手さん' 'LILOCLE運営' '' 'D0016' '取引中' '')
+  (& $P 'C-0023' '天の酒喰食房' '作り手さん' 'LILOCLE運営' '' 'D0017' '取引中' '')
+  (& $P 'C-0024' 'クレンナルー' '作り手さん' 'LILOCLE運営' '' 'D0018' '取引中' '')
+  (& $P 'C-0025' 'SPOONING' '作り手さん' 'LILOCLE運営' '' 'D0020' '取引中' '')
+  (& $P 'C-0026' '工房ふじや' '作り手さん' 'LILOCLE運営' '' 'D0023' '取引中' '')
+  (& $P 'C-0027' 'ファームキャニング' '作り手さん' 'LILOCLE運営' '' 'D0025' '取引中' '')
+  (& $P 'C-0028' 'earthなないろfactory' '作り手さん' 'LILOCLE運営' '' 'D0026' '取引中' '')
+  (& $P 'C-0029' '七久里農園' '作り手さん' 'LILOCLE運営' '' 'D0027' '取引中' '')
+  (& $P 'C-0030' 'シャンテ' '作り手さん' 'LILOCLE運営' '' 'D0030' '取引中' '')
+  (& $P 'C-0031' '木曽谷Kousaku.' '作り手さん' 'LILOCLE運営' '' 'D0032' '取引中' '')
+  (& $P 'C-0032' 'ジョダン' '作り手さん' 'LILOCLE運営' '' 'D0033' '取引中' '')
+  (& $P 'C-0033' '二十四節気' '作り手さん' 'LILOCLE運営' '' 'D0034' '取引中' '')
+  (& $P 'C-0034' 'Hidamari' '作り手さん' 'LILOCLE運営' '' 'D0036' '取引中' '')
+  (& $P 'C-0035' 'SHEBERY' '作り手さん' 'LILOCLE運営' '' 'D0037' '取引中' '')
+  (& $P 'C-0036' 'Bake Lab M' '作り手さん' 'LILOCLE運営' '' 'D0038' '取引中' '')
+  (& $P 'C-0037' 'ブライド・トゥー・ビー' '作り手さん' 'LILOCLE運営' '' 'D0039' '取引中' '')
+)
+Add-RowsIfMissing -ListName '案件' -KeyField 'DealId' -Rows @(
+  @{ Title = '坂中商店 できるAIチーム＋'; DealId = 'DX-0001'; Business = '業務改善・DX支援'; DealType = '問い合わせから運用'; PartnerIds = 'C-0007'; Stage = '運用'; NextAction = '運用状況を確かめる'; Owner = '坂中'; Memo = '顧客台帳の 坂中商店（④活用）・成約管理タスク #1 と同じお客様'; Deleted = $false }
+  @{ Title = 'ORDER4638 七久里農園'; DealId = 'ORDER4638'; Business = 'LILOCLE運営'; DealType = '注文'; PartnerIds = 'C-0029'; Stage = '作り手さんへ報告'; NextAction = 'ORDER4638 を作り手さんへ報告する'; NextDue = '2026-11-18T00:00:00Z'; Owner = '坂中'; BlockedReason = 'お問い合わせあり（領収書。宛名 ANDCOCO株式会社）'; Memo = '仕事 #198・#207・#209'; Deleted = $false }
 )
 
 Write-Host ''
