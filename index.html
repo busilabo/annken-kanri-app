@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 公開のときに、公開の仕組み（.github/workflows/publish-annken-kanri-app.yml）がこの版の番号に書き換える。手元では dev のまま -->
-<meta name="app-version" content="8d37f02">
+<meta name="app-version" content="466510e">
 <title>ビジラボ 仕事管理</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@500&display=swap">
 <style>
@@ -1843,8 +1843,18 @@
   .d-st[data-st="cur"] { color: var(--text); font-weight: 700; }
   .d-st:last-child i { background: var(--warn-soft); border-color: var(--warn); }
   @keyframes d-pulse { 0%, 100% { box-shadow: 0 0 0 0 var(--accent-soft); } 50% { box-shadow: 0 0 0 7px var(--accent-soft); } }
-  .d-next { font: inherit; text-align: left; display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: center; padding: 12px 16px; border-radius: 14px; border: 0; background: var(--accent); color: #fff; cursor: pointer; }
-  .d-next > span { display: grid; gap: 2px; min-width: 0; }
+  .d-next { display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: center; padding: 12px 16px; border-radius: 14px; background: var(--accent); color: #fff; }
+  .d-next > span, .d-next-go { display: grid; gap: 2px; min-width: 0; }
+  .d-next-go { font: inherit; color: inherit; text-align: left; background: none; border: 0; padding: 0; cursor: pointer; }
+  .d-who { border: 0; background: none; padding: 0; cursor: pointer; border-radius: 50%; }
+  .d-who:hover .avatar, .d-who:focus-visible .avatar { outline: 3px solid var(--accent-soft); }
+  .d-who-open .avatar { outline: 2px dashed var(--warn); outline-offset: 2px; }
+  .d-next .d-who-open .avatar { outline-color: #fff; }
+  .d-assign { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 8px 10px; margin: 4px 0 8px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--text); }
+  .d-assign[hidden] { display: none; }
+  .d-owner-opt { font: inherit; color: inherit; background: var(--surface); }
+  .d-owner-opt.d-on { border-color: var(--accent); background: var(--accent-soft); }
+  .d-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; border-bottom: 1px solid var(--border); }
   .d-next b { font-size: 16px; line-height: 1.4; overflow-wrap: anywhere; }
   .d-next small { font-size: 12.5px; opacity: .92; }
   .d-next-plain { background: var(--accent-soft); color: var(--text); cursor: default; grid-template-columns: 1fr; }
@@ -1866,8 +1876,8 @@
   .d-stars span { color: var(--border); }
   .d-sec h3 { margin: 0 0 6px; font-size: 13px; color: var(--text-muted); }
   .d-tasks { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--border); }
-  .d-tasks button { font: inherit; color: inherit; width: 100%; text-align: left; background: none; border: 0; border-bottom: 1px solid var(--border); padding: 9px 2px; display: grid; grid-template-columns: 24px 1fr auto auto; gap: 10px; align-items: center; cursor: pointer; font-size: 14.5px; }
-  .d-tasks button:hover { background: var(--surface-2); }
+  .d-tasks .d-row-go { font: inherit; color: inherit; width: 100%; text-align: left; background: none; border: 0; padding: 9px 2px; display: grid; grid-template-columns: 24px 1fr auto; gap: 10px; align-items: center; cursor: pointer; font-size: 14.5px; }
+  .d-tasks .d-row:hover { background: var(--surface-2); }
   .d-ck { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--border); display: grid; place-items: center; font-size: 11px; color: #fff; }
   .d-tasks li[data-done] .d-ck { background: var(--ok); border-color: var(--ok); }
   .d-tasks li[data-done] .d-t { text-decoration: line-through; color: var(--text-muted); }
@@ -1943,7 +1953,7 @@
   .tile.dragging { opacity: .45; }
   .band.drop-over { outline: 3px dashed var(--accent); outline-offset: -3px; background: var(--accent-soft); }
 </style>
-<script src="rules.js?v=8d37f02"></script>
+<script src="rules.js?v=466510e"></script>
 </head>
 <body>
 
@@ -8476,6 +8486,34 @@
     pr.tasks.forEach(function (c) { var o = ownerOf(c); if (o && o !== UNASSIGNED && names.indexOf(o) === -1) names.push(o); });
     return names;
   }
+  // 仕事の担当の顔（押すと、その場で担当を選べる。2026-11-18 代表の指定：？を押したらすぐ選べるように）
+  function dealWhoBtn(c, big) {
+    var ow = ownerOf(c);
+    return '<button type="button" class="d-who' + (ow === UNASSIGNED ? ' d-who-open' : '') + '" data-deal-assign="' + jumpKeyOf(c) + '" title="' + (ow === UNASSIGNED ? '担当を選ぶ' : '担当を変える（いま ' + esc(ow) + 'さん）') + '">' + avatarHtml(ow, { big: !!big }) + '</button>';
+  }
+  function dealAssignPickHtml(c) {
+    var k = jumpKeyOf(c), ow = ownerOf(c);
+    return '<div class="d-assign" data-deal-assign-box="' + k + '" hidden><span class="d-kind">だれがやりますか？</span>' + STAFF.filter(function (n) { return n !== UNASSIGNED; }).map(function (n) {
+      return '<button type="button" class="d-owner-opt' + (n === ow ? ' d-on' : '') + '" data-deal-assign-to="' + esc(n) + '" data-deal-assign-key="' + k + '">' + avatarHtml(n) + esc(n) + '</button>';
+    }).join('') + (ow !== UNASSIGNED ? '<button type="button" class="d-owner-opt" data-deal-assign-to="' + esc(UNASSIGNED) + '" data-deal-assign-key="' + k + '">🙋 走者募集に戻す</button>' : '') + '</div>';
+  }
+  document.addEventListener('click', function (e) {
+    var t = e.target.closest && e.target.closest('[data-deal-assign],[data-deal-assign-to]');
+    if (!t) return;
+    e.preventDefault(); e.stopPropagation();
+    if (t.hasAttribute('data-deal-assign')) {
+      var k = t.getAttribute('data-deal-assign');
+      document.querySelectorAll('[data-deal-assign-box]').forEach(function (b) { b.hidden = b.getAttribute('data-deal-assign-box') !== k || !b.hidden; });
+      return;
+    }
+    var card = jumpRegistry[t.getAttribute('data-deal-assign-key')], name = t.getAttribute('data-deal-assign-to');
+    if (!card) return;
+    if (name === UNASSIGNED) {
+      addHistoryEntry(card, 'task', '担当を外す', statusOf(card), null, ownerOf(card) + 'さんを外しました（案件の画面から）');
+      assignCard(card, UNASSIGNED);
+    } else if (name !== ownerOf(card)) assignCard(card, name, 'ask');
+    renderDeals();
+  }, true);
   function dealOwnerPickHtml(d) {
     var cur = dealOwnerList(d);
     return '<div class="d-owner-pick" data-deal-owner-box hidden>' + STAFF.filter(function (n) { return n !== UNASSIGNED; }).map(function (n) {
@@ -8556,8 +8594,8 @@
     // 次の1手
     if (nx) {
       var nxo = ownerOf(nx), nxd = cardDue(nx);
-      html += '<button type="button" class="d-next" data-jump-key="' + jumpKeyOf(nx) + '">' + avatarHtml(nxo, { big: true }) +
-        '<span><small>次にやること</small><b>▶ ' + esc(cardTitle(nx)) + '</b><small>' + (nxo === UNASSIGNED ? '🙋 走者募集' : esc(nxo) + 'さん') + (nxd ? '・' + esc(String(nxd).slice(5, 10).replace('-', '/').replace(/^0/, '')) + ' まで' : '') + '</small></span></button>';
+      html += '<div class="d-next">' + dealWhoBtn(nx, true) +
+        '<button type="button" class="d-next-go" data-jump-key="' + jumpKeyOf(nx) + '"><small>次にやること</small><b>▶ ' + esc(cardTitle(nx)) + '</b><small>' + (nxo === UNASSIGNED ? '🙋 走者募集（顔を押すと担当を選べます）' : esc(nxo) + 'さん') + (nxd ? '・' + esc(String(nxd).slice(5, 10).replace('-', '/').replace(/^0/, '')) + ' まで' : '') + '</small></button></div>' + dealAssignPickHtml(nx);
     } else if (d.NextAction && DEAL_END.indexOf(d.Stage) === -1) {
       html += '<div class="d-next d-next-plain"><span><small>次にやること</small><b>' + esc(d.NextAction) + '</b></span></div>';
     }
@@ -8575,8 +8613,9 @@
     var order = pr.open.slice().sort(function (a, b) { return String(cardDue(a) || '9').localeCompare(String(cardDue(b) || '9')); }).concat(pr.done);
     html += '<div class="d-sec"><h3>仕事（押すと開きます）</h3>' + (order.length ? '<ul class="d-tasks">' + order.map(function (c) {
       var dn = statusOf(c) === '完了', ow = ownerOf(c), du = cardDue(c);
-      return '<li' + (dn ? ' data-done' : c === nx ? ' data-next' : '') + '><button type="button" data-jump-key="' + jumpKeyOf(c) + '"><span class="d-ck">' + (dn ? '✓' : '') + '</span>' +
-        '<span class="d-t">' + esc(cardTitle(c)) + '</span><span class="d-dt">' + (dn ? '済み' : du ? esc(String(du).slice(5, 10).replace('-', '/').replace(/^0/, '')) : '') + '</span>' + avatarHtml(ow) + '</button></li>';
+      return '<li' + (dn ? ' data-done' : c === nx ? ' data-next' : '') + '><div class="d-row"><button type="button" class="d-row-go" data-jump-key="' + jumpKeyOf(c) + '"><span class="d-ck">' + (dn ? '✓' : '') + '</span>' +
+        '<span class="d-t">' + esc(cardTitle(c)) + '</span><span class="d-dt">' + (dn ? '済み' : du ? esc(String(du).slice(5, 10).replace('-', '/').replace(/^0/, '')) : '') + '</span></button>' +
+        (dn ? avatarHtml(ow) : dealWhoBtn(c)) + '</div>' + (dn ? '' : dealAssignPickHtml(c)) + '</li>';
     }).join('') + '</ul>' : '<p class="deal-empty">仕事はまだありません</p>') + '</div>';
     // できたこと
     if (pr.done.length) {
@@ -9292,8 +9331,8 @@
 })();
 </script>
 <script src="vendor/msal-browser.min.js"></script>
-<script src="sync.js?v=8d37f02"></script>
-<script src="chat.js?v=8d37f02"></script>
+<script src="sync.js?v=466510e"></script>
+<script src="chat.js?v=466510e"></script>
 <script>
 // 新しい版が出たら知らせて切り替える（2026-11-17 代表の指摘：ブラウザが古い版を覚えていて、更新しても前の画面のままだった）。
 // 公開のたびに version.txt に版の番号が入る。5分ごとと、画面に戻ってきたときに見比べ、違えば上に帯を出す。押すと読み直す（入力中の内容を消さないよう、勝手には読み直さない）
