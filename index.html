@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 公開のときに、公開の仕組み（.github/workflows/publish-annken-kanri-app.yml）がこの版の番号に書き換える。手元では dev のまま -->
-<meta name="app-version" content="8ada325">
+<meta name="app-version" content="d3889f0">
 <title>ビジラボ 仕事管理</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@500&display=swap">
 <style>
@@ -1929,7 +1929,7 @@
   .tile.dragging { opacity: .45; }
   .band.drop-over { outline: 3px dashed var(--accent); outline-offset: -3px; background: var(--accent-soft); }
 </style>
-<script src="rules.js?v=8ada325"></script>
+<script src="rules.js?v=d3889f0"></script>
 </head>
 <body>
 
@@ -1953,7 +1953,8 @@
 
   <nav class="sections">
     <button type="button" class="section-btn" data-section="work" data-local-active>仕事管理</button>
-    <button type="button" class="section-btn" data-section="deal">案件管理 <span class="tab-count" data-local-count="inquiry">0</span></button>
+    <!-- 案件管理＝全事業の案件（🤝 案件）。数字は開いている案件の数（止まっていれば 🔴）。2026-11-18 代表の指定 -->
+    <button type="button" class="section-btn" data-section="deal">案件管理 <span class="tab-count" data-deal-count>0</span></button>
     <button type="button" class="section-btn" data-section="build">システム構築管理 <span class="tab-count" data-local-count="wontask">0</span></button>
     <button type="button" class="section-btn" data-section="ops">運用状況管理 <span class="tab-count" data-local-count="ops">0</span></button>
   </nav>
@@ -1961,7 +1962,6 @@
   <nav class="tabs" data-subnav="work">
     <button type="button" class="tab-btn" data-tab="today" data-local-active>🏠 今日 <span class="tab-count" data-local-count="today">0</span></button>
     <button type="button" class="tab-btn" data-tab="growth">📈 成長</button>
-    <button type="button" class="tab-btn" data-tab="deal">🤝 案件 <span class="tab-count" data-deal-count>0</span></button>
     <button type="button" class="tab-btn" data-tab="task">仕事一覧 <span class="tab-count" data-local-count="task">0</span></button>
     <button type="button" class="tab-btn" data-tab="shift">出勤予定</button>
     <button type="button" class="tab-btn" data-tab="team">チーム状況</button>
@@ -1970,7 +1970,8 @@
     <button type="button" class="tab-btn" data-tab="contact">連絡先 <span class="tab-count" data-local-count="contact">0</span></button>
   </nav>
   <nav class="tabs" data-subnav="deal" hidden>
-    <button type="button" class="tab-btn" data-tab="inquiry">問い合わせ管理</button>
+    <button type="button" class="tab-btn" data-tab="deal">🤝 案件 <span class="tab-count" data-deal-count>0</span></button>
+    <button type="button" class="tab-btn" data-tab="inquiry">問い合わせ管理（DX） <span class="tab-count" data-local-count="inquiry">0</span></button>
     <button type="button" class="tab-today-btn" data-local data-role="meetingTodayNav">📅 本日商談 <span class="tab-count" data-local-count="meetingToday">0</span></button>
     <button type="button" class="tab-today-btn" data-local data-role="wonNav">✅ 成約 <span class="tab-count" data-local-count="won">0</span></button>
   </nav>
@@ -8467,9 +8468,8 @@
 
   function renderDeals() {
     if (!dealState) return;
-    var cnt = document.querySelector('[data-deal-count]');
     var stuckAll = dealState.loaded ? openDeals().filter(function (d) { return dealStuck(d).length; }).length : 0;
-    if (cnt) { cnt.textContent = stuckAll ? '🔴' + stuckAll : String(openDeals().length); }
+    document.querySelectorAll('[data-deal-count]').forEach(function (cnt) { cnt.textContent = stuckAll ? '🔴' + stuckAll : String(openDeals().length); });
     var bizBox = document.querySelector('[data-deal-biz]'), board = document.querySelector('[data-deal-board]');
     if (!bizBox || !board) return;
     var top = document.querySelector('.deal-top'), unl = document.querySelector('[data-deal-unlinked]');
@@ -8712,8 +8712,8 @@
 
 
   // ---- 画面の切り替え ----
-  var PANEL_SECTION = { deal: "work", growth: "work", today: "work", contact: "work", task: "work", shift: "work", team: "work", skill: "work", customer: "work", inquiry: "deal", wontask: "build", ops: "ops" };
-  var lastTabOf = { work: "today", deal: "inquiry", build: "wontask", ops: "ops" };
+  var PANEL_SECTION = { deal: "deal", growth: "work", today: "work", contact: "work", task: "work", shift: "work", team: "work", skill: "work", customer: "work", inquiry: "deal", wontask: "build", ops: "ops" };
+  var lastTabOf = { work: "today", deal: "deal", build: "wontask", ops: "ops" };
 
   function jumpToCard(card, focusRole) {
     if (!card || !document.body.contains(card)) { applyAll(); return; }
@@ -9256,8 +9256,8 @@
 })();
 </script>
 <script src="vendor/msal-browser.min.js"></script>
-<script src="sync.js?v=8ada325"></script>
-<script src="chat.js?v=8ada325"></script>
+<script src="sync.js?v=d3889f0"></script>
+<script src="chat.js?v=d3889f0"></script>
 <script>
 // 新しい版が出たら知らせて切り替える（2026-11-17 代表の指摘：ブラウザが古い版を覚えていて、更新しても前の画面のままだった）。
 // 公開のたびに version.txt に版の番号が入る。5分ごとと、画面に戻ってきたときに見比べ、違えば上に帯を出す。押すと読み直す（入力中の内容を消さないよう、勝手には読み直さない）
