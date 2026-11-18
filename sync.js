@@ -1353,7 +1353,10 @@
         // 1. 注文の報告：作り手さんの明細が OPEN のまま（報告は注文から12時間後、10・14・18・22時）
         var openFo = (o.fulfillmentOrders || []).filter(function (f) { return f.status === "OPEN" && f.skus.some(function (s) { return /^D\d{4}/i.test(s); }); });
         if (openFo.length && !o.shipped) {
-          if (age * 24 >= 30) add("report", "bad", o, "作り手さんへの注文の報告が、まだされていません（注文から" + Math.floor(age) + "日）");
+          // 報告は注文から12時間後（毎時）。18時間を過ぎても報告されていなければ、保留か止まっている（2026-11-18 代表の指摘：ORDER4638 の保留に気づけなかった）
+          var hrs = Math.floor(age * 24);
+          if (hrs >= 24) add("report", "bad", o, "作り手さんへの注文の報告が、まだされていません（注文から" + hrs + "時間）。保留になっていないか、注文・発送報告のメールを見てください");
+          else if (hrs >= 18) add("report", "warn", o, "作り手さんへの注文の報告が、まだされていません（注文から" + hrs + "時間）");
           else counts.waitReport++;
         }
         // 2・3. 作り手さんのエクセル
@@ -1400,6 +1403,17 @@
         { key: "pay", label: "支払いの確定", tone: worst("pay"), text: n("pay") ? "期限が近い注文が " + n("pay") + " 件" : "期限が近い注文はありません" }
       ];
       window.__app.setLiloStatus({ loaded: true, at: new Date(), checks: checks, issues: issues, total: orders.length, sales: await salesP });
+      // 報告が24時間以上止まっている注文は、代表あての仕事にする（注文・発送報告の「保留中」と同じ目印。もうあれば作らない）
+      var stuck = issues.filter(function (i) { return i.cat === "report" && i.tone === "bad" && i.order; });
+      for (var si = 0; si < stuck.length; si++) {
+        var it = stuck[si];
+        await createTaskOnce("routine:lilocle-" + it.order, {
+          Title: (it.order + " " + it.maker + "：注文の報告が止まっています").slice(0, 60),
+          Priority: "高", Owner: "坂中", Business: "LILOCLE運営", Category: "定時報告の対応",
+          Content: it.order + " " + it.maker + "：注文の報告が止まっています\n" + it.text +
+            "\n\n【手順】\n1. 「【LILOCLE】注文・発送報告」のメールで、保留・要確認になっている理由を見る\n2. 進めてよければ、Claude のチャットで「" + it.order + "を報告して」と伝える（内容を見て了承する）"
+        }, "注文の報告が止まっている", "LILOCLE の様子で見つけた");
+      }
     } catch (e) {
       log("lilo status failed: " + e.message);
       window.__app.setLiloStatus({ loaded: false, error: e.message, sales: typeof salesP !== "undefined" ? await salesP : null });
