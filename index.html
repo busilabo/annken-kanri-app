@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 公開のときに、公開の仕組み（.github/workflows/publish-annken-kanri-app.yml）がこの版の番号に書き換える。手元では dev のまま -->
-<meta name="app-version" content="e9df1fe">
+<meta name="app-version" content="8ada325">
 <title>ビジラボ 仕事管理</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@500&display=swap">
 <style>
@@ -1867,6 +1867,11 @@
   .d-edit { border: 1px solid var(--border); border-radius: 12px; padding: 0 12px; }
   .d-edit > summary { padding: 9px 0; cursor: pointer; font-size: 13.5px; color: var(--text-muted); }
   .d-edit .deal-form { padding-bottom: 12px; }
+  .d-btile { border: 2px solid var(--text); }
+  .d-btile-main { display: grid !important; grid-template-columns: auto 1fr; gap: 12px; align-items: center; }
+  .d-btile-txt { display: grid; gap: 2px; min-width: 0; }
+  .d-btile-tag { font-size: 12px; font-weight: 700; color: var(--text-muted); }
+  .d-btile .tile-foot { align-items: center; }
   .s-deal-go { font: inherit; color: inherit; text-align: left; display: flex; align-items: center; gap: 8px; padding: 5px 14px 5px 5px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); cursor: pointer; font-size: 13.5px; align-self: flex-start; max-width: 100%; }
   .s-deal-go > span:nth-child(2) { min-width: 0; overflow-wrap: anywhere; }
   .s-deal-go:hover { border-color: var(--accent); }
@@ -1924,7 +1929,7 @@
   .tile.dragging { opacity: .45; }
   .band.drop-over { outline: 3px dashed var(--accent); outline-offset: -3px; background: var(--accent-soft); }
 </style>
-<script src="rules.js?v=e9df1fe"></script>
+<script src="rules.js?v=8ada325"></script>
 </head>
 <body>
 
@@ -7882,7 +7887,52 @@
   }
 
   // カード型の1件。左端の線の色で急ぎかどうか、右下の顔アイコンで走者が分かる
+  // 同じ案件の仕事は、ボードでは1枚にまとめる（2026-11-18 代表の指定：打ち合わせから出た仕事がばらばらに並んで見づらい）。
+  // 2件以上あるときだけ。いちばん急ぐ仕事の段に置き、押すと案件の画面へ。だれも持っていなければ「次の走者募集」、1件でも持っていれば「走行中」
+  function groupDealTiles(buckets) {
+    if (!dealState || !dealState.loaded) return;
+    var ORDER = ['urgent', 'week', 'next', 'later'], groups = {};
+    ORDER.forEach(function (b, bi) {
+      buckets[b].forEach(function (it) {
+        if (it.card.getAttribute('data-kind') !== 'task') return;
+        var id = roleVal(it.card, 'dealId');
+        var d = id && openDeals().filter(function (x) { return x.DealId === id; })[0];
+        if (!d) return;
+        (groups[id] = groups[id] || { deal: d, items: [], band: bi }).items.push(it);
+        groups[id].band = Math.min(groups[id].band, bi);
+      });
+    });
+    Object.keys(groups).forEach(function (id) {
+      var g = groups[id];
+      if (g.items.length < 2) return;
+      ORDER.forEach(function (b) { buckets[b] = buckets[b].filter(function (it) { return g.items.indexOf(it) === -1; }); });
+      var pr = dealProgress(g.deal), nx = dealNextTask(pr);
+      var owners = dealOwners(pr, g.deal), nobody = pr.open.filter(function (c) { return ownerOf(c) === UNASSIGNED; }).length;
+      var urgent = g.items.some(function (it) { return it.urgent; });
+      var sg = dealSignal(g.deal, pr);
+      var tile = { card: nx || g.items[0].card, dealTile: true, deal: g.deal, pr: pr, nx: nx, owners: owners, urgent: urgent, sig: sg,
+        claim: g.items.every(function (it) { return it.claim; }), nobody: nobody };
+      buckets[ORDER[g.band]].unshift(tile);
+    });
+  }
+  function dealTileHtml(it) {
+    var d = it.deal, pr = it.pr, nx = it.nx, nxo = nx ? ownerOf(nx) : '', nxd = nx ? cardDue(nx) : '';
+    var bizI = BUSINESSES.indexOf(d.Business) + 1;
+    return '<div class="tile d-btile"' + (bizI ? ' data-biz-i="' + bizI + '"' : '') + (it.urgent ? ' data-urgent' : '') + '>' +
+      '<button type="button" class="tile-main d-btile-main" data-deal-goto="' + esc(d.id) + '">' +
+      '<span class="d-ring">' + ringSvg(pr.n, pr.total, 48, 4) + '<b>' + pr.n + '/' + pr.total + '</b></span>' +
+      '<span class="d-btile-txt"><span class="d-btile-tag">🤝 案件・仕事 ' + pr.open.length + '件</span>' +
+      '<span class="tile-title">' + esc(dealName(d)) + '</span>' +
+      (nx ? '<span class="tile-meta">▶ 次：' + esc(cardTitle(nx)) + '（' + (nxo === UNASSIGNED ? '走者募集' : esc(nxo) + 'さん') + (nxd ? '・' + esc(String(nxd).slice(5, 10).replace('-', '/').replace(/^0/, '')) : '') + '）</span>' : '') +
+      '</span></button>' +
+      '<div class="tile-foot"><span class="tile-badges">' + (it.urgent ? '<span class="row-badge" data-tone="crit">🔥 急ぎ</span>' : '') +
+      '<span class="d-sig" data-tone="' + it.sig.tone + '">' + it.sig.text + '</span>' +
+      (d.NextDue ? '<span class="row-badge" data-tone="neutral">🏁 ' + esc(dueText(d)) + '</span>' : '') +
+      (it.nobody ? '<span class="row-badge" data-tone="warn">🙋 走者募集 ' + it.nobody + '</span>' : '') + '</span>' +
+      '<span class="d-avs">' + it.owners.slice(0, 4).map(function (o) { return avatarHtml(o); }).join('') + '</span></div></div>';
+  }
   function tileHtml(it) {
+    if (it.dealTile) return dealTileHtml(it);
     var key = jumpKeyOf(it.card);
     var badges = (it.badges || []).filter(Boolean);
     var tone = badges.some(function (b) { return b.tone === 'crit'; }) ? 'crit' : badges.some(function (b) { return b.tone === 'warn'; }) ? 'warn' : (it.tone || 'neutral');
@@ -8047,6 +8097,7 @@
       else buckets.later.push(item);
     });
     buckets.urgent.sort(byUrgency); buckets.week.sort(byDue); buckets.next.sort(byDue); buckets.later.sort(byDue);
+    groupDealTiles(buckets);
 
     // 毎週・毎月の仕事（ひな形）
     var tpl = function (kindName) {
@@ -8338,7 +8389,7 @@
   var dealState = { loaded: false, partners: [], deals: [] };
   var dealBiz = 'LILOCLE運営', dealOpenId = '';
   try { dealBiz = localStorage.getItem('busilabo.dealBiz') || dealBiz; } catch (e) { /* 保存できない環境でも動く */ }
-  function setDeals(st) { dealState = st || dealState; renderDeals(); renderTodayAlerts(); try { renderSimpleTasks(); } catch (e) { /* 読み込みの途中 */ } }
+  function setDeals(st) { dealState = st || dealState; renderDeals(); renderTodayAlerts(); try { renderSimpleTasks(); renderToday(); } catch (e) { /* 読み込みの途中 */ } }
   function openDeals() { return dealState.deals.filter(function (d) { return DEAL_END.indexOf(d.Stage) === -1; }); }
   function partnerName(id) { var p = dealState.partners.filter(function (x) { return x.PartnerId === id; })[0]; return p ? p.Title : id; }
   function dealPartners(d) { return String(d.PartnerIds || '').split(/[、,\s]+/).filter(Boolean).map(partnerName).join('・'); }
@@ -9205,8 +9256,8 @@
 })();
 </script>
 <script src="vendor/msal-browser.min.js"></script>
-<script src="sync.js?v=e9df1fe"></script>
-<script src="chat.js?v=e9df1fe"></script>
+<script src="sync.js?v=8ada325"></script>
+<script src="chat.js?v=8ada325"></script>
 <script>
 // 新しい版が出たら知らせて切り替える（2026-11-17 代表の指摘：ブラウザが古い版を覚えていて、更新しても前の画面のままだった）。
 // 公開のたびに version.txt に版の番号が入る。5分ごとと、画面に戻ってきたときに見比べ、違えば上に帯を出す。押すと読み直す（入力中の内容を消さないよう、勝手には読み直さない）
