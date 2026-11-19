@@ -1636,6 +1636,12 @@
     var oldest = waiting.reduce(function (m, x) { return Math.max(m, Date.now() - new Date(x.createdDateTime).getTime()); }, 0);
     var st = { checkedAt: Date.now(), summaryMin: Math.round((Date.now() - new Date(sum.lastModifiedDateTime).getTime()) / 60000), oldestMin: Math.round(oldest / 60000), waiting: waiting.length };
     if (window.__app && window.__app.setLedgerHealth) window.__app.setLedgerHealth(st);
+    // マネージャーの見回り（1時間ごと。データベース/マネージャーの見回り.json）も一緒に読む
+    try {
+      var mg = await graph("/drives/" + QUEUE_DRIVE_ID + "/root:/" + encodeURIComponent("データベース") + "/" + encodeURIComponent("マネージャーの見回り.json") + ":/content");
+      if (typeof mg === "string") mg = JSON.parse(mg);
+      if (window.__app && window.__app.setManagerReport) window.__app.setManagerReport(mg);
+    } catch (e) { /* まだ一度も見回っていない */ }
     return st;
   }
   window.__db = { load: loadDbRef, health: checkLedgerHealth, ref: function () { return dbRef; }, guess: guessLinks, refresh: refreshDeals, updateDeal: updateDeal };
