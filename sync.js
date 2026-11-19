@@ -547,7 +547,7 @@
     try { await ensureDailyTasks(); } catch (e) { log("daily task failed: " + e.message); }
     try { if (window.__manuals) await migrateManualReviews(); } catch (e) { log("manual review merge failed: " + e.message); }
     try { await restoreDroppedInquiries(); } catch (e) { log("restore dropped inquiries failed: " + e.message); }
-    try { await ensureRecurring(); } catch (e) { log("recurring task failed: " + e.message); }
+    // 毎週・毎月の仕事は台帳係（Azure ledger.js ensureRecurring）が15分ごとに作る（2026-11-19 アプリから移した）
     // Instagram・Facebook・LINE のメッセージは、Azure の台帳係（ledger.js）が5分ごとに仕事にする（2026-11-18）。アプリは受け取らない
   }
 
