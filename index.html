@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 公開のときに、公開の仕組み（.github/workflows/publish-annken-kanri-app.yml）がこの版の番号に書き換える。手元では dev のまま -->
-<meta name="app-version" content="c5917d0">
+<meta name="app-version" content="454c7ba">
 <title>ビジラボ 仕事管理</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@500&display=swap">
 <style>
@@ -1955,7 +1955,7 @@
   .tile.dragging { opacity: .45; }
   .band.drop-over { outline: 3px dashed var(--accent); outline-offset: -3px; background: var(--accent-soft); }
 </style>
-<script src="rules.js?v=c5917d0"></script>
+<script src="rules.js?v=454c7ba"></script>
 </head>
 <body>
 
@@ -4963,6 +4963,13 @@
         now.text = curStep.text;
         now.why = why || cs.why || '';
         now.btns = '<button type="button" class="s-btn s-primary f-big" data-s-act="' + esc(curStep.action) + '" data-s-act-key="' + key + '" data-s-act-line="' + curStep.line + '"' + (cs.mode ? ' data-s-act-mode="' + cs.mode + '"' : '') + (cs.why ? ' disabled' : '') + '>' + (cs.mode === 'refuse' ? '✉️ お断りの下書きを作って送る' : ACTIONS[curStep.action].label) + '</button>';
+      } else if (curStep && canReply && /返事|返信/.test(curStep.text) && !/待つ/.test(curStep.text)) {
+        // 「返事を送る」手順：その場で書いて送れるように（2026-11-19）
+        now.text = repOwns ? repStepText(curStep.text) : curStep.text;
+        now.why = why || (c.needsRep ? '⚠️ 代表に確認してから送る：' + c.draftNote : (c.draftNote || fromLabel(ri.route) + ' から' + (ri.to ? ' ' + ri.to + ' へ' : '')));
+        now.btns = '<button type="button" class="s-btn s-primary f-big" data-s-reply="' + key + '">✉️ ' + (draft ? '下書きを見て送る' : '返事を書く（AI が下書き）') + '</button>' +
+          '<button type="button" class="s-btn" data-s-step-do="' + key + '" data-s-step-line="' + curStep.line + '">✅ 送った</button>' +
+          '<button type="button" class="s-btn" data-s-step-skip="' + key + '" data-s-step-line="' + curStep.line + '">➖ 返事は要らない</button>';
       } else if (curStep && draft && canReply && curIdx === 0) {
         // 最初の手順が返事なら、下書きを開くボタンにする
         now.text = repOwns ? repStepText(curStep.text) : curStep.text;
@@ -5976,7 +5983,14 @@
     if (!mark) { applyAll(); return; }
     var c = parseTaskContent(card);
     var st = actionStates(card, c, statusOf(card));
-    if (c.steps.length && c.steps.every(function (s, i) { return s.decided || (st[i] && st[i].skip); })) {
+    var allDecided = c.steps.length && c.steps.every(function (s, i) { return s.decided || (st[i] && st[i].skip); });
+    // 実行した手順が1つもないまま（全部「不要」・代表の手順を飛ばしただけ）なら、完了にしない（2026-11-19 代表の指摘：七久里農園様の仕事が、返事をしないまま完了になった）
+    if (allDecided && !c.steps.some(function (s) { return s.done; })) {
+      addHistoryEntry(card, 'task', '手順が全部「不要」になった', statusOf(card), null, '何もしないまま終わっていないか確かめてください。済んでいれば「✅ 終わった」を押します');
+      applyAll();
+      return;
+    }
+    if (allDecided) {
       setTaskStatus(card, '完了');
       addHistoryEntry(card, 'task', '完了にする', '完了', null, '手順が全部終わったので完了にした');
       if (window.__manualOps && window.__manualOps.onComplete) window.__manualOps.onComplete(card);
@@ -9367,8 +9381,8 @@
 })();
 </script>
 <script src="vendor/msal-browser.min.js"></script>
-<script src="sync.js?v=c5917d0"></script>
-<script src="chat.js?v=c5917d0"></script>
+<script src="sync.js?v=454c7ba"></script>
+<script src="chat.js?v=454c7ba"></script>
 <script>
 // 新しい版が出たら知らせて切り替える（2026-11-17 代表の指摘：ブラウザが古い版を覚えていて、更新しても前の画面のままだった）。
 // 公開のたびに version.txt に版の番号が入る。5分ごとと、画面に戻ってきたときに見比べ、違えば上に帯を出す。押すと読み直す（入力中の内容を消さないよう、勝手には読み直さない）

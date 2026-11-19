@@ -150,6 +150,10 @@
     reply: [
       "メールを読んで、必要なら返信する"
     ],
+    liloPayment: [
+      "作り手さんに返事を送る（請求書の送り方の相談なら「メールに添付で大丈夫です」など。返事が要らないお知らせなら「不要」）",
+      "請求書が付いていれば、金額と注文の内容を確かめて、支払いの準備をする（支払いは代表。付いていなければ「不要」）"
+    ],
     liloTaikai: [
       "Claude に「退会希望を処理して」と頼む（スキル lilocle-taikai。メールアドレスが一致するお客様の情報を削除し、退会手続き完了のメールを contact@lilocle.jp から送ります。代表の確認はいりません）",
       "Claude が「確認が必要」と言ったもの（お客様が見つからない・2人以上いる・注文があって削除できない）は、代表に聞く",
@@ -296,7 +300,7 @@
     }
     if (mailbox.indexOf("lilocle@") === 0) {
       // 担当は決めずに入れる（2026-11-19 代表の指定：担当は後から決める）
-      if (PAYMENT_WORD.test(text)) return { title: "LILOCLE 請求・支払い：" + subject, business: "LILOCLE運営", category: "代表の確認", steps: STEPS.rep };
+      if (PAYMENT_WORD.test(text)) return { title: "LILOCLE 請求・支払い：" + subject, business: "LILOCLE運営", category: "代表の確認", steps: STEPS.liloPayment, draftKind: "lilocle-maker", channel: "メール" };
       return { title: "LILOCLEメーカー様：" + subject, business: "LILOCLE運営", category: "メーカー対応", steps: STEPS.liloSupplier };
     }
     // contact@ に届いても、作り手（メーカー様・取り扱い候補）からのメールはメーカー対応（2026-11-06 代表の指定）
