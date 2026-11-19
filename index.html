@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 公開のときに、公開の仕組み（.github/workflows/publish-annken-kanri-app.yml）がこの版の番号に書き換える。手元では dev のまま -->
-<meta name="app-version" content="b128a84">
+<meta name="app-version" content="d86b29c">
 <title>ビジラボ 仕事管理</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@500&display=swap">
 <style>
@@ -1955,7 +1955,7 @@
   .tile.dragging { opacity: .45; }
   .band.drop-over { outline: 3px dashed var(--accent); outline-offset: -3px; background: var(--accent-soft); }
 </style>
-<script src="rules.js?v=b128a84"></script>
+<script src="rules.js?v=d86b29c"></script>
 </head>
 <body>
 
@@ -7862,6 +7862,8 @@
   function spamExempt(card) {
     // LILOCLE の退会希望（「配信停止」「メルマガ」と書かれるが、お客様からの依頼。sync.js isTaikai）
     if (roleVal(card, 'teamsMessageId').indexOf('mail:taikai:') === 0) return true;
+    // 取引先（作り手さん・綿半様など）からのメールは迷惑メールではない（2026-11-19）
+    if (card.getAttribute('data-kind') === 'task' && roleVal(card, 'partnerId')) return true;
     var id =card.getAttribute('data-kind') === 'inquiry' ? card.getAttribute('data-src-id') || "" : roleVal(card, 'teamsMessageId').replace(/^(inquiry|mail):/, "");
     return SPAM_NOT_IDS.indexOf(id) !== -1;
   }
@@ -7987,7 +7989,8 @@
       var urgent = g.items.some(function (it) { return it.urgent; });
       var sg = dealSignal(g.deal, pr);
       var tile = { card: nx || g.items[0].card, dealTile: true, deal: g.deal, pr: pr, nx: nx, owners: owners, urgent: urgent, sig: sg,
-        claim: g.items.every(function (it) { return it.claim; }), nobody: nobody };
+        claim: g.items.every(function (it) { return ownerOf(it.card) === UNASSIGNED; }), nobody: nobody,
+        away: g.items.filter(function (it) { return it.ownerOff; }).map(function (it) { return ownerOf(it.card); }) };
       buckets[ORDER[g.band]].unshift(tile);
     });
   }
@@ -8004,7 +8007,8 @@
       '<div class="tile-foot"><span class="tile-badges">' + (it.urgent ? '<span class="row-badge" data-tone="crit">🔥 急ぎ</span>' : '') +
       '<span class="d-sig" data-tone="' + it.sig.tone + '">' + it.sig.text + '</span>' +
       (d.NextDue ? '<span class="row-badge" data-tone="neutral">🏁 ' + esc(dueText(d)) + '</span>' : '') +
-      (it.nobody ? '<span class="row-badge" data-tone="warn">🙋 走者募集 ' + it.nobody + '</span>' : '') + '</span>' +
+      (it.nobody ? '<span class="row-badge" data-tone="warn">🙋 走者募集 ' + it.nobody + '</span>' : '') +
+      (it.away && it.away.length ? '<span class="row-badge" data-tone="warn">' + esc(it.away.filter(function (n, i, a) { return a.indexOf(n) === i; }).join('・')) + 'さんお休み</span>' : '') + '</span>' +
       '<span class="d-avs">' + it.owners.slice(0, 4).map(function (o) { return avatarHtml(o); }).join('') + '</span></div></div>';
   }
   function tileHtml(it) {
@@ -8572,7 +8576,11 @@
       return '<label class="d-owner-opt"><input type="checkbox" value="' + esc(n) + '"' + (cur.indexOf(n) !== -1 ? ' checked' : '') + '>' + avatarHtml(n) + esc(n) + '</label>';
     }).join('') + '<div class="deal-actions"><button type="button" class="s-btn s-primary" data-deal-owners-save="' + esc(d.id) + '">この人たちにする</button><span data-deal-owner-msg></span></div></div>';
   }
-  function dealName(d) { return String(d.Title || d.DealId || '').replace(d.DealId, '').trim() || d.DealId; }
+  function dealName(d) {
+    // 注文の案件は「ご注文 ORDER4638（作り手：七久里農園 様）」（2026-11-19 代表の指摘：「七久里農園」だけだと、お客様への領収書の仕事なのに作り手さんの仕事に見える）
+    if (/^ORDER\d+$/.test(d.DealId || '')) { var mk = dealPartners(d) || String(d.Title || '').replace(d.DealId, '').trim(); return 'ご注文 ' + d.DealId + (mk ? '（作り手：' + mk + ' 様）' : ''); }
+    return String(d.Title || d.DealId || '').replace(d.DealId, '').trim() || d.DealId;
+  }
   // 次の1手：開いている仕事のうち、期限の早いもの（期限なしは後ろ）
   function dealNextTask(pr) {
     return pr.open.slice().sort(function (a, b) { return String(cardDue(a) || '9').localeCompare(String(cardDue(b) || '9')); })[0] || null;
@@ -9385,8 +9393,8 @@
 })();
 </script>
 <script src="vendor/msal-browser.min.js"></script>
-<script src="sync.js?v=b128a84"></script>
-<script src="chat.js?v=b128a84"></script>
+<script src="sync.js?v=d86b29c"></script>
+<script src="chat.js?v=d86b29c"></script>
 <script>
 // 新しい版が出たら知らせて切り替える（2026-11-17 代表の指摘：ブラウザが古い版を覚えていて、更新しても前の画面のままだった）。
 // 公開のたびに version.txt に版の番号が入る。5分ごとと、画面に戻ってきたときに見比べ、違えば上に帯を出す。押すと読み直す（入力中の内容を消さないよう、勝手には読み直さない）
