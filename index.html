@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 公開のときに、公開の仕組み（.github/workflows/publish-annken-kanri-app.yml）がこの版の番号に書き換える。手元では dev のまま -->
-<meta name="app-version" content="454c7ba">
+<meta name="app-version" content="b128a84">
 <title>ビジラボ 仕事管理</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@500&display=swap">
 <style>
@@ -1955,7 +1955,7 @@
   .tile.dragging { opacity: .45; }
   .band.drop-over { outline: 3px dashed var(--accent); outline-offset: -3px; background: var(--accent-soft); }
 </style>
-<script src="rules.js?v=454c7ba"></script>
+<script src="rules.js?v=b128a84"></script>
 </head>
 <body>
 
@@ -4936,11 +4936,8 @@
     } else if (!closed && !recur) {
       var now = { text: '', why: '', btns: '' };
       var why = handover ? '前の人から：' + handover : '';
-      if (owner === UNASSIGNED) {
-        now.text = curStep ? (repOwns ? repStepText(curStep.text) : curStep.text) : c.title;
-        now.why = why || 'まだだれも受け取っていません。受け取ると、あなたの仕事になります';
-        now.btns = '<button type="button" class="s-btn s-primary f-big" data-s-claim="' + key + '">🙋 受け取って始める</button>';
-      } else if (c.pastes.length) {
+      // 担当がいなくても、そのまま進められる（2026-11-19 代表の指定：担当は後から決める。「受け取って始める」を押すと担当が付いてしまっていた）
+      if (c.pastes.length) {
         var pl = c.pastes[0].label;
         now.text = '下の文をコピーして、' + (pl || '相手') + ' に貼り付ける';
         now.why = why || '貼り付けたら、そちらで進めてもらいます。済んだら「終わった」を押します';
@@ -4986,10 +4983,13 @@
         now.why = why || (c.needsRep ? '⚠️ 代表に確認してから送る：' + c.draftNote : (c.draftNote || (fromLabel(ri.route) + ' から' + (ri.to ? ' ' + ri.to + ' へ' : '')))) ;
         now.btns = '<button type="button" class="s-btn s-primary f-big" data-s-reply="' + key + '">✉️ ' + (draft ? '下書きを見て送る' : '返事を書く') + '</button>';
       } else {
-        now.text = c.steps.length ? '手順は全部済みました。中身を確かめて終わりにする' : '中身を読んで、済んだら「終わった」を押す';
+        // 手順のない仕事は、仕事の名前がそのまま「すること」。済んでから「終わった」（2026-11-19：手順のない「領収書を送る」が、送らないまま終わりにされた）
+        now.text = c.steps.length ? '手順は全部済みました。中身を確かめて終わりにする' : (c.title || '中身を読んで、済んだら「終わった」を押す');
+        if (!c.steps.length && !why) why = '済んでから「✅ 終わった」を押してください';
         now.why = why || (ri && ri.blocked ? '📨 ' + ri.blocked : '');
         now.btns = '<button type="button" class="s-btn s-primary f-big" data-s-done="' + key + '">✅ 終わった</button>';
       }
+      if (owner === UNASSIGNED && !now.why) now.why = '担当はまだ決まっていません（後から決めても、このまま進められます）';
       html += '<div class="f-now s-now"><div class="f-now-label">いまやること</div><b class="f-now-title">' + linkify(now.text) + '</b>' +
         (now.why ? '<div class="f-now-help">' + linkify(now.why) + '</div>' : '') +
         (now.btns ? '<div class="f-now-actions">' + now.btns + '</div>' : '') + '</div>';
@@ -5089,6 +5089,9 @@
       foot.push('<button type="button" class="s-btn s-mini" data-s-reopen="' + key + '">まだ終わっていなかった</button>');
     } else if (!recur) {
       if (owner === UNASSIGNED) {
+        // 担当がいないまま進めて、終わらせてもよい。受け取るのは、自分が続けて持つときだけ（小さく）
+        if (!inqHold) foot.push('<button type="button" class="s-btn s-mini" data-s-done="' + key + '">✅ 終わった</button>');
+        foot.push('<button type="button" class="s-btn s-mini" data-s-claim="' + key + '">🙋 担当になる</button>');
         foot.push('<button type="button" class="s-btn s-mini" data-s-ask="' + key + '">❓ 代表に聞く</button>');
       } else {
         if (c.flow) foot.push('<button type="button" class="s-btn s-mini" data-s-done="' + key + '">手順を飛ばして終わりにする</button>');
@@ -7416,6 +7419,7 @@
     if (jst.slice(0, 10) !== todayStr) return '';
     var items = [];
     (r.linked || []).forEach(function (l) { items.push('🤝 ' + l.taskIds.map(function (i) { return '#' + i; }).join('・') + ' を案件「' + l.deal + '」にまとめた'); });
+    (r.stepped || []).forEach(function (x) { items.push('📋 #' + x.id + ' に手順を付けた（' + x.steps.join(' → ') + '）'); });
     (r.renamed || []).forEach(function (x) { items.push('✏️ #' + x.id + ' の名前を「' + x.to + '」に直した'); });
     (r.reopened || []).forEach(function (x) { items.push('↩ #' + x.id + ' を未完了に戻した（' + x.why + '）'); });
     (r.asks || []).forEach(function (x) { items.push('❓ ' + x.text); });
@@ -9381,8 +9385,8 @@
 })();
 </script>
 <script src="vendor/msal-browser.min.js"></script>
-<script src="sync.js?v=454c7ba"></script>
-<script src="chat.js?v=454c7ba"></script>
+<script src="sync.js?v=b128a84"></script>
+<script src="chat.js?v=b128a84"></script>
 <script>
 // 新しい版が出たら知らせて切り替える（2026-11-17 代表の指摘：ブラウザが古い版を覚えていて、更新しても前の画面のままだった）。
 // 公開のたびに version.txt に版の番号が入る。5分ごとと、画面に戻ってきたときに見比べ、違えば上に帯を出す。押すと読み直す（入力中の内容を消さないよう、勝手には読み直さない）
