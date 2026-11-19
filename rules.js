@@ -295,7 +295,8 @@
       return { title: "Amazon購入者：" + subject, business: "Amazon販売", category: "お客様対応", priority: "高", due: nextWorkday(data.receivedAt), steps: STEPS.amazonBuyer, draftKind: "amazon", channel: "Amazon" };
     }
     if (mailbox.indexOf("lilocle@") === 0) {
-      if (PAYMENT_WORD.test(text)) return { title: "LILOCLE 請求・支払い：" + subject, business: "LILOCLE運営", category: "代表の確認", owner: "坂中", steps: STEPS.rep };
+      // 担当は決めずに入れる（2026-11-19 代表の指定：担当は後から決める）
+      if (PAYMENT_WORD.test(text)) return { title: "LILOCLE 請求・支払い：" + subject, business: "LILOCLE運営", category: "代表の確認", steps: STEPS.rep };
       return { title: "LILOCLEメーカー様：" + subject, business: "LILOCLE運営", category: "メーカー対応", steps: STEPS.liloSupplier };
     }
     // contact@ に届いても、作り手（メーカー様・取り扱い候補）からのメールはメーカー対応（2026-11-06 代表の指定）
