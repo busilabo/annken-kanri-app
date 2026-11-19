@@ -238,6 +238,8 @@ $Plan = [ordered]@{
     @{ name = 'Items';       type = 'multiline'; desc = '明細（SKU×数 商品名。お客様の名前・住所・電話は入れない）' }
     @{ name = 'Tracking';    type = 'multiline'; desc = '追跡番号' }
     @{ name = 'CancelledAt'; type = 'dateTime';  desc = 'キャンセル日時' }
+    @{ name = 'MakerSheet';  type = 'multiline'; desc = '作り手さんの共有エクセル（追跡番号記入）の記録：行があるか（＝注文を報告済み）・確認の状態・追跡番号（2026-11-19）' }
+    @{ name = 'ReportHold';  type = 'multiline'; desc = '作り手さんへの注文報告を保留している理由（お問い合わせがあった など。定時実行の報告・仕事から。2026-11-19）' }
     @{ name = 'SyncedAt';    type = 'dateTime';  desc = '写した日時（台帳係）' }
     $Deleted
   )}
