@@ -1628,7 +1628,17 @@
     }
     if (changed) pushDeals();
   }
-  window.__db = { load: loadDbRef, ref: function () { return dbRef; }, guess: guessLinks, refresh: refreshDeals, updateDeal: updateDeal };
+  // 台帳係が動いているか：いまの台帳（15分ごとに書く）の新しさと、取り込み口に残っているいちばん古いもの（送った返信 sent- は24時間待つので除く）
+  async function checkLedgerHealth() {
+    var sum = await graph("/drives/" + QUEUE_DRIVE_ID + "/root:/" + encodeURIComponent("データベース") + "/" + encodeURIComponent("いまの台帳.json") + "?$select=lastModifiedDateTime");
+    var q = await graph("/drives/" + QUEUE_DRIVE_ID + "/root:/" + QUEUE_FOLDER.split("/").map(encodeURIComponent).join("/") + ":/children?$select=name,createdDateTime&$top=300");
+    var waiting = (q.value || []).filter(function (x) { return /\.json$/i.test(x.name) && !/^sent-|^verify-request/.test(x.name); });
+    var oldest = waiting.reduce(function (m, x) { return Math.max(m, Date.now() - new Date(x.createdDateTime).getTime()); }, 0);
+    var st = { checkedAt: Date.now(), summaryMin: Math.round((Date.now() - new Date(sum.lastModifiedDateTime).getTime()) / 60000), oldestMin: Math.round(oldest / 60000), waiting: waiting.length };
+    if (window.__app && window.__app.setLedgerHealth) window.__app.setLedgerHealth(st);
+    return st;
+  }
+  window.__db = { load: loadDbRef, health: checkLedgerHealth, ref: function () { return dbRef; }, guess: guessLinks, refresh: refreshDeals, updateDeal: updateDeal };
 
   async function createTaskItem(fields, historyAction, historyMemo) {
     if (!listIds.task) return null;
@@ -2915,6 +2925,9 @@
     // 取引先と案件（2026-11-18 第4段）
     refreshDeals().catch(function (e) { log("deals failed: " + e.message); });
     setInterval(function () { refreshDeals().catch(function (e) { log("deals failed: " + e.message); }); }, 10 * 60 * 1000);
+    // 台帳係（Azure）の見張り（2026-11-19 代表の指定）。台帳係が止まると、メールや報告が仕事にならないまま待つので、今日の画面に赤で出す
+    checkLedgerHealth().catch(function (e) { log("ledger health failed: " + e.message); });
+    setInterval(function () { checkLedgerHealth().catch(function (e) { log("ledger health failed: " + e.message); }); }, 10 * 60 * 1000);
     // LILOCLE のお客様の仕事の名前を、件名から「だれの・何の用件か」に付け直す（2026-11-17。今ある仕事は一度だけ）
     setTimeout(function () { retitleLiloTasks().catch(function (e) { log("retitle failed: " + e.message); }); }, 20000);
     setInterval(function () { retitleLiloTasks().catch(function (e) { log("retitle failed: " + e.message); }); }, 10 * 60 * 1000);
