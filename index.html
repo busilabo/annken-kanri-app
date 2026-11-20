@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 公開のときに、公開の仕組み（.github/workflows/publish-annken-kanri-app.yml）がこの版の番号に書き換える。手元では dev のまま -->
-<meta name="app-version" content="ee40c2f">
+<meta name="app-version" content="c28d30b">
 <title>ビジラボ 仕事管理</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@500&display=swap">
 <style>
@@ -1996,7 +1996,7 @@
   .tile.dragging { opacity: .45; }
   .band.drop-over { outline: 3px dashed var(--accent); outline-offset: -3px; background: var(--accent-soft); }
 </style>
-<script src="rules.js?v=ee40c2f"></script>
+<script src="rules.js?v=c28d30b"></script>
 </head>
 <body>
 
@@ -5367,11 +5367,18 @@
         copy: function (x) { return 'LILOCLE の Shopify に、次の新商品を登録して（代表に確認済み）：\n' + x.memo('answer') + '\n\nメーカー様からの案内：\n' + x.desc; } }
     ] },
     // 請求書（2026-11-20 代表の指定：自動ではなく、仕事管理から頼んだときだけ Claude Code が保存・印刷する）
-    'maker-invoice': { family: 'maker', label: '請求書が届いた', hint: 'メーカー様から LILOCLE あての請求書（PDF）が届いた。訂正版の請求書も含む', steps: [
-      { id: 'ask', type: 'site', site: 'claudecode', title: 'Claude Code に請求書の受け取りを頼む', help: '下の文をコピーして、代表の PC の Claude Code に貼り付けます。エクセルと金額を照らし合わせ、PDF の保存・受領の返信（確認してから）・印刷まで行い、終わるとこの仕事に結果を書きます', doneLabel: '✅ 頼んだ',
-        copy: function (x) { return '/lilocle-seikyusho-uketori 仕事 ' + x.no + '：' + x.who + ' から届いた請求書を受け取って（件名：' + x.title + '）'; } },
-      { id: 'result', type: 'choose', end: true, title: 'Claude Code の結果を見る', help: '差異がなければ、Claude Code がこの仕事を完了にします',
-        choices: [{ label: '✅ 保存・印刷・受領の返信まで済んだ', go: 'end' }, { label: '⚠️ 金額などに差異があった', go: 'rep' }] }
+    // 照らし合わせ・保存・印刷は代表の PC の Claude Code（請求書のフォルダとプリンターがあるため）。決める・返信はこの画面で
+    'maker-invoice': { family: 'maker', label: '請求書が届いた', hint: 'メーカー様から LILOCLE あての請求書（PDF・Misoca など）が届いた。訂正版の請求書も含む', steps: [
+      { id: 'check', type: 'site', site: 'claudecode', title: 'Claude Code に、エクセルとの照らし合わせを頼む', help: '下の文をコピーして、代表の PC の Claude Code に貼り付けます。違いがなければ、保存と印刷まで済ませて、結果をこの仕事に書きます', doneLabel: '✅ 頼んだ',
+        copy: function (x) { return '/lilocle-seikyusho-uketori 仕事 ' + x.no + '：' + x.who + ' から届いた請求書を照らし合わせて（件名：' + x.title + '）'; } },
+      { id: 'decide', type: 'choose', title: '照らし合わせの結果を見て、受け取るか決める', help: '結果は、ひとつ前の手順のメモにあります。違いがあるときは代表が決めます（違いがなければ Claude Code が先へ進めます）',
+        choices: [{ label: '✅ このまま受け取る', go: 'next' }, { label: '✉️ 訂正版をお願いする', go: 'fix', memo: '直していただくこと（例：内税に直した金額 3,634円で）' }, { label: '🙋 代表に相談する', go: 'rep' }] },
+      { id: 'keep', type: 'site', site: 'claudecode', title: 'Claude Code に、保存と印刷を頼む', help: '下の文をコピーして、代表の PC の Claude Code に貼り付けます。終わるとこの手順に ✓ が付きます', doneLabel: '✅ 保存・印刷した',
+        copy: function (x) { return '/lilocle-seikyusho-uketori 仕事 ' + x.no + '：照らし合わせは済み、このまま受け取る。保存して印刷して'; } },
+      { id: 'reply', type: 'mail', to: 'requester', end: true, title: 'メーカー様に、受け取りましたとお返事する', help: 'lilocle@ から送ります',
+        instruction: function (x) { return 'メーカー様（' + x.who + '）に、LILOCLE（リロクル）として、ご請求書を確かに受け取り、お支払期限までにお振込みすることをお伝えするお返事を書く。どの月の分の請求書かを入れる（照らし合わせの結果：' + x.memo('check') + '）。金額の違いや社内の確認のことは書かない。署名は付けない。'; } },
+      { id: 'fix', type: 'mail', to: 'requester', end: true, title: 'メーカー様に、訂正版の請求書をお願いする', help: 'lilocle@ から送ります。訂正版が届いたら、新しい仕事になります',
+        instruction: function (x) { return 'メーカー様（' + x.who + '）に、LILOCLE（リロクル）として、いただいたご請求書の内容について、次の点を直した訂正版をお送りいただくよう、丁寧にお願いするお返事を書く。直していただくこと：' + x.memo('decide') + '。照らし合わせの結果：' + x.memo('check') + '。ご請求書へのお礼を入れる。署名は付けない。'; } }
     ] },
     'maker-other': { family: 'maker', label: 'そのほか（お返事）', hint: 'お客様の件への返事・確認・あいさつなど', steps: [
       { id: 'reply', type: 'mail', to: 'requester', end: true, title: 'メーカー様にお返事する', help: 'lilocle@ から送ります',
@@ -5640,6 +5647,9 @@
     var pos = fs.list.filter(function (e) { return !e.skip; }).indexOf(cur) + 1;
     // このあと
     var rest = fs.list.slice(fs.list.indexOf(cur) + 1).filter(function (e) { return !e.s.decided && !e.skip && e.d; });
+    // 「おわり」の手順のあとは、選んだときだけ進む別の道（訂正をお願いする・キャンセルできないとお伝えするなど）なので、このあとには出さない（2026-11-20）
+    var endAt = -1; rest.some(function (e, i) { if (e.d.end) { endAt = i; return true; } return false; });
+    if (d && d.end) rest = []; else if (endAt >= 0) rest = rest.slice(0, endAt + 1);
     html += '<div class="f-now"><div class="f-now-label">いまやること（' + pos + ' / ' + n + '）</div><b class="f-now-title">' + esc(d.title) + '</b>' +
       (d.help ? '<div class="f-now-help">' + linkify(d.help) + '</div>' : '');
     // 待つ手順：届いたものを出す
@@ -9570,8 +9580,8 @@
 })();
 </script>
 <script src="vendor/msal-browser.min.js"></script>
-<script src="sync.js?v=ee40c2f"></script>
-<script src="chat.js?v=ee40c2f"></script>
+<script src="sync.js?v=c28d30b"></script>
+<script src="chat.js?v=c28d30b"></script>
 <script>
 // 新しい版が出たら知らせて切り替える（2026-11-17 代表の指摘：ブラウザが古い版を覚えていて、更新しても前の画面のままだった）。
 // 公開のたびに version.txt に版の番号が入る。5分ごとと、画面に戻ってきたときに見比べ、違えば上に帯を出す。押すと読み直す（入力中の内容を消さないよう、勝手には読み直さない）
