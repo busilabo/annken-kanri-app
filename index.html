@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 公開のときに、公開の仕組み（.github/workflows/publish-annken-kanri-app.yml）がこの版の番号に書き換える。手元では dev のまま -->
-<meta name="app-version" content="801bb41">
+<meta name="app-version" content="b8ee8b9">
 <title>ビジラボ 仕事管理</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@500&display=swap">
 <style>
@@ -1837,6 +1837,21 @@
   .d-sig[data-tone="warn"] { background: var(--warn-soft); color: var(--warn); }
   .d-sig[data-tone="red"] { background: var(--crit-soft); color: var(--crit); }
   .d-page { display: grid; gap: 14px; }
+  /* 案件カルテ（データベースAI社員のまとめ。2026-11-20 データベース案 第3段） */
+  .d-karte { border: 1px solid var(--border); border-left: 5px solid var(--ok); border-radius: 14px; padding: 12px 16px; background: var(--surface); display: grid; gap: 8px; }
+  .d-karte[data-tone="warn"] { border-left-color: var(--warn); }
+  .d-karte[data-tone="red"] { border-left-color: var(--crit); }
+  .d-karte-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .d-karte-head b { font-size: 14.5px; }
+  .d-karte-head small { margin-left: auto; color: var(--text-muted); font-size: 12px; }
+  .d-karte-now { margin: 0; font-size: 14px; line-height: 1.75; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .d-karte-wait { margin: 0; padding: 8px 12px; border-radius: 10px; background: var(--warn-soft); font-size: 14px; line-height: 1.7; overflow-wrap: anywhere; }
+  .d-karte-wait b { color: var(--warn); }
+  .d-karte-prom { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+  .d-karte-prom li { display: grid; grid-template-columns: auto 1fr; gap: 8px; font-size: 13.5px; line-height: 1.6; overflow-wrap: anywhere; }
+  .d-karte-prom li[data-late] { color: var(--crit); font-weight: 700; }
+  .d-karte-more summary { cursor: pointer; font-size: 13px; color: var(--text-muted); }
+  .d-karte-more p { margin: 6px 0 0; font-size: 13.5px; line-height: 1.7; overflow-wrap: anywhere; }
   .d-cols { display: grid; grid-template-columns: minmax(0, 1.8fr) minmax(280px, 1fr); gap: 28px; align-items: start; }
   @media (max-width: 900px) { .d-cols { grid-template-columns: 1fr; } }
   .d-main, .d-side { display: grid; gap: 18px; min-width: 0; }
@@ -1975,7 +1990,7 @@
   .tile.dragging { opacity: .45; }
   .band.drop-over { outline: 3px dashed var(--accent); outline-offset: -3px; background: var(--accent-soft); }
 </style>
-<script src="rules.js?v=801bb41"></script>
+<script src="rules.js?v=b8ee8b9"></script>
 </head>
 <body>
 
@@ -8679,6 +8694,30 @@
     renderUnlinked();
   }
 
+  // 案件カルテ：データベースAI社員のまとめ（いまの状況・お待たせ・まだの約束）。中身がないときは出さない
+  function dealKarteHtml(d) {
+    var k = (dealState.kartes || []).filter(function (x) { return x.Kind !== '取引先' && x.DealId === d.DealId; })[0];
+    if (!k || !k.NowText) return '';
+    var tone = /止まって/.test(k.Signal || '') ? 'red' : /気をつけ/.test(k.Signal || '') ? 'warn' : 'ok';
+    var none = function (t) { return !t || /^(記録なし|特に|なし)/.test(String(t).trim()); };
+    var today = new Date().toISOString().slice(0, 10);
+    var proms = (dealState.promises || []).filter(function (p) { return p.DealId === d.DealId; });
+    var at = k.UpdatedAt ? new Date(k.UpdatedAt) : null;
+    return '<section class="d-karte" data-tone="' + tone + '">' +
+      '<div class="d-karte-head"><span class="d-sig" data-tone="' + tone + '">' + esc(k.Signal || '順調') + '</span><b>🗂 いまの状況</b>' +
+      (at ? '<small>データベースAI社員のまとめ・' + (at.getMonth() + 1) + '/' + at.getDate() + ' ' + at.getHours() + ':' + String(at.getMinutes()).padStart(2, '0') + '</small>' : '') + '</div>' +
+      '<p class="d-karte-now">' + esc(k.NowText) + '</p>' +
+      (none(k.Waiting) ? '' : '<p class="d-karte-wait"><b>⏳ お待たせしていること</b><br>' + esc(k.Waiting) + '</p>') +
+      (proms.length ? '<ul class="d-karte-prom">' + proms.map(function (p) {
+        var late = p.Due && String(p.Due).slice(0, 10) < today;
+        return '<li' + (late ? ' data-late' : '') + '><span>🤝</span><span>' + esc(p.What || '') + (p.DueText || p.Due ? '（' + esc(late ? '期限を過ぎています' : (p.DueText || String(p.Due).slice(0, 10))) + '）' : '') + (p.TaskId ? ' ・仕事 #' + esc(p.TaskId) : '') + '</span></li>';
+      }).join('') + '</ul>' : '') +
+      ((k.NextStep || k.Concerns || k.LastContact) ? '<details class="d-karte-more"><summary>くわしく（最後のやり取り・次の一手・気になること）</summary>' +
+        (k.LastContact ? '<p><b>最後のやり取り：</b>' + esc(k.LastContact) + '</p>' : '') +
+        (k.NextStep ? '<p><b>次の一手：</b>' + esc(k.NextStep) + '</p>' : '') +
+        (k.Concerns ? '<p><b>気になること：</b>' + esc(k.Concerns) + '</p>' : '') + '</details>' : '') +
+      '</section>';
+  }
   function renderDealDetail() {
     var box = document.querySelector('[data-deal-detail]');
     if (!box) return;
@@ -8698,7 +8737,7 @@
       (goal ? '<div class="d-goal">🎯 ' + esc(goal) + '</div>' : '') +
       '<div class="d-cheer" data-tone="' + sg.tone + '">' + esc(cheerText(d, pr)) + '</div>' +
       '<div class="d-owner-row"><span class="d-kind">👥 担当</span>' + (dealOwnerList(d).length ? dealOwnerList(d).map(function (n) { return '<span class="d-owner-chip">' + avatarHtml(n) + esc(n) + 'さん</span>'; }).join('') : '<span class="d-kind">まだ決めていません</span>') +
-      '<button type="button" class="s-btn s-mini" data-deal-owner-edit>✏️ 担当を変える</button></div>' + dealOwnerPickHtml(d) + '</div></div>';
+      '<button type="button" class="s-btn s-mini" data-deal-owner-edit>✏️ 担当を変える</button></div>' + dealOwnerPickHtml(d) + '</div></div>' + dealKarteHtml(d);
     // ゴールまでの道（段階）
     if (stages.length) {
       var cur = stages.indexOf(d.Stage), road = stages.concat(['完了']);
@@ -9450,8 +9489,8 @@
 })();
 </script>
 <script src="vendor/msal-browser.min.js"></script>
-<script src="sync.js?v=801bb41"></script>
-<script src="chat.js?v=801bb41"></script>
+<script src="sync.js?v=b8ee8b9"></script>
+<script src="chat.js?v=b8ee8b9"></script>
 <script>
 // 新しい版が出たら知らせて切り替える（2026-11-17 代表の指摘：ブラウザが古い版を覚えていて、更新しても前の画面のままだった）。
 // 公開のたびに version.txt に版の番号が入る。5分ごとと、画面に戻ってきたときに見比べ、違えば上に帯を出す。押すと読み直す（入力中の内容を消さないよう、勝手には読み直さない）

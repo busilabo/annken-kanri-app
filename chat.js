@@ -285,7 +285,7 @@
 
   // ---- データベースの手伝い ----
   // 台帳係（Azure）が外の正本から写す表は、チャットからは書かない（2026-11-18）
-  var READ_ONLY_LISTS = ["注文", "日ごとの数字"];
+  var READ_ONLY_LISTS = ["注文", "日ごとの数字", "カルテ", "約束"];
   function readOnlyGuard(name) {
     if (READ_ONLY_LISTS.indexOf(name) !== -1) throw new Error("「" + name + "」は台帳係が Shopify などから自動で写す表なので、ここからは直せません（元の Shopify などで直してください）");
   }

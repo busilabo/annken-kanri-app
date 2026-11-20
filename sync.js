@@ -1510,7 +1510,7 @@
   // 新しく入る仕事・やり取りに、取引先番号（C-0001）と案件番号（ORDER4638 など）を自動で付ける。
   // 見分け方：注文番号（ORDER〇〇〇〇）→ 案件／作り手さんの番号（D0027）・メールのドメイン → 取引先。分からなければ空のまま（後で人が結ぶ）
   var PARTNER_LIST = "取引先", DEAL_LIST = "案件";
-  var dbRef = { loaded: false, at: 0, partnerListId: null, dealListId: null, partners: [], deals: [] };
+  var dbRef = { loaded: false, at: 0, partnerListId: null, dealListId: null, partners: [], deals: [], karteListId: null, promiseListId: null, kartes: [], promises: [] };
   async function loadDbRef(force) {
     if (!siteId) return dbRef;
     if (dbRef.loaded && !force && Date.now() - dbRef.at < 10 * 60 * 1000) return dbRef;
@@ -1519,6 +1519,13 @@
       if (!dbRef.dealListId) dbRef.dealListId = await findListId(DEAL_LIST);
       if (dbRef.partnerListId) dbRef.partners = await readAll(dbRef.partnerListId, "Title,PartnerId,Roles,Businesses,Domains,ExternalIds,PartnerStatus,Deleted");
       if (dbRef.dealListId) dbRef.deals = await readAll(dbRef.dealListId, "Title,DealId,Business,DealType,PartnerIds,Stage,NextAction,NextDue,Owner,BlockedReason,Memo,Link,StartedAt,Deleted");
+      // データベースAI社員のまとめ（案件カルテ・約束）。案件の画面に「いまの状況」「お待たせ」を出す（2026-11-20 データベース案 第3段）
+      try {
+        if (!dbRef.karteListId) dbRef.karteListId = await findListId("カルテ");
+        if (!dbRef.promiseListId) dbRef.promiseListId = await findListId("約束");
+        if (dbRef.karteListId) dbRef.kartes = (await readAll(dbRef.karteListId, "KarteKey,Kind,DealId,PartnerId,Signal,NowText,Waiting,LastContact,NextStep,Concerns,UpdatedAt,Deleted")).filter(function (k) { return !k.Deleted; });
+        if (dbRef.promiseListId) dbRef.promises = (await readAll(dbRef.promiseListId, "DealId,PartnerId,FromParty,ToParty,What,DueText,Due,PromiseStatus,TaskId,Deleted")).filter(function (p) { return !p.Deleted && p.PromiseStatus === "まだ"; });
+      } catch (e) { log("karte load failed: " + e.message); }
       dbRef.loaded = true; dbRef.at = Date.now();
     } catch (e) { log("db ref load failed: " + e.message); }
     return dbRef;
@@ -1575,7 +1582,7 @@
       dbRef.deals.push(Object.assign({ id: made.id }, row));
     } catch (e) { log("deal create failed (" + dealId + "): " + e.message); }
   }
-  function pushDeals() { if (window.__app && window.__app.setDeals) window.__app.setDeals({ loaded: dbRef.loaded, partners: dbRef.partners, deals: dbRef.deals }); }
+  function pushDeals() { if (window.__app && window.__app.setDeals) window.__app.setDeals({ loaded: dbRef.loaded, partners: dbRef.partners, deals: dbRef.deals, kartes: dbRef.kartes, promises: dbRef.promises }); }
   async function refreshDeals() { await loadDbRef(true); pushDeals(); }
   // 案件の行を書き換える（段階・次にやること・期限など）。画面の「保存」から
   async function updateDeal(itemId, fields) {
@@ -2418,7 +2425,7 @@
     }
   }
   // マネージャー（チャット）が読める表。仕事管理の画面に出ない表も、データベースとして読めるようにする（2026-11-18 代表の指定）
-  var CHAT_ONLY_LISTS = ["作業サイト", "取引先", "案件", "注文", "日ごとの数字", "売上", "目標と数字", "数字の記録", "発信", "試していること", "マーケティングの道具", "ノウハウ", "データの置き場所"];
+  var CHAT_ONLY_LISTS = ["作業サイト", "取引先", "案件", "注文", "日ごとの数字", "売上", "目標と数字", "数字の記録", "発信", "試していること", "マーケティングの道具", "ノウハウ", "データの置き場所", "カルテ", "約束"];
   var chatOnlyListIds = {};
 
   function snapshotActivity(card, f) {
