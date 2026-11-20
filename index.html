@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 公開のときに、公開の仕組み（.github/workflows/publish-annken-kanri-app.yml）がこの版の番号に書き換える。手元では dev のまま -->
-<meta name="app-version" content="72cbfe8">
+<meta name="app-version" content="5bbbdf3">
 <title>ビジラボ 仕事管理</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@500&display=swap">
 <style>
@@ -1840,6 +1840,9 @@
   .f-receipt { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 700; flex: 1 1 260px; }
   .f-receipt input { flex: 1; min-width: 0; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; font: inherit; font-weight: 400; background: var(--surface); color: var(--text); }
   .f-hint { flex-basis: 100%; font-size: 13px; color: var(--crit); }
+  .s-attached { padding: 8px 12px; border-radius: 8px; background: var(--ok-soft); font-size: 14px; font-weight: 700; overflow-wrap: anywhere; }
+  .s-attached a { color: var(--ok); }
+  .s-files-other summary { cursor: pointer; font-size: 12.5px; color: var(--text-muted); }
   /* 案件カルテ（データベースAI社員のまとめ。2026-11-20 データベース案 第3段） */
   .d-karte { border: 1px solid var(--border); border-left: 5px solid var(--ok); border-radius: 14px; padding: 12px 16px; background: var(--surface); display: grid; gap: 8px; }
   .d-karte[data-tone="warn"] { border-left-color: var(--warn); }
@@ -1993,7 +1996,7 @@
   .tile.dragging { opacity: .45; }
   .band.drop-over { outline: 3px dashed var(--accent); outline-offset: -3px; background: var(--accent-soft); }
 </style>
-<script src="rules.js?v=72cbfe8"></script>
+<script src="rules.js?v=5bbbdf3"></script>
 </head>
 <body>
 
@@ -5327,7 +5330,7 @@
     'lilo-receipt': { family: 'lilo', label: '領収書のご依頼', hint: '領収書・請求書を発行して送ってほしいと、はっきり頼まれている（宛名・但し書きの指定など）。同封されているかの質問はこれではない', steps: [
       // 2026-11-20 代表の指定：PDF 作りもアプリの中で。いつものひな型（全社共有の 領収書_雛形.xlsx）に Shopify の注文を入れて PDF にする（Azure の台帳係 makeReceipt）
       { id: 'make', type: 'receipt', title: '領収書の PDF を作る', help: '宛名を確かめて「🧾 領収書を作る」を押すと、いつものひな型で作ります（Shopify の注文から。合計・消費税も Shopify と合わせて確かめます）。できたら開いて中身を見てください' },
-      { id: 'send', type: 'mail', to: 'requester', end: true, needFile: true, title: '領収書の PDF を添付して、お客様に送る', help: 'contact@ から送ります。送る欄の「📎 ファイルを付ける」で、作った領収書の PDF を選んでください',
+      { id: 'send', type: 'mail', to: 'requester', end: true, needFile: true, title: '領収書の PDF を添付して、お客様に送る', help: 'contact@ から送ります。前の手順で作った領収書の PDF が、最初から付いています',
         instruction: function (x) { return 'お客様（' + x.who + '）に、ご依頼の' + orderLabel(x) + 'の領収書を PDF で添付してお送りするメールを書く。お問い合わせへのお礼を入れる。宛名・但し書きなどに直しが必要なら、このメールにご返信いただければ作り直すことを添える。署名は付けない。'; },
         subject: function (x) { return '【LILOCLE】' + (x.o ? 'ご注文（' + x.o.name + '）' : 'ご注文') + 'の領収書をお送りします'; } }
     ] },
@@ -6005,8 +6008,11 @@
       '<div class="s-revise"><input type="text" data-c-request placeholder="直してほしいことを一言（例：もっと短く／お詫びを先に）"><button type="button" class="s-btn" data-c-revise="' + key + '">🤖 AI に直してもらう</button></div>' +
       '<small class="s-draft-hint">本文は、ここで手で直すこともできます</small>' +
       // 添付（2026-11-08）：本人のメールボックス・contact@ から送れる。lilocle@（メーカー様あて）は添付なし
-      (plan.route !== 'maker' || plan.chooseRoute ? '<label class="s-files">📎 ファイルを付ける' + (plan.needFile ? '（必ず付けてください）' : '（あれば。1つ3MBまで）') +
-        '<input type="file" multiple data-c-files accept=".pdf,image/*,.xlsx,.docx"></label>' : '') +
+      // アプリで作った領収書は、最初から付けておく（2026-11-20 代表の指定）。別のファイルにしたいときだけ選ぶ
+      (plan.receipt ? '<div class="s-attached">📎 付けるファイル：<a href="' + esc(plan.receipt.url) + '" target="_blank" rel="noopener">' + esc(plan.receipt.name) + '</a>（作った領収書）</div>' +
+        '<details class="s-files-other"><summary>別のファイルにする</summary><label class="s-files"><input type="file" multiple data-c-files accept=".pdf,image/*,.xlsx,.docx"></label></details>'
+      : (plan.route !== 'maker' || plan.chooseRoute ? '<label class="s-files">📎 ファイルを付ける' + (plan.needFile ? '（必ず付けてください）' : '（あれば。1つ3MBまで）') +
+        '<input type="file" multiple data-c-files accept=".pdf,image/*,.xlsx,.docx"></label>' : '')) +
       '<div class="s-compose-err" data-c-err></div>' +
       '<div class="s-actions"><button type="button" class="s-btn s-primary" data-c-send="' + key + '" disabled>📨 送る</button><button type="button" class="s-btn" data-c-close="' + key + '">やめる</button></div></div>';
   }
@@ -9556,8 +9562,8 @@
 })();
 </script>
 <script src="vendor/msal-browser.min.js"></script>
-<script src="sync.js?v=72cbfe8"></script>
-<script src="chat.js?v=72cbfe8"></script>
+<script src="sync.js?v=5bbbdf3"></script>
+<script src="chat.js?v=5bbbdf3"></script>
 <script>
 // 新しい版が出たら知らせて切り替える（2026-11-17 代表の指摘：ブラウザが古い版を覚えていて、更新しても前の画面のままだった）。
 // 公開のたびに version.txt に版の番号が入る。5分ごとと、画面に戻ってきたときに見比べ、違えば上に帯を出す。押すと読み直す（入力中の内容を消さないよう、勝手には読み直さない）
