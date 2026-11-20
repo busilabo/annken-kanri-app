@@ -1443,6 +1443,9 @@
       to: to, bcc: "busilabo@busilabo.com", subject: mail.subject, body: mail.body,
       approvedAt: new Date().toISOString(), approvedBy: (mail.staff || "スタッフ") + "（仕事管理アプリで確認して送信）"
     };
+    // 2026-11-20：contact@ の送信フロー（Power Automate）が、添付を base64 の文字のまま付けてしまい、お客様が PDF を開けなかった。
+    // フローが直るまで、contact@ からの添付は止める（壊れたファイルをお客様に送らないため）
+    if (files.length && !window.__customerAttachOk) throw new Error("いま contact@ からは添付を送れません（送信の仕組みの不具合で、ファイルが壊れて届くため）。Outlook の contact@ から、ファイルを付けて送ってください");
     if (files.length) {
       job.attachments = [];
       for (var i = 0; i < files.length; i++) job.attachments.push(await uploadAttachment(stamp, files[i]));
