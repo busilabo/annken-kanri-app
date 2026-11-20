@@ -243,6 +243,41 @@ $Plan = [ordered]@{
     @{ name = 'SyncedAt';    type = 'dateTime';  desc = '写した日時（台帳係）' }
     $Deleted
   )}
+  # ③まとめ（2026-11-19 データベース案 第1段）：データベースAI社員が原本と台帳から作る。マネージャー・アプリ・チャットが読む
+  '約束' = @{ create = $true; columns = @(
+    @{ name = 'PromiseKey';  type = 'text';      desc = '目印（同じ約束を二重に入れないため。案件番号＋短い要約）'; indexed = $true }
+    $DealId
+    @{ name = 'PartnerId';   type = 'text';      desc = '取引先番号'; indexed = $true }
+    @{ name = 'Business';    type = 'text';      desc = '事業' }
+    @{ name = 'FromParty';   type = 'text';      desc = 'だれが約束したか（LILOCLE・ビジラボ・作り手さん・お客様 など）' }
+    @{ name = 'ToParty';     type = 'text';      desc = 'だれに約束したか' }
+    @{ name = 'What';        type = 'multiline'; desc = '何を約束したか' }
+    @{ name = 'DueText';     type = 'text';      desc = 'いつまでに（「発送後」など、書かれたまま）' }
+    @{ name = 'Due';         type = 'dateTime';  desc = '期限（日付が分かるとき）' }
+    @{ name = 'PromiseStatus'; type = 'text';    desc = 'まだ／済み／取り消し' }
+    @{ name = 'Source';      type = 'multiline'; desc = '根拠（何月何日のどのメール・報告か。やり取りログの番号）' }
+    @{ name = 'DoneEvidence'; type = 'multiline'; desc = '済んだ根拠（送ったメール・Shopify など）' }
+    @{ name = 'TaskId';      type = 'text';      desc = 'この約束を果たす仕事の番号' }
+    @{ name = 'UpdatedAt';   type = 'dateTime';  desc = 'データベースAI社員が確かめた日時' }
+    $Deleted
+  )}
+  'カルテ' = @{ create = $true; columns = @(
+    @{ name = 'KarteKey';    type = 'text';      desc = '目印（deal:ORDER4638／partner:C-0029）'; indexed = $true }
+    @{ name = 'Kind';        type = 'text';      desc = '案件／取引先' }
+    $DealId
+    @{ name = 'PartnerId';   type = 'text';      desc = '取引先番号'; indexed = $true }
+    @{ name = 'Business';    type = 'text';      desc = '事業' }
+    @{ name = 'Signal';      type = 'text';      desc = '順調／気をつける／止まっている' }
+    @{ name = 'NowText';     type = 'multiline'; desc = 'いまの状況（3行まで）' }
+    @{ name = 'Waiting';     type = 'multiline'; desc = '待っていること・お待たせしていること' }
+    @{ name = 'LastContact'; type = 'multiline'; desc = '最後のやり取り（いつ・だれと・何を）' }
+    @{ name = 'NextStep';    type = 'multiline'; desc = '次の一手（仕事の番号つき）' }
+    @{ name = 'Concerns';    type = 'multiline'; desc = '気になること（食い違い・抜けの疑い・注意点）' }
+    @{ name = 'Evidence';    type = 'multiline'; desc = '根拠（やり取りログ・注文・仕事の番号と日時）' }
+    @{ name = 'SourceStamp'; type = 'text';      desc = 'まとめたときの記録の新しさ（変わったときだけ書き直すため）' }
+    @{ name = 'UpdatedAt';   type = 'dateTime';  desc = 'まとめた日時' }
+    $Deleted
+  )}
   '日ごとの数字' = @{ create = $true; columns = @(
     @{ name = 'RecordKey';   type = 'text';      desc = '日|事業|数字の名前（同じ行を二重に入れないための鍵）'; indexed = $true }
     @{ name = 'Day';         type = 'text';      desc = '日（YYYY-MM-DD・日本時間）'; indexed = $true }
