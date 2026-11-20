@@ -1449,7 +1449,18 @@
     }
     return putFile(CUSTOMER_OUTBOX, "reply-" + stamp + "-app-L" + (mail.taskNo || "") + ".json", JSON.stringify(job), "application/json");
   }
-  window.__act = { order: shopifyOrder, orderCached: function (n) { return orderCache[n] || null; }, cancel: shopifyCancel, finalCheck: finalCheck, draft: composeDraft, send: sendMail, cancelSteps: function () { return STEPS.liloCancel.slice(); }, isCancelRequest: function (t) { return isCancelRequest(t, ""); },
+  // 領収書の PDF を作る（Azure の台帳係。全社共有の 領収書_雛形.xlsx → PDF。2026-11-20）
+  var LEDGER_ENDPOINT = "https://busilabo-work-chat.azurewebsites.net/api/ledger";
+  function makeReceipt(req) { return callApi(LEDGER_ENDPOINT, Object.assign({ what: "receipt" }, req), 180000); }
+  // SharePoint のファイルを、送るときの添付（File）にする
+  async function driveFile(id, name) {
+    var token = await getToken();
+    var res = await fetch("https://graph.microsoft.com/v1.0/drives/" + LILO_DRIVE + "/items/" + id + "/content", { headers: { "Authorization": "Bearer " + token } });
+    if (!res.ok) throw new Error("ファイルを読めませんでした（" + res.status + "）");
+    var blob = await res.blob();
+    return new File([blob], name, { type: "application/pdf" });
+  }
+  window.__act = { receipt: makeReceipt, driveFile: driveFile, order: shopifyOrder, orderCached: function (n) { return orderCache[n] || null; }, cancel: shopifyCancel, finalCheck: finalCheck, draft: composeDraft, send: sendMail, cancelSteps: function () { return STEPS.liloCancel.slice(); }, isCancelRequest: function (t) { return isCancelRequest(t, ""); },
     me: function () { return (account && account.username) || ""; },
     // 仕事の流れ（index.html の FLOWS）が、前の作りの手順を見分けるのに使う
     steps: function () { return STEPS; },

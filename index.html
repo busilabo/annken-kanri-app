@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 公開のときに、公開の仕組み（.github/workflows/publish-annken-kanri-app.yml）がこの版の番号に書き換える。手元では dev のまま -->
-<meta name="app-version" content="73324d4">
+<meta name="app-version" content="326473a">
 <title>ビジラボ 仕事管理</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@500&display=swap">
 <style>
@@ -1837,6 +1837,9 @@
   .d-sig[data-tone="warn"] { background: var(--warn-soft); color: var(--warn); }
   .d-sig[data-tone="red"] { background: var(--crit-soft); color: var(--crit); }
   .d-page { display: grid; gap: 14px; }
+  .f-receipt { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 700; flex: 1 1 260px; }
+  .f-receipt input { flex: 1; min-width: 0; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; font: inherit; font-weight: 400; background: var(--surface); color: var(--text); }
+  .f-hint { flex-basis: 100%; font-size: 13px; color: var(--crit); }
   /* 案件カルテ（データベースAI社員のまとめ。2026-11-20 データベース案 第3段） */
   .d-karte { border: 1px solid var(--border); border-left: 5px solid var(--ok); border-radius: 14px; padding: 12px 16px; background: var(--surface); display: grid; gap: 8px; }
   .d-karte[data-tone="warn"] { border-left-color: var(--warn); }
@@ -1990,7 +1993,7 @@
   .tile.dragging { opacity: .45; }
   .band.drop-over { outline: 3px dashed var(--accent); outline-offset: -3px; background: var(--accent-soft); }
 </style>
-<script src="rules.js?v=73324d4"></script>
+<script src="rules.js?v=326473a"></script>
 </head>
 <body>
 
@@ -4764,6 +4767,8 @@
   function orderNoOf(card, c) {
     if (businessOf(card) !== 'LILOCLE運営') return '';
     var m = /(\d{3,})/.exec(taskField(c, '注文番号'));
+    // 「注文番号：」の行がなくても、名前・中身・案件の番号の ORDER〇〇〇〇 から読む（2026-11-20：領収書を送る仕事など）
+    if (!m) m = /ORDER\s*0*(\d{3,})/i.exec([c.title, c.desc.join('\n'), roleVal(card, 'dealId')].join('\n'));
     return m ? m[1] : '';
   }
   var ordersLoading = {};
@@ -4898,6 +4903,9 @@
       // 【返信の下書き】〜【下書きここまで】は、コピーできる下書きとして別に出す
       if (/^【返信の下書き】/.test(line.trim())) { inDraft = true; continue; }
       if (/^【下書きここまで】/.test(line.trim())) { inDraft = false; continue; }
+      // 【領収書】名前｜ファイルの番号｜場所：アプリで作った領収書の PDF（2026-11-20）。送る手順で自動で付ける
+      var rcm = /^【領収書】\s*(.+?)｜([\w!-]+)｜(\S+)/.exec(line.trim());
+      if (rcm) { out.receipt = { name: rcm[1], id: rcm[2], url: rcm[3] }; continue; }
       if (inDraft) { out.draft.push(line); continue; }
       var dm = /^【下書きのメモ】\s*(⚠️代表に確認)?\s*(.*)$/.exec(line.trim());
       if (dm) { out.needsRep = !!dm[1]; out.draftNote = dm[2]; continue; }
@@ -5317,8 +5325,8 @@
         subject: function (x) { return '【LILOCLE】' + (x.o ? 'ご注文（' + x.o.name + '）' : 'ご注文') + 'の領収書について'; } }
     ] },
     'lilo-receipt': { family: 'lilo', label: '領収書のご依頼', hint: '領収書・請求書を発行して送ってほしいと、はっきり頼まれている（宛名・但し書きの指定など）。同封されているかの質問はこれではない', steps: [
-      { id: 'make', type: 'site', site: 'claude', title: 'Claude で領収書を作る', help: '下の文をコピーして Claude に貼り付けます（スキル「LILOCLE 領収書作成」が PDF を作ります）', doneLabel: '✅ 作った',
-        copy: function (x) { return '領収書を作って\n注文番号：' + (x.orderNo || '') + '\nお客様：' + x.who + '\nお問い合わせの内容：\n' + x.desc; } },
+      // 2026-11-20 代表の指定：PDF 作りもアプリの中で。いつものひな型（全社共有の 領収書_雛形.xlsx）に Shopify の注文を入れて PDF にする（Azure の台帳係 makeReceipt）
+      { id: 'make', type: 'receipt', title: '領収書の PDF を作る', help: '宛名を確かめて「🧾 領収書を作る」を押すと、いつものひな型で作ります（Shopify の注文から。合計・消費税も Shopify と合わせて確かめます）。できたら開いて中身を見てください' },
       { id: 'send', type: 'mail', to: 'requester', end: true, needFile: true, title: '領収書の PDF を添付して、お客様に送る', help: 'contact@ から送ります。送る欄の「📎 ファイルを付ける」で、作った領収書の PDF を選んでください',
         instruction: function (x) { return 'お客様（' + x.who + '）に、ご依頼の' + orderLabel(x) + 'の領収書を PDF で添付してお送りするメールを書く。お問い合わせへのお礼を入れる。宛名・但し書きなどに直しが必要なら、このメールにご返信いただければ作り直すことを添える。署名は付けない。'; },
         subject: function (x) { return '【LILOCLE】' + (x.o ? 'ご注文（' + x.o.name + '）' : 'ご注文') + 'の領収書をお送りします'; } }
@@ -5641,6 +5649,13 @@
       html += '<a class="s-btn' + (d.copy || d.copyDraft ? '' : ' s-primary') + ' f-big" href="' + esc(site.url || '#') + '" target="_blank" rel="noopener">🔗 ' + esc(site.name || d.site) + ' を開く</a>' +
         '<button type="button" class="s-btn f-big" data-f-act="site-done" ' + b + '>' + esc(d.doneLabel || '✅ 済んだ') + '</button>';
     }
+    else if (d.type === 'receipt') {
+      if (c.receipt) html += '<div class="f-got">🧾 できました：<a href="' + esc(c.receipt.url) + '" target="_blank" rel="noopener">' + esc(c.receipt.name) + ' を開く ↗</a></div>' +
+        '<button type="button" class="s-btn s-primary f-big" data-f-act="receipt-ok" ' + b + '>✅ 中身を確かめた（次へ）</button><button type="button" class="s-btn f-big" data-f-act="receipt-redo" ' + b + '>🔁 宛名を直して作り直す</button>';
+      else html += '<label class="f-receipt">宛名<input type="text" data-f-receipt-to value="' + esc(receiptAddressee(c)) + '"></label>' +
+        '<button type="button" class="s-btn s-primary f-big" data-f-act="receipt-make" ' + b + (x.orderNo ? '' : ' disabled') + '>🧾 領収書を作る</button>' + (x.orderNo ? '<span class="s-act-note">注文 ORDER' + esc(x.orderNo) + '</span>' : '<span class="s-act-note">注文番号が分かりません</span>') +
+        '<div class="f-hint" data-f-receipt-hint></div>';
+    }
     else if (d.type === 'ask') html += '<button type="button" class="s-btn s-primary f-big" data-f-act="ask" ' + b + '>🙋 代表に聞く</button>';
     else if (d.type === 'task') html += '<button type="button" class="s-btn s-primary f-big" data-f-act="task" ' + b + '>📋 代表に頼む</button>';
     html += '</div>';
@@ -5648,6 +5663,20 @@
       '<button type="button" class="s-btn s-mini" data-f-act="skip" ' + b + '>この手順はしない</button></div>';
     if (rest.length) html += '<div class="f-next">このあと：' + rest.map(function (e) { return esc(e.d.title.replace(/（.*?）/g, '')); }).join(' → ') + '</div>';
     return html + '</div>';
+  }
+  function receiptAddressee(c) {
+    var t = taskField(c, '宛名') || (/宛名[\s　]*[「『]?([^」』\n。、]+)/.exec(c.desc.join('\n')) || [])[1] || '';
+    return t.replace(/（.*?）|\(.*?\)/g, '').replace(/様$/, '').trim();
+  }
+  function setReceiptLine(card, r) {
+    var el = card.querySelector('[data-role="content"]');
+    if (!el) return;
+    var lines = textOf(el).split('\n').filter(function (l) { return !/^【領収書】/.test(l.trim()); });
+    var at = lines.findIndex(function (l) { return /^【流れ】/.test(l.trim()); });
+    var row = r ? '【領収書】' + r.name + '｜' + r.id + '｜' + r.url : '';
+    if (row) { if (at === -1) lines.push(row); else lines.splice(at, 0, row); }
+    el.textContent = lines.join('\n');
+    el.dispatchEvent(userEvent('input'));
   }
   // メールの手順の宛先・送り元・文
   function flowMailPlan(d, x) {
@@ -5666,12 +5695,13 @@
     var p = flowMailPlan(d, x);
     var plan = { route: p.route, kind: p.kind, title: d.title, to: p.to, subject: p.subject, sender: p.sender, text: x.desc + (x.o ? '\n\n注文 ' + x.o.name + '：' + itemsText(x.o) : ''),
       maker: d.to === 'maker' ? x.maker : null, makerName: x.makerName, reply: !d.instruction, draft: d.useDraft ? x.draft : '', draftNote: (x.needsRep ? '⚠️ 代表に確認してから送ってください：' : '') + (x.draftNote || ''),
-      instruction: d.instruction ? d.instruction(x) : '', attachUrl: d.attach ? x.faxLink : '', needFile: !!d.needFile };
+      instruction: d.instruction ? d.instruction(x) : '', attachUrl: d.attach ? x.faxLink : '', needFile: !!d.needFile, receipt: d.needFile ? c.receipt || null : null };
     var panel = openSimplePanel(card, composeHtml(card, key, line, 'flow', d.id, plan));
     if (!panel) { delete composeCtx[key]; return; }
     composeCtx[key] = { card: card, line: line, actionId: 'flow', mode: '', plan: plan, flowStep: d };
     panel.scrollIntoView({ block: 'start' });
     if (plan.attachUrl) { var note = panel.querySelector('[data-c-note]'); if (note) note.textContent = '📎 FAX の PDF を添付して送ります'; }
+    if (plan.receipt) { var rn = panel.querySelector('[data-c-note]'); if (rn) rn.textContent = '📎 アプリで作った領収書（' + plan.receipt.name + '）を付けて送ります'; }
     if (plan.reply && plan.draft) { fillDraft(key, Promise.resolve({ draft: plan.draft, needsRep: false, note: plan.draftNote })); return; }
     fillDraft(key, window.__act.draft(plan.reply ? { kind: plan.kind, channel: 'メール', sender: plan.sender, subject: plan.subject, text: plan.text }
       : { kind: plan.kind, channel: 'メール', sender: plan.sender, instruction: plan.instruction, text: plan.text }));
@@ -5774,6 +5804,27 @@
     }
     if (!d) return;
     var act = t.getAttribute('data-f-act');
+    if (act === 'receipt-make') {
+      var rbox = t.closest('.f-now'), to = ((rbox.querySelector('[data-f-receipt-to]') || {}).value || '').trim(), hint = rbox.querySelector('[data-f-receipt-hint]');
+      if (!to) { hint.textContent = '宛名を入れてください'; return; }
+      if (!window.confirm('次の内容で領収書を作ります。\n\n注文：ORDER' + x.orderNo + '\n宛名：' + to + (/様$|御中$/.test(to) ? '' : '様') + '\n\n（作るだけです。お客様にはまだ送りません）')) return;
+      t.disabled = true; t.textContent = '作っています…（1分ほど）'; hint.textContent = '';
+      window.__act.receipt({ number: x.orderNo, addressee: to, taskNo: card.getAttribute('data-item-id') || '' }).then(function (r) {
+        if (r.warnings && r.warnings.length) {
+          t.disabled = false; t.textContent = '🧾 領収書を作る';
+          hint.innerHTML = '⚠️ ' + esc(r.warnings.join('／')) + '<br>作ったファイル：<a href="' + esc(r.pdf.webUrl) + '" target="_blank" rel="noopener">' + esc(r.pdf.name) + '</a>。このまま送らず、「分からないので代表に聞く」で相談してください';
+          addHistoryEntry(card, 'task', '領収書を作った（合わないところあり）', statusOf(card), null, r.pdf.name + '｜' + r.warnings.join('／'));
+          return;
+        }
+        setReceiptLine(card, { name: r.pdf.name, id: r.pdf.id, url: r.pdf.webUrl });
+        if (statusOf(card) === '未着手') setTaskStatus(card, '進行中');
+        addHistoryEntry(card, 'task', '領収書を作った', statusOf(card), null, (currentUser ? currentUser + 'さん：' : '') + r.pdf.name + '（合計 ' + r.total + ' 円・消費税 ' + r.tax + ' 円。Shopify と同じ）');
+        applyAll();
+      }, function (err) { t.disabled = false; t.textContent = '🧾 領収書を作る'; hint.textContent = '作れませんでした：' + (err.message || err); });
+      return;
+    }
+    if (act === 'receipt-redo') { if (window.confirm('宛名を直して、領収書を作り直しますか？（前のファイルはフォルダに残ります）')) { setReceiptLine(card, null); addHistoryEntry(card, 'task', '領収書を作り直す', statusOf(card), null, currentUser ? currentUser + 'さん' : ''); applyAll(); } return; }
+    if (act === 'receipt-ok') { finishFlowStep(card, line, 'next', '領収書：' + (c.receipt ? c.receipt.name : ''), d.title); return; }
     if (act === 'mail') openFlowMail(card, key, line, d);
     else if (act === 'cancel') runCancel(card, key, line);
     else if (act === 'copy') openFlowCopy(card, key, line, d);
@@ -6063,6 +6114,14 @@
     var route = routeOf(key);
     var from = fromLabel(route);
     var files = e.files ? Array.prototype.slice.call(e.files.files || []) : [];
+    // アプリで作った領収書は、選ばなくても付ける（2026-11-20）
+    if (ctx.plan.receipt && !files.length && !ctx.receiptFile) {
+      e.send.disabled = true; e.send.textContent = '領収書を読んでいます…';
+      window.__act.driveFile(ctx.plan.receipt.id, ctx.plan.receipt.name).then(function (f) { ctx.receiptFile = f; e.send.disabled = false; e.send.textContent = '📨 送る'; sendCompose(key); },
+        function (err) { e.send.disabled = false; e.send.textContent = '📨 送る'; e.err.textContent = '作った領収書を読めませんでした：' + (err.message || err) + '（📎 で選んでも送れます）'; });
+      return;
+    }
+    if (ctx.receiptFile && !files.length) files = [ctx.receiptFile];
     if (ctx.plan.needFile && !files.length) { e.err.textContent = '📎 で、送るファイル（領収書の PDF など）を選んでください'; return; }
     if (files.length && route === 'maker') { e.err.textContent = 'この送り元からは添付を送れません。ファイルを外すか、送り元を変えてください'; return; }
     var big = files.filter(function (f) { return f.size > 3 * 1024 * 1024; })[0];
@@ -9493,8 +9552,8 @@
 })();
 </script>
 <script src="vendor/msal-browser.min.js"></script>
-<script src="sync.js?v=73324d4"></script>
-<script src="chat.js?v=73324d4"></script>
+<script src="sync.js?v=326473a"></script>
+<script src="chat.js?v=326473a"></script>
 <script>
 // 新しい版が出たら知らせて切り替える（2026-11-17 代表の指摘：ブラウザが古い版を覚えていて、更新しても前の画面のままだった）。
 // 公開のたびに version.txt に版の番号が入る。5分ごとと、画面に戻ってきたときに見比べ、違えば上に帯を出す。押すと読み直す（入力中の内容を消さないよう、勝手には読み直さない）
