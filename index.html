@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 公開のときに、公開の仕組み（.github/workflows/publish-annken-kanri-app.yml）がこの版の番号に書き換える。手元では dev のまま -->
-<meta name="app-version" content="1911d9e">
+<meta name="app-version" content="ee40c2f">
 <title>ビジラボ 仕事管理</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@500&display=swap">
 <style>
@@ -1996,7 +1996,7 @@
   .tile.dragging { opacity: .45; }
   .band.drop-over { outline: 3px dashed var(--accent); outline-offset: -3px; background: var(--accent-soft); }
 </style>
-<script src="rules.js?v=1911d9e"></script>
+<script src="rules.js?v=ee40c2f"></script>
 </head>
 <body>
 
@@ -5289,6 +5289,7 @@
     meta: { name: 'Meta Business Suite（Instagram・Facebook）', url: 'https://business.facebook.com' },
     line: { name: 'LINE 公式アカウント', url: 'https://manager.line.biz' },
     claude: { name: 'Claude', url: 'https://claude.ai' },
+    claudecode: { name: 'Claude Code（代表の PC）', url: '' },
     outlook: { name: 'Outlook', url: 'https://outlook.office.com/mail/' },
     teams: { name: 'Teams', url: 'https://teams.microsoft.com' }
   };
@@ -5364,6 +5365,13 @@
       { id: 'answer', type: 'choose', title: '代表の答えを待つ', choices: [{ label: '✅ 載せる', go: 'next', memo: '載せる商品' }, { label: '✋ 載せない', go: 'end' }] },
       { id: 'add', type: 'site', site: 'claude', end: true, title: 'Shopify に登録する', help: '下の文をコピーして Claude（LILOCLE運営AIチーム）に頼みます（画像はメーカー様の資料、説明文は AI チーム）', doneLabel: '✅ 登録した',
         copy: function (x) { return 'LILOCLE の Shopify に、次の新商品を登録して（代表に確認済み）：\n' + x.memo('answer') + '\n\nメーカー様からの案内：\n' + x.desc; } }
+    ] },
+    // 請求書（2026-11-20 代表の指定：自動ではなく、仕事管理から頼んだときだけ Claude Code が保存・印刷する）
+    'maker-invoice': { family: 'maker', label: '請求書が届いた', hint: 'メーカー様から LILOCLE あての請求書（PDF）が届いた。訂正版の請求書も含む', steps: [
+      { id: 'ask', type: 'site', site: 'claudecode', title: 'Claude Code に請求書の受け取りを頼む', help: '下の文をコピーして、代表の PC の Claude Code に貼り付けます。エクセルと金額を照らし合わせ、PDF の保存・受領の返信（確認してから）・印刷まで行い、終わるとこの仕事に結果を書きます', doneLabel: '✅ 頼んだ',
+        copy: function (x) { return '/lilocle-seikyusho-uketori 仕事 ' + x.no + '：' + x.who + ' から届いた請求書を受け取って（件名：' + x.title + '）'; } },
+      { id: 'result', type: 'choose', end: true, title: 'Claude Code の結果を見る', help: '差異がなければ、Claude Code がこの仕事を完了にします',
+        choices: [{ label: '✅ 保存・印刷・受領の返信まで済んだ', go: 'end' }, { label: '⚠️ 金額などに差異があった', go: 'rep' }] }
     ] },
     'maker-other': { family: 'maker', label: 'そのほか（お返事）', hint: 'お客様の件への返事・確認・あいさつなど', steps: [
       { id: 'reply', type: 'mail', to: 'requester', end: true, title: 'メーカー様にお返事する', help: 'lilocle@ から送ります',
@@ -5649,8 +5657,8 @@
     else if (d.type === 'site') {
       var site = SITES[d.site] || {};
       if (d.copy || d.copyDraft) html += '<button type="button" class="s-btn s-primary f-big" data-f-act="copy" ' + b + '>📋 貼り付ける文を見る</button>';
-      html += '<a class="s-btn' + (d.copy || d.copyDraft ? '' : ' s-primary') + ' f-big" href="' + esc(site.url || '#') + '" target="_blank" rel="noopener">🔗 ' + esc(site.name || d.site) + ' を開く</a>' +
-        '<button type="button" class="s-btn f-big" data-f-act="site-done" ' + b + '>' + esc(d.doneLabel || '✅ 済んだ') + '</button>';
+      if (site.url) html += '<a class="s-btn' + (d.copy || d.copyDraft ? '' : ' s-primary') + ' f-big" href="' + esc(site.url) + '" target="_blank" rel="noopener">🔗 ' + esc(site.name || d.site) + ' を開く</a>';
+      html += '<button type="button" class="s-btn f-big" data-f-act="site-done" ' + b + '>' + esc(d.doneLabel || '✅ 済んだ') + '</button>';
     }
     else if (d.type === 'receipt') {
       if (c.receipt) html += '<div class="f-got">🧾 できました：<a href="' + esc(c.receipt.url) + '" target="_blank" rel="noopener">' + esc(c.receipt.name) + ' を開く ↗</a></div>' +
@@ -9562,8 +9570,8 @@
 })();
 </script>
 <script src="vendor/msal-browser.min.js"></script>
-<script src="sync.js?v=1911d9e"></script>
-<script src="chat.js?v=1911d9e"></script>
+<script src="sync.js?v=ee40c2f"></script>
+<script src="chat.js?v=ee40c2f"></script>
 <script>
 // 新しい版が出たら知らせて切り替える（2026-11-17 代表の指摘：ブラウザが古い版を覚えていて、更新しても前の画面のままだった）。
 // 公開のたびに version.txt に版の番号が入る。5分ごとと、画面に戻ってきたときに見比べ、違えば上に帯を出す。押すと読み直す（入力中の内容を消さないよう、勝手には読み直さない）
