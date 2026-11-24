@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 公開のときに、公開の仕組み（.github/workflows/publish-annken-kanri-app.yml）がこの版の番号に書き換える。手元では dev のまま -->
-<meta name="app-version" content="ac4477d">
+<meta name="app-version" content="12f215b">
 <title>ビジラボ 仕事管理</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@500&display=swap">
 <style>
@@ -1997,7 +1997,7 @@
   .tile.dragging { opacity: .45; }
   .band.drop-over { outline: 3px dashed var(--accent); outline-offset: -3px; background: var(--accent-soft); }
 </style>
-<script src="rules.js?v=ac4477d"></script>
+<script src="rules.js?v=12f215b"></script>
 </head>
 <body>
 
@@ -8322,6 +8322,15 @@
     var weekEndStr = fmtDate(weekEnd), nextWeekEndStr = fmtDate(nextWeekEnd);
     var buckets = { urgent: [], week: [], next: [], later: [] };
     var recruitN = 0;
+    // 今日このアプリで動いた人（履歴の「〇〇さん」）
+    var activeToday = {}, tdM = new Date(todayStr + "T00:00:00");
+    var names = shiftNames();
+    all.forEach(function (c) {
+      historyEntries(c).forEach(function (h) {
+        if (!h.at || h.at.getFullYear() !== tdM.getFullYear() || h.at.getMonth() !== tdM.getMonth() || h.at.getDate() !== tdM.getDate()) return;
+        names.forEach(function (n) { if ((h.memo + ' ' + h.action).indexOf(n + 'さん') !== -1) activeToday[n] = true; });
+      });
+    });
     // 営業・迷惑メールらしいものはボードに出さず、「迷惑メール振分け分」へ
     var spams = [];
     open.forEach(function (c) {
@@ -8342,7 +8351,8 @@
       var meta = [kindMeta(c), owner === UNASSIGNED ? "次の走者募集" : "", canDoToday(c)].filter(Boolean).join(" · ");
       var note = hasHandover(c) ? "申し送り：" + firstLine(roleVal(c, 'handover'), 40) : "";
       // 持ち主が休み、または今日の勤務を終えて帰った（退勤済み）なら、期限の近い仕事はその日のうちに次の走者へ
-      var gone = owner !== UNASSIGNED && (presence[owner] === false || shiftStatusOf(owner) === "left");
+      // ただし、今日このアプリで何かした人（受け取った・手順を進めたなど）は来ている。出勤予定の取り込みが遅れても「お休み」にしない（2026-11-24：石﨑さんが 8:57 に受け取ったのに、予定の取り込みが 9:15 で「お休み」と出た）
+      var gone = owner !== UNASSIGNED && !activeToday[owner] && (presence[owner] === false || shiftStatusOf(owner) === "left");
       var due = cardDue(c);
       var high = kind === 'task' && roleVal(c, 'priority') === '高';
       var isUrg = isUrgent(c) || isSoon(c) || (!due && high);
@@ -9604,8 +9614,8 @@
 })();
 </script>
 <script src="vendor/msal-browser.min.js"></script>
-<script src="sync.js?v=ac4477d"></script>
-<script src="chat.js?v=ac4477d"></script>
+<script src="sync.js?v=12f215b"></script>
+<script src="chat.js?v=12f215b"></script>
 <script>
 // 新しい版が出たら知らせて切り替える（2026-11-17 代表の指摘：ブラウザが古い版を覚えていて、更新しても前の画面のままだった）。
 // 公開のたびに version.txt に版の番号が入る。5分ごとと、画面に戻ってきたときに見比べ、違えば上に帯を出す。押すと読み直す（入力中の内容を消さないよう、勝手には読み直さない）
