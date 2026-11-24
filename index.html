@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 公開のときに、公開の仕組み（.github/workflows/publish-annken-kanri-app.yml）がこの版の番号に書き換える。手元では dev のまま -->
-<meta name="app-version" content="12f215b">
+<meta name="app-version" content="e3e5485">
 <title>ビジラボ 仕事管理</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@500&display=swap">
 <style>
@@ -1838,6 +1838,11 @@
   .d-sig[data-tone="warn"] { background: var(--warn-soft); color: var(--warn); }
   .d-sig[data-tone="red"] { background: var(--crit-soft); color: var(--crit); }
   .d-page { display: grid; gap: 14px; }
+  .m-asks { display: grid; gap: 10px; margin: 10px 0; }
+  .m-ask { display: grid; gap: 4px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+  .m-ask b { font-size: 14.5px; }
+  .m-ask small { color: var(--text-muted); font-size: 12.5px; }
+  .m-ask-btns { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
   .f-receipt { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 700; flex: 1 1 260px; }
   .f-receipt input { flex: 1; min-width: 0; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; font: inherit; font-weight: 400; background: var(--surface); color: var(--text); }
   .f-hint { flex-basis: 100%; font-size: 13px; color: var(--crit); }
@@ -1997,7 +2002,7 @@
   .tile.dragging { opacity: .45; }
   .band.drop-over { outline: 3px dashed var(--accent); outline-offset: -3px; background: var(--accent-soft); }
 </style>
-<script src="rules.js?v=12f215b"></script>
+<script src="rules.js?v=e3e5485"></script>
 </head>
 <body>
 
@@ -4975,6 +4980,8 @@
       (due ? '<span class="row-badge" data-tone="' + due.tone + '">' + esc(due.text) + '</span>' : '') +
       '<span class="s-owner">' + (owner === UNASSIGNED ? '次の走者募集' : avatarHtml(owner) + ' ' + esc(owner) + 'さんが担当') + '</span></div>' +
       '<div class="s-what"><small>何の仕事</small><b class="s-title">' + esc(c.title || '（名前のない仕事）') + '</b></div>' + dealGoHtml(card);
+    // マネージャーからの確認：1つずつ「要る／要らない・済み／決まりにする」で答える（2026-11-24 代表の指定：改善 ③④）
+    if (/^manager-ask:/.test(roleVal(card, 'teamsMessageId')) && !closed) html += managerAskHtml(card, key);
 
     if (c.flow) {
       // 流れのある仕事：流れの「いまやること」をそのまま札に入れる
@@ -5690,6 +5697,85 @@
     var t = taskField(c, '宛名') || (/宛名[\s　]*[「『]?([^」』\n。、]+)/.exec(c.desc.join('\n')) || [])[1] || '';
     return t.replace(/（.*?）|\(.*?\)/g, '').replace(/様$/, '').trim();
   }
+  // ---- マネージャーからの確認に答える（2026-11-24 代表の指定：改善 ③④）----
+  // 答えは「データベース/マネージャーへの答え.json」に残り、マネージャーは同じことを60日聞かない。
+  // 「要る」で、名前（「」）だけの確認は新しい仕事になる（担当は未定）。「決まりにする」は「データベース/マネージャーの決まり.txt」に1行足す
+  var MASK_DRIVE = "b!wbAWUnf6KkGVCCMpzpid5mjD2eweyyFPkqQ-wGokg-I25eWJtTuGQ7bhpfZRHTvP";
+  function maskLines(card) { return roleVal(card, 'content').split('\n').filter(function (l) { return /^・/.test(l); }).map(function (l) { return l.slice(1); }); }
+  function maskKey(text) {
+    var ids = (String(text).split('【')[0].match(/#(\d+)/g) || []).map(function (x) { return x.slice(1); }).sort();
+    if (ids.length) return '#' + ids.join('・#');
+    var m = /「([^」]{2,80})」/.exec(String(text));
+    return m ? '「' + m[1] + '」' : String(text).slice(0, 40);
+  }
+  function managerAskHtml(card, key) {
+    var lines = maskLines(card);
+    if (!lines.length) return '';
+    return '<div class="m-asks">' + lines.map(function (l, i) {
+      var main = l.split('【')[0], facts = /【調べたこと】([^【]*)/.exec(l), rec = /【おすすめ】([^【]*)/.exec(l);
+      var isNew = !/#\d+/.test(main) && /「[^」]+」は要りますか/.test(main);
+      return '<div class="m-ask"><b>' + esc(main) + '</b>' +
+        (facts ? '<small>調べたこと：' + esc(facts[1]) + '</small>' : '') + (rec ? '<small>おすすめ：' + esc(rec[1]) + '</small>' : '') +
+        '<div class="m-ask-btns"><button type="button" class="s-btn s-primary" data-mask="need" data-mask-key="' + key + '" data-mask-i="' + i + '">' + (isNew ? '👍 要る（仕事にする）' : '👍 要る（対応する）') + '</button>' +
+        '<button type="button" class="s-btn" data-mask="no" data-mask-key="' + key + '" data-mask-i="' + i + '">🙅 要らない・済み</button>' +
+        '<button type="button" class="s-btn s-mini" data-mask="rule" data-mask-key="' + key + '" data-mask-i="' + i + '">📏 決まりにする</button></div></div>';
+    }).join('') + '</div>';
+  }
+  async function maskDriveText(path) {
+    var token = await window.__chatOps.getToken();
+    var res = await fetch('https://graph.microsoft.com/v1.0/drives/' + MASK_DRIVE + '/root:/' + path.split('/').map(encodeURIComponent).join('/') + ':/content', { headers: { Authorization: 'Bearer ' + token } });
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error('読めませんでした（' + res.status + '）');
+    return res.text();
+  }
+  async function maskDrivePut(path, text, type) {
+    var token = await window.__chatOps.getToken();
+    var res = await fetch('https://graph.microsoft.com/v1.0/drives/' + MASK_DRIVE + '/root:/' + path.split('/').map(encodeURIComponent).join('/') + ':/content', { method: 'PUT', headers: { Authorization: 'Bearer ' + token, 'Content-Type': type }, body: text });
+    if (!res.ok) throw new Error('書けませんでした（' + res.status + '）');
+  }
+  async function answerManagerAsk(card, i, kind) {
+    var lines = maskLines(card), text = lines[i];
+    if (!text) return;
+    var who = currentUser || ownerOf(card) || '';
+    var note = '';
+    if (kind === 'rule') {
+      note = window.prompt('決まりとして覚えることを1行で書いてください（例：自社発送の注文は作り手さんのエクセルを使わない）', '');
+      if (!note) return;
+      var rules = (await maskDriveText('データベース/マネージャーの決まり.txt')) || 'マネージャーとデータベースAI社員が守る決まり（1行に1つ。代表が書き足せます）\n';
+      await maskDrivePut('データベース/マネージャーの決まり.txt', rules.replace(/\s*$/, '\n') + '・' + note.replace(/\n/g, ' ') + '（' + todayStr + ' ' + who + 'さん）\n', 'text/plain; charset=utf-8');
+    }
+    var answer = kind === 'need' ? '要る' : '要らない・済み';
+    var raw = await maskDriveText('データベース/マネージャーへの答え.json');
+    var data = raw ? JSON.parse(raw) : { answers: [] };
+    data.answers = (data.answers || []).concat([{ key: maskKey(text), answer: answer, note: note, text: text.slice(0, 300), at: new Date().toISOString(), by: who }]).slice(-500);
+    await maskDrivePut('データベース/マネージャーへの答え.json', JSON.stringify(data, null, 1), 'application/json');
+    // 名前だけの確認で「要る」→ 新しい仕事（担当は未定）
+    var main = text.split('【')[0], nm = /「([^」]+)」は要りますか/.exec(main);
+    if (kind === 'need' && nm && !/#\d+/.test(main)) {
+      var biz = /（事業：([^）]+)）/.exec(main);
+      var facts = /【調べたこと】([^【]*)/.exec(text);
+      await window.__chatOps.createTask({ Title: nm[1].slice(0, 60), Content: nm[1] + '\n' + (facts ? facts[1] + '\n' : '') + '（マネージャーからの確認で ' + who + 'さんが「要る」と答えた）', Business: biz ? biz[1] : businessOf(card), Priority: '中', Owner: UNASSIGNED, Category: '未分類' }, 'マネージャーの確認から仕事にした', who + 'さんが「要る」と答えた');
+    }
+    // 確認から外す。全部答えたら完了
+    var el = card.querySelector('[data-role="content"]');
+    var rest = textOf(el).split('\n').filter(function (l) { return l !== '・' + text; });
+    var left = rest.filter(function (l) { return /^・/.test(l); }).length;
+    rest[0] = 'マネージャーからの確認（' + left + '件）';
+    el.textContent = rest.join('\n');
+    el.dispatchEvent(userEvent('input'));
+    addHistoryEntry(card, 'task', '確認に答えた', statusOf(card), '', maskKey(text) + '：' + answer + (note ? '（決まりにした：' + note + '）' : '') + '（' + who + 'さん）');
+    if (!left) setTaskStatus(card, '完了');
+    renderSimpleTasks();
+  }
+  document.body.addEventListener('click', function (e) {
+    var b = e.target.closest && e.target.closest('[data-mask]');
+    if (!b || b.disabled) return;
+    var card = jumpRegistry[b.getAttribute('data-mask-key')];
+    if (!card || !window.__chatOps) return;
+    b.disabled = true;
+    answerManagerAsk(card, +b.getAttribute('data-mask-i'), b.getAttribute('data-mask')).catch(function (err) { b.disabled = false; alert('答えを残せませんでした：' + err.message); });
+  });
+
   function setReceiptLine(card, r) {
     var el = card.querySelector('[data-role="content"]');
     if (!el) return;
@@ -9614,8 +9700,8 @@
 })();
 </script>
 <script src="vendor/msal-browser.min.js"></script>
-<script src="sync.js?v=12f215b"></script>
-<script src="chat.js?v=12f215b"></script>
+<script src="sync.js?v=e3e5485"></script>
+<script src="chat.js?v=e3e5485"></script>
 <script>
 // 新しい版が出たら知らせて切り替える（2026-11-17 代表の指摘：ブラウザが古い版を覚えていて、更新しても前の画面のままだった）。
 // 公開のたびに version.txt に版の番号が入る。5分ごとと、画面に戻ってきたときに見比べ、違えば上に帯を出す。押すと読み直す（入力中の内容を消さないよう、勝手には読み直さない）
