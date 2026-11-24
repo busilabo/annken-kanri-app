@@ -304,7 +304,9 @@
         status: statusEl ? statusEl.textContent : "",
         tone: statusEl ? statusEl.getAttribute("data-tone") : "",
         due: (entry.querySelector(".history-due") || {}).textContent || "",
-        memo: textOf(entry.querySelector(".history-memo"))
+        memo: textOf(entry.querySelector(".history-memo")),
+        // だれが変えたか（2026-11-24 見直し案の1段）。読んだときの by を落とさずに書き戻す
+        by: entry.getAttribute("data-by") || ""
       });
     });
     return JSON.stringify(entries);
@@ -319,6 +321,7 @@
     entries.forEach(function (item) {
       var entry = document.createElement("div");
       entry.className = "history-entry";
+      if (item.by) entry.setAttribute("data-by", item.by);
       entry.innerHTML =
         '<div class="history-meta">' +
         '<span class="history-time tabular"></span>' +
@@ -1688,7 +1691,7 @@
       Priority: "中",
       Owner: "未定",
       Category: "未分類",
-      History: JSON.stringify([{ time: stampNow(), action: historyAction, status: "未着手", tone: "neutral", due: "", memo: historyMemo || "" }]),
+      History: JSON.stringify([{ time: stampNow(), action: historyAction, status: "未着手", tone: "neutral", due: "", memo: historyMemo || "", by: (window.__app && window.__app.whoAmI && window.__app.whoAmI()) || "画面" }]),
       Deleted: false
     }, fields));
     var created;

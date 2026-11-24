@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 公開のときに、公開の仕組み（.github/workflows/publish-annken-kanri-app.yml）がこの版の番号に書き換える。手元では dev のまま -->
-<meta name="app-version" content="7070937">
+<meta name="app-version" content="4e2a5b7">
 <title>ビジラボ 仕事管理</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@500&display=swap">
 <style>
@@ -1838,6 +1838,9 @@
   .d-sig[data-tone="warn"] { background: var(--warn-soft); color: var(--warn); }
   .d-sig[data-tone="red"] { background: var(--crit-soft); color: var(--crit); }
   .d-page { display: grid; gap: 14px; }
+  .m-report { display: grid; gap: 3px; margin: 10px 0; padding: 10px 12px; border-radius: 10px; background: var(--surface-2, var(--surface)); border: 1px dashed var(--border); }
+  .m-report b { font-size: 13.5px; margin-top: 4px; }
+  .m-report small { color: var(--muted, inherit); line-height: 1.5; }
   .m-asks { display: grid; gap: 10px; margin: 10px 0; }
   .m-ask { display: grid; gap: 4px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
   .m-ask b { font-size: 14.5px; }
@@ -2002,7 +2005,7 @@
   .tile.dragging { opacity: .45; }
   .band.drop-over { outline: 3px dashed var(--accent); outline-offset: -3px; background: var(--accent-soft); }
 </style>
-<script src="rules.js?v=7070937"></script>
+<script src="rules.js?v=4e2a5b7"></script>
 </head>
 <body>
 
@@ -3966,8 +3969,11 @@
     var dueNote = "";
     if (newDue === "") dueNote = dueFieldLabel(kind) + "なし";
     else if (newDue) dueNote = dueFieldLabel(kind) + " " + newDue.slice(5).replace("-", "/");
+    // だれが変えたか（2026-11-24 見直し案の1段）：画面で押した人。画面が自動でしたこと（流れを決めた・最終チェック・自動の照らし合わせ）は「画面の自動」
+    var byWho = /^(流れを決めた|自動で|🔍 最終チェック|自動の)|（自動）$/.test(actionLabel || "") ? "画面の自動" : (currentUser || "画面");
     var entry = document.createElement("div");
     entry.className = "history-entry";
+    entry.setAttribute("data-by", byWho);
     entry.innerHTML =
       '<div class="history-meta">' +
       '<span class="history-time tabular">' + stamp + "</span>" +
@@ -4981,7 +4987,7 @@
       '<span class="s-owner">' + (owner === UNASSIGNED ? '次の走者募集' : avatarHtml(owner) + ' ' + esc(owner) + 'さんが担当') + '</span></div>' +
       '<div class="s-what"><small>何の仕事</small><b class="s-title">' + esc(c.title || '（名前のない仕事）') + '</b></div>' + dealGoHtml(card);
     // マネージャーからの確認：1つずつ「要る／要らない・済み／決まりにする」で答える（2026-11-24 代表の指定：改善 ③④）
-    if (/^manager-ask:/.test(roleVal(card, 'teamsMessageId')) && !closed) html += managerAskHtml(card, key);
+    if (/^manager-ask:/.test(roleVal(card, 'teamsMessageId'))) html += managerAskHtml(card, key);   // 完了でも日報は出す（確認の行は答えると消える）
 
     if (c.flow) {
       if (c.flow === 'maker-invoice' && !closed) autoInvoiceCheck(card, c);
@@ -5720,12 +5726,15 @@
   }
   function managerAskHtml(card, key) {
     var lines = maskLines(card);
-    if (!lines.length) return '';
-    return '<div class="m-asks">' + lines.map(function (l, i) {
-      var main = l.split('【')[0], facts = /【調べたこと】([^【]*)/.exec(l), rec = /【おすすめ】([^【]*)/.exec(l);
+    // 管理日報（2026-11-24 見直し案の1段）：「■」「－」の行。確認の上に出す
+    var report = roleVal(card, 'content').split('\n').filter(function (l) { return /^(■|－)/.test(l); });
+    var reportHtml = report.length ? '<div class="m-report">' + report.map(function (l) { return /^■/.test(l) ? '<b>' + esc(l.slice(1).trim()) + '</b>' : '<small>' + esc(l.slice(1).trim()) + '</small>'; }).join('') + '</div>' : '';
+    if (!lines.length) return reportHtml;
+    return reportHtml + '<div class="m-asks">' + lines.map(function (l, i) {
+      var main = l.split('【')[0], facts = /【(?:調べたこと|見たもの)】([^【]*)/.exec(l), unk = /【分からないこと】([^【]*)/.exec(l), rec = /【おすすめ】([^【]*)/.exec(l);
       var isNew = !/#\d+/.test(main) && /「[^」]+」は要りますか/.test(main);
       return '<div class="m-ask"><b>' + esc(main) + '</b>' +
-        (facts ? '<small>調べたこと：' + esc(facts[1]) + '</small>' : '') + (rec ? '<small>おすすめ：' + esc(rec[1]) + '</small>' : '') +
+        (facts ? '<small>見たもの：' + esc(facts[1]) + '</small>' : '') + (unk ? '<small>分からないこと：' + esc(unk[1]) + '</small>' : '') + (rec ? '<small>おすすめ：' + esc(rec[1]) + '</small>' : '') +
         '<div class="m-ask-btns"><button type="button" class="s-btn s-primary" data-mask="need" data-mask-key="' + key + '" data-mask-i="' + i + '">' + (isNew ? '👍 要る（仕事にする）' : '👍 要る（対応する）') + '</button>' +
         '<button type="button" class="s-btn" data-mask="no" data-mask-key="' + key + '" data-mask-i="' + i + '">🙅 要らない・済み</button>' +
         '<button type="button" class="s-btn s-mini" data-mask="rule" data-mask-key="' + key + '" data-mask-i="' + i + '">📏 決まりにする</button></div></div>';
@@ -5763,14 +5772,14 @@
     var main = text.split('【')[0], nm = /「([^」]+)」は要りますか/.exec(main);
     if (kind === 'need' && nm && !/#\d+/.test(main)) {
       var biz = /（事業：([^）]+)）/.exec(main);
-      var facts = /【調べたこと】([^【]*)/.exec(text);
+      var facts = /【(?:調べたこと|見たもの)】([^【]*)/.exec(text);
       await window.__chatOps.createTask({ Title: nm[1].slice(0, 60), Content: nm[1] + '\n' + (facts ? facts[1] + '\n' : '') + '（マネージャーからの確認で ' + who + 'さんが「要る」と答えた）', Business: biz ? biz[1] : businessOf(card), Priority: '中', Owner: UNASSIGNED, Category: '未分類' }, 'マネージャーの確認から仕事にした', who + 'さんが「要る」と答えた');
     }
     // 確認から外す。全部答えたら完了
     var el = card.querySelector('[data-role="content"]');
     var rest = textOf(el).split('\n').filter(function (l) { return l !== '・' + text; });
     var left = rest.filter(function (l) { return /^・/.test(l); }).length;
-    rest[0] = 'マネージャーからの確認（' + left + '件）';
+    rest[0] = (/^マネージャーの日報/.test(rest[0]) ? 'マネージャーの日報と確認（' : 'マネージャーからの確認（') + left + '件）';
     el.textContent = rest.join('\n');
     el.dispatchEvent(userEvent('input'));
     addHistoryEntry(card, 'task', '確認に答えた', statusOf(card), '', maskKey(text) + '：' + answer + (note ? '（決まりにした：' + note + '）' : '') + '（' + who + 'さん）');
@@ -9771,6 +9780,7 @@
     setMktStatus: setMktStatus,
     setGrowth: setGrowth,
     setDeals: setDeals,
+    whoAmI: function () { return currentUser || ""; },
     setLedgerHealth: setLedgerHealth,
     setManagerReport: setManagerReport,
     mktChecks: mktChecks,
@@ -9785,8 +9795,8 @@
 })();
 </script>
 <script src="vendor/msal-browser.min.js"></script>
-<script src="sync.js?v=7070937"></script>
-<script src="chat.js?v=7070937"></script>
+<script src="sync.js?v=4e2a5b7"></script>
+<script src="chat.js?v=4e2a5b7"></script>
 <script>
 // 新しい版が出たら知らせて切り替える（2026-11-17 代表の指摘：ブラウザが古い版を覚えていて、更新しても前の画面のままだった）。
 // 公開のたびに version.txt に版の番号が入る。5分ごとと、画面に戻ってきたときに見比べ、違えば上に帯を出す。押すと読み直す（入力中の内容を消さないよう、勝手には読み直さない）
