@@ -275,7 +275,8 @@
     var body = String(data.bodyHtml || "").replace(/<[^>]*>/g, " ");
     var text = String(data.subject || "") + " " + String(data.preview || "") + " " + body;
     if (!/請求/.test(text) || OWN_SENDER.test(String(data.fromAddress || "").trim())) return false;
-    return data.business === "LILOCLE運営" || LILO_NAME.test(text);
+    // busilabo@ の署名にも LILOCLE が入っているので、ほかの事業の相手（連絡先で事業が決まっている人）は名前では見ない
+    return data.business === "LILOCLE運営" || (!data.business && LILO_NAME.test(text));
   }
   function mailProfile(data) {
     var from = String(data.fromAddress || "").trim();
