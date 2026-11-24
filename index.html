@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 公開のときに、公開の仕組み（.github/workflows/publish-annken-kanri-app.yml）がこの版の番号に書き換える。手元では dev のまま -->
-<meta name="app-version" content="ffaade6">
+<meta name="app-version" content="e10c55b">
 <title>ビジラボ 仕事管理</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@500&display=swap">
 <style>
@@ -2002,7 +2002,7 @@
   .tile.dragging { opacity: .45; }
   .band.drop-over { outline: 3px dashed var(--accent); outline-offset: -3px; background: var(--accent-soft); }
 </style>
-<script src="rules.js?v=ffaade6"></script>
+<script src="rules.js?v=e10c55b"></script>
 </head>
 <body>
 
@@ -5375,14 +5375,12 @@
         copy: function (x) { return 'LILOCLE の Shopify に、次の新商品を登録して（代表に確認済み）：\n' + x.memo('answer') + '\n\nメーカー様からの案内：\n' + x.desc; } }
     ] },
     // 請求書（2026-11-20 代表の指定：自動ではなく、仕事管理から頼んだときだけ Claude Code が保存・印刷する）
-    // 照らし合わせ・保存・印刷は代表の PC の Claude Code（請求書のフォルダとプリンターがあるため）。決める・返信はこの画面で
+    // 2026-11-24 代表の指定：照らし合わせ・保存・印刷もこの画面で完結。照らし合わせと保存は Azure、印刷は代表の PC が「印刷待ち」を見て自動で1部
     'maker-invoice': { family: 'maker', label: '請求書が届いた', hint: 'メーカー様から LILOCLE あての請求書（PDF・Misoca など）が届いた。訂正版の請求書も含む', steps: [
-      { id: 'check', type: 'site', site: 'claudecode', title: 'Claude Code に、エクセルとの照らし合わせを頼む', help: '下の文をコピーして、代表の PC の Claude Code に貼り付けます。違いがなければ、保存と印刷まで済ませて、結果をこの仕事に書きます', doneLabel: '✅ 頼んだ',
-        copy: function (x) { return '/lilocle-seikyusho-uketori 仕事 ' + x.no + '：' + x.who + ' から届いた請求書を照らし合わせて（件名：' + x.title + '）'; } },
-      { id: 'decide', type: 'choose', title: '照らし合わせの結果を見て、受け取るか決める', help: '結果は、ひとつ前の手順のメモにあります。違いがあるときは代表が決めます（違いがなければ Claude Code が先へ進めます）',
+      { id: 'check', type: 'invoice-check', title: '請求書とエクセルを照らし合わせる', help: 'AI が請求書の PDF と作り手さんのエクセルを読み、金額・明細が合っているかを確かめます（1〜3分）' },
+      { id: 'decide', type: 'choose', title: '照らし合わせの結果を見て、受け取るか決める', help: '結果は、ひとつ前の手順のメモにあります。違いがあるときは代表が決めます',
         choices: [{ label: '✅ このまま受け取る', go: 'next' }, { label: '✉️ 訂正版をお願いする', go: 'fix', memo: '直していただくこと（例：消費税を内税にした金額で）' }, { label: '🙋 代表に相談する', go: 'rep' }] },
-      { id: 'keep', type: 'site', site: 'claudecode', title: 'Claude Code に、保存と印刷を頼む', help: '下の文をコピーして、代表の PC の Claude Code に貼り付けます。終わるとこの手順に ✓ が付きます', doneLabel: '✅ 保存・印刷した',
-        copy: function (x) { return '/lilocle-seikyusho-uketori 仕事 ' + x.no + '：照らし合わせは済み、このまま受け取る。保存して印刷して'; } },
+      { id: 'keep', type: 'invoice-keep', title: '共有フォルダに保存して、印刷する', help: '全社共有の「LILOCLE資料／リロクル請求書」に保存し、「印刷待ち」に置きます。代表の PC が自動で1部印刷します' },
       { id: 'reply', type: 'mail', to: 'requester', end: true, title: 'メーカー様に、受け取りましたとお返事する', help: 'lilocle@ から送ります',
         instruction: function (x) { return 'メーカー様（' + x.who + '）に、LILOCLE（リロクル）として、ご請求書を確かに受け取り、お支払期限までにお振込みすることをお伝えするお返事を書く。どの月の分の請求書かを入れる（照らし合わせの結果：' + x.memo('check') + '）。金額の違いや社内の確認のことは書かない。署名は付けない。'; } },
       { id: 'fix', type: 'mail', to: 'requester', end: true, title: 'メーカー様に、訂正版の請求書をお願いする', help: 'lilocle@ から送ります。訂正版が届いたら、新しい仕事になります',
@@ -5678,6 +5676,16 @@
       if (site.url) html += '<a class="s-btn' + (d.copy || d.copyDraft ? '' : ' s-primary') + ' f-big" href="' + esc(site.url) + '" target="_blank" rel="noopener">🔗 ' + esc(site.name || d.site) + ' を開く</a>';
       html += '<button type="button" class="s-btn f-big" data-f-act="site-done" ' + b + '>' + esc(d.doneLabel || '✅ 済んだ') + '</button>';
     }
+    else if (d.type === 'invoice-check') {
+      var src = invoiceSourceOf(card);
+      html += (src ? '<div class="f-got">📄 請求書：' + esc(src.label) + '</div>' : '<div class="f-hint">メールの添付が見つかりません。請求書の PDF を選んでください（Outlook で添付を保存したもの・Misoca の「PDF をダウンロード」）</div>') +
+        '<label class="f-receipt">' + (src ? '別の PDF にする' : 'PDF') + '<input type="file" accept="application/pdf,.pdf" data-f-inv-file></label>' +
+        '<button type="button" class="s-btn s-primary f-big" data-f-act="inv-check" ' + b + '>🔍 照らし合わせる</button><div class="f-hint" data-f-inv-hint></div>';
+    }
+    else if (d.type === 'invoice-keep') {
+      html += '<button type="button" class="s-btn s-primary f-big" data-f-act="inv-keep" ' + b + '>💾 保存して印刷する</button>' +
+        '<button type="button" class="s-btn f-big" data-f-act="inv-keep-noprint" ' + b + '>保存だけする</button><div class="f-hint" data-f-inv-hint></div>';
+    }
     else if (d.type === 'receipt') {
       if (c.receipt) html += '<div class="f-got">🧾 できました：<a href="' + esc(c.receipt.url) + '" target="_blank" rel="noopener">' + esc(c.receipt.name) + ' を開く ↗</a></div>' +
         '<button type="button" class="s-btn s-primary f-big" data-f-act="receipt-ok" ' + b + '>✅ 中身を確かめた（次へ）</button><button type="button" class="s-btn f-big" data-f-act="receipt-redo" ' + b + '>🔁 宛名を直して作り直す</button>';
@@ -5776,6 +5784,15 @@
     answerManagerAsk(card, +b.getAttribute('data-mask-i'), b.getAttribute('data-mask')).catch(function (err) { b.disabled = false; alert('答えを残せませんでした：' + err.message); });
   });
 
+  // 請求書の PDF のありか：Power Automate が保存した添付（【請求書PDF】名前｜itemId）か、メールの中の Misoca のリンク
+  function invoiceSourceOf(card) {
+    var body = roleVal(card, 'content');
+    var a = /【請求書PDF】([^｜\n]+)｜(\S+)/.exec(body);
+    if (a) return { label: a[1] + '（メールの添付）', req: { itemId: a[2] } };
+    var m = /https:\/\/app\.misoca\.jp\/receive_documents\/[0-9a-f-]{36}/.exec(body);
+    if (m) return { label: 'Misoca の請求書（メールのリンク）', req: { misocaUrl: m[0] } };
+    return null;
+  }
   function setReceiptLine(card, r) {
     var el = card.querySelector('[data-role="content"]');
     if (!el) return;
@@ -5936,6 +5953,28 @@
         addHistoryEntry(card, 'task', '領収書を作った', statusOf(card), null, (currentUser ? currentUser + 'さん：' : '') + r.pdf.name + '（合計 ' + r.total + ' 円・消費税 ' + r.tax + ' 円。Shopify と同じ）');
         applyAll();
       }, function (err) { t.disabled = false; t.textContent = '🧾 領収書を作る'; hint.textContent = '作れませんでした：' + (err.message || err); });
+      return;
+    }
+    if (act === 'inv-check') {
+      var ibox = t.closest('.f-now'), ihint = ibox.querySelector('[data-f-inv-hint]'), fileEl = ibox.querySelector('[data-f-inv-file]');
+      var picked = fileEl && fileEl.files && fileEl.files[0], isrc = invoiceSourceOf(card), no = card.getAttribute('data-item-id') || '';
+      if (!picked && !isrc) { ihint.textContent = '請求書の PDF を選んでください'; return; }
+      t.disabled = true; t.textContent = '照らし合わせています…（1〜3分）'; ihint.textContent = '';
+      (picked ? window.__act.invoiceUpload(no, picked).then(function (id) { return { itemId: id }; }) : Promise.resolve(isrc.req)).then(function (req) {
+        return window.__act.invoiceCheck(Object.assign({ taskId: no, hint: (c.title || '') + ' ' + roleVal(card, 'requester') }, req));
+      }).then(function (r) {
+        var memo = (/違い/.test(r.verdict) ? '⚠️ ' : '✅ ') + r.verdict + '：' + r.summary + '（' + r.maker + '・' + r.months + '分・' + Number(r.total || 0).toLocaleString() + '円' + (r.due ? '・期限 ' + r.due : '') + '）';
+        if (statusOf(card) === '未着手') setTaskStatus(card, '進行中');
+        finishFlowStep(card, line, 'next', memo, d.title);
+      }, function (err) { t.disabled = false; t.textContent = '🔍 照らし合わせる'; ihint.textContent = '照らし合わせられませんでした：' + (err.message || err); });
+      return;
+    }
+    if (act === 'inv-keep' || act === 'inv-keep-noprint') {
+      var kbox = t.closest('.f-now'), khint = kbox.querySelector('[data-f-inv-hint]'), print = act === 'inv-keep';
+      t.disabled = true; t.textContent = '保存しています…';
+      window.__act.invoiceKeep({ taskId: card.getAttribute('data-item-id') || '', print: print }).then(function (r) {
+        finishFlowStep(card, line, 'next', '保存した：' + r.folder + '/' + r.fileName + (r.renamed ? '（前の版は ' + r.renamed + '）' : '') + (print ? '・印刷待ちに置いた（代表の PC が印刷）' : ''), d.title);
+      }, function (err) { t.disabled = false; t.textContent = print ? '💾 保存して印刷する' : '保存だけする'; khint.textContent = '保存できませんでした：' + (err.message || err); });
       return;
     }
     if (act === 'receipt-redo') { if (window.confirm('宛名を直して、領収書を作り直しますか？（前のファイルはフォルダに残ります）')) { setReceiptLine(card, null); addHistoryEntry(card, 'task', '領収書を作り直す', statusOf(card), null, currentUser ? currentUser + 'さん' : ''); applyAll(); } return; }
@@ -9700,8 +9739,8 @@
 })();
 </script>
 <script src="vendor/msal-browser.min.js"></script>
-<script src="sync.js?v=ffaade6"></script>
-<script src="chat.js?v=ffaade6"></script>
+<script src="sync.js?v=e10c55b"></script>
+<script src="chat.js?v=e10c55b"></script>
 <script>
 // 新しい版が出たら知らせて切り替える（2026-11-17 代表の指摘：ブラウザが古い版を覚えていて、更新しても前の画面のままだった）。
 // 公開のたびに version.txt に版の番号が入る。5分ごとと、画面に戻ってきたときに見比べ、違えば上に帯を出す。押すと読み直す（入力中の内容を消さないよう、勝手には読み直さない）

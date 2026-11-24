@@ -1454,6 +1454,18 @@
   // 領収書の PDF を作る（Azure の台帳係。全社共有の 領収書_雛形.xlsx → PDF。2026-11-20）
   var LEDGER_ENDPOINT = "https://busilabo-work-chat.azurewebsites.net/api/ledger";
   function makeReceipt(req) { return callApi(LEDGER_ENDPOINT, Object.assign({ what: "receipt" }, req), 180000); }
+  // メーカー様の請求書（2026-11-24）：照らし合わせ・保存と印刷は Azure。PDF を選んだときは 案件管理キュー/invoices に置いてから渡す
+  function invoiceCheck(req) { return callApi(LEDGER_ENDPOINT, Object.assign({ what: "invoice-check" }, req), 280000); }
+  function invoiceKeep(req) { return callApi(LEDGER_ENDPOINT, Object.assign({ what: "invoice-keep" }, req), 120000); }
+  async function invoiceUpload(taskNo, file) {
+    if (!/\.pdf$/i.test(file.name || "") && file.type !== "application/pdf") throw new Error("PDF を選んでください");
+    var token = await getToken();
+    var res = await fetch("https://graph.microsoft.com/v1.0/drives/" + LILO_DRIVE + "/root:/" + encodeURIComponent("案件管理キュー") + "/invoices/" + encodeURIComponent("upload-" + taskNo + ".pdf") + ":/content", {
+      method: "PUT", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/pdf" }, body: file
+    });
+    if (!res.ok) throw new Error("PDF を置けませんでした（" + res.status + "）");
+    return (await res.json()).id;
+  }
   // SharePoint のファイルを、送るときの添付（File）にする
   async function driveFile(id, name) {
     var token = await getToken();
@@ -1462,7 +1474,7 @@
     var blob = await res.blob();
     return new File([blob], name, { type: "application/pdf" });
   }
-  window.__act = { receipt: makeReceipt, driveFile: driveFile, order: shopifyOrder, orderCached: function (n) { return orderCache[n] || null; }, cancel: shopifyCancel, finalCheck: finalCheck, draft: composeDraft, send: sendMail, cancelSteps: function () { return STEPS.liloCancel.slice(); }, isCancelRequest: function (t) { return isCancelRequest(t, ""); },
+  window.__act = { receipt: makeReceipt, invoiceCheck: invoiceCheck, invoiceKeep: invoiceKeep, invoiceUpload: invoiceUpload, driveFile: driveFile, order: shopifyOrder, orderCached: function (n) { return orderCache[n] || null; }, cancel: shopifyCancel, finalCheck: finalCheck, draft: composeDraft, send: sendMail, cancelSteps: function () { return STEPS.liloCancel.slice(); }, isCancelRequest: function (t) { return isCancelRequest(t, ""); },
     me: function () { return (account && account.username) || ""; },
     // 仕事の流れ（index.html の FLOWS）が、前の作りの手順を見分けるのに使う
     steps: function () { return STEPS; },
@@ -1838,12 +1850,19 @@
         // 返信先（相手のアドレスと届いたメールボックス）を残す。アプリの「返信する」が使う（2026-11-08）。Amazon はセラーセントラルから返すので残さない
         var replyAddr = String(data.fromAddress || "").trim().toLowerCase();
         var replyLine = profile.business !== "Amazon販売" && /^[\w.+-]+@[\w-]+(\.[\w-]+)+$/.test(replyAddr) && !OWN_SENDER.test(replyAddr) && !/@shopify\.com$/.test(replyAddr)
-          ? "\n返信先：" + replyAddr + "（" + String(data.mailbox || "").trim().toLowerCase() + " に届いたメール。件名「" + String(data.subject || "").slice(0, 80) + "」）" : "";
+          ? "\n返信先：" + replyAddr + "（" + String(profile.replyFrom || data.mailbox || "").trim().toLowerCase() + " に届いたメール。件名「" + String(data.subject || "").slice(0, 80) + "」）" : "";
         // LILOCLE のお客様の仕事は、件名ではなく「だれの・何の用件か・どの注文か」を名前にする（2026-11-17）
         if (/^LILOCLEお客様：/.test(profile.title) && !/^ホームページのお問い合わせ/.test(String(data.subject || ""))) {
           profile = Object.assign({}, profile, { title: await liloCustomerTitle(from, String(data.subject || ""), preview), subjectLine: "件名：" + String(data.subject || "").slice(0, 80) });
         }
-        var content = profile.title + "\n" + (profile.subjectLine ? profile.subjectLine + "\n" : "") + preview + replyLine + draftText(draft) + stepsText(profile.steps);
+        // 請求書の PDF（Power Automate が保存した添付 attachments:[{name,id}]）と、Misoca のリンク（bodyHtml・links）を残す。請求書の流れの「照らし合わせる」が使う（2026-11-24）
+        var invLines = "";
+        (Array.isArray(data.attachments) ? data.attachments : []).forEach(function (a) {
+          if (a && a.id && /\.pdf$/i.test(a.name || "")) invLines += "\n【請求書PDF】" + String(a.name).replace(/[｜\n]/g, " ").slice(0, 120) + "｜" + a.id;
+        });
+        var mis = /https:\/\/app\.misoca\.jp\/receive_documents\/[0-9a-f-]{36}/.exec(String(data.bodyHtml || "") + " " + [].concat(data.links || []).join(" ") + " " + preview);
+        if (mis) invLines += "\n請求書のリンク：" + mis[0];
+        var content = profile.title + "\n" + (profile.subjectLine ? profile.subjectLine + "\n" : "") + preview + replyLine + invLines + draftText(draft) + stepsText(profile.steps);
         // 下書きを待つ間に、別の人の画面が同じメールを仕事にしていたら作らない
         if (draft && await remoteTaskExists(key)) { await moveToProcessed(file, "mail task"); return; }
         var fields = {

@@ -269,6 +269,14 @@
     return /注文番号：\s*#?\s*\w*\d+/.test(all) && CANCEL_WORD.test(all) && !CANCEL_NOT.test(all);
   }
 
+  // busilabo@ に届いた LILOCLE の請求書か：請求・支払いの言葉があり、連絡先で LILOCLE運営 の相手か、件名・本文に LILOCLE（リロクル）とある
+  var LILO_NAME = /LILOCLE|リロクル|ﾘﾛｸﾙ/i;
+  function isLiloInvoiceAtBusilabo(data) {
+    var body = String(data.bodyHtml || "").replace(/<[^>]*>/g, " ");
+    var text = String(data.subject || "") + " " + String(data.preview || "") + " " + body;
+    if (!/請求/.test(text) || OWN_SENDER.test(String(data.fromAddress || "").trim())) return false;
+    return data.business === "LILOCLE運営" || LILO_NAME.test(text);
+  }
   function mailProfile(data) {
     var from = String(data.fromAddress || "").trim();
     var subject = String(data.subject || "（件名なし）");
@@ -302,6 +310,10 @@
       // 担当は決めずに入れる（2026-11-19 代表の指定：担当は後から決める）
       if (PAYMENT_WORD.test(text)) return { title: "LILOCLE 請求・支払い：" + subject, business: "LILOCLE運営", category: "代表の確認", steps: STEPS.liloPayment, draftKind: "lilocle-maker", channel: "メール" };
       return { title: "LILOCLEメーカー様：" + subject, business: "LILOCLE運営", category: "メーカー対応", steps: STEPS.liloSupplier };
+    }
+    // まれに作り手さんの請求書が busilabo@（staff@）に届く。LILOCLE あての請求書なら lilocle@ と同じ「請求・支払い」にし、返事は lilocle@ から送る（2026-11-24 代表の指定）
+    if ((mailbox.indexOf("busilabo@") === 0 || mailbox.indexOf("staff@") === 0) && isLiloInvoiceAtBusilabo(data)) {
+      return { title: "LILOCLE 請求・支払い：" + subject, business: "LILOCLE運営", category: "代表の確認", steps: STEPS.liloPayment, draftKind: "lilocle-maker", channel: "メール", replyFrom: "lilocle@lilocle.jp" };
     }
     // contact@ に届いても、作り手（メーカー様・取り扱い候補）からのメールはメーカー対応（2026-11-06 代表の指定）
     if (mailbox.indexOf("contact@") === 0 && LILO_MAKER_AT_CONTACT.test(from)) {
