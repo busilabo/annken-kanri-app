@@ -1860,7 +1860,10 @@
         };
         // メールの中の日付は、配送の希望日やお客様の指定日のことが多く、仕事の期限ではない。期限は決まっているもの（Amazon）だけ入れる
         if (profile.due) fields.Due = profile.due;
-        var created = await createTaskItem(fields, "メールで依頼", honorific(from) + "から（" + (data.mailbox || "") + "）");
+        // 届いた時刻を残す（送った返信がこのメールより前のものかを見分けるため。2026-11-24）
+        var recvAt = data.receivedAt ? new Date(data.receivedAt) : null;
+        var recvText = recvAt && !isNaN(recvAt.getTime()) ? "・受信 " + (recvAt.getMonth() + 1) + "/" + recvAt.getDate() + " " + ("0" + recvAt.getHours()).slice(-2) + ":" + ("0" + recvAt.getMinutes()).slice(-2) : "";
+        var created = await createTaskItem(fields, "メールで依頼", honorific(from) + "から（" + (data.mailbox || "") + "）" + recvText);
         if (!created) return;   // 入れられなかったら、次の取り込みでもう一度試す
       }
     }
@@ -1894,6 +1897,17 @@
       if ((entries[i].querySelector(".history-action") || {}).textContent === "追加のメールが届いた") {
         return historyTime((entries[i].querySelector(".history-time") || {}).textContent);
       }
+    }
+    return null;
+  }
+
+  // 仕事のもとになったメールの届いた時刻（「メールで依頼」の履歴の「・受信 11/21 07:38」）
+  function mailReceivedAt(card) {
+    var entries = card.querySelectorAll("[data-history] .history-entry");
+    for (var i = 0; i < entries.length; i++) {
+      if ((entries[i].querySelector(".history-action") || {}).textContent !== "メールで依頼") continue;
+      var m = /受信 (\d{1,2}\/\d{1,2} \d{1,2}:\d{2})/.exec((entries[i].querySelector(".history-memo") || {}).textContent || "");
+      if (m) return historyTime(m[1]);
     }
     return null;
   }
@@ -1932,8 +1946,11 @@
     cards.forEach(function (c) {
       // 仕事ができる前の返信（同じ件名の前のやり取り）は数えない。取り込みが遅れることがあるので1日の余裕を見る。
       // 一度だけのフローが送信済みアイテムを50件さかのぼって置くため（2026-11-06）
-      var created = createdOn(c);
-      if (created && sentAt < new Date(created.getTime() - 86400000)) return;
+      // 2026-11-24：七久里農園様の「内税の請求書」の仕事が、前の日にこちらから送った訂正のお願い（届いたメールより前）で自動で完了になっていた。
+      // 届いた時刻が分かれば、それより前の返信は数えない。分からない古い仕事は、仕事ができた時刻の3時間前までの返信だけ数える
+      var recv = mailReceivedAt(c), created = createdOn(c);
+      if (recv) { if (sentAt.getTime() < recv.getTime() - 5 * 60000) return; }
+      else if (created && sentAt.getTime() < created.getTime() - 3 * 3600000) return;
       // 相手のメールが、こちらの送ったメールへの返事なら（引用に送った日時がある・件名が「Re: 送った件名」）、送ったのはこの仕事より前。数えない
       // （2026-11-18 ORDER4638：前の日に送った「領収書について」に、お客様が宛名を返してきた仕事が、その前の返信で自動で完了になっていた）
       if (repliesToSent(c, sentAt, subject)) return;
