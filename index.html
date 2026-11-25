@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 公開のときに、公開の仕組み（.github/workflows/publish-annken-kanri-app.yml）がこの版の番号に書き換える。手元では dev のまま -->
-<meta name="app-version" content="4e2a5b7">
+<meta name="app-version" content="88ec38c">
 <title>ビジラボ 仕事管理</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@500&display=swap">
 <style>
@@ -2005,7 +2005,7 @@
   .tile.dragging { opacity: .45; }
   .band.drop-over { outline: 3px dashed var(--accent); outline-offset: -3px; background: var(--accent-soft); }
 </style>
-<script src="rules.js?v=4e2a5b7"></script>
+<script src="rules.js?v=88ec38c"></script>
 </head>
 <body>
 
@@ -7477,7 +7477,7 @@
       mktCardsHtml('busilabo', { inquiry: o.results[0] }) + seoHtml() + effectHtml('busilabo') +
       '<div class="mk-ops">' + statusLightsHtml('運用状況', o.tiles) + '</div>' +
       (oIssues.length ? '<ul class="lilo-issues">' + oIssues.map(function (i) { return '<li>' + LILO_LIGHT[i.tone] + ' ' + esc(i.text) + '</li>'; }).join('') + '</ul>' : '') +
-      '<div class="lilo-foot"><details class="lilo-help"><summary>ℹ️ 数字の見かた</summary><div>運用は、問い合わせ・成約後の構築タスク・運用中の顧客・仕事のカードを今数えたものです。マーケティングは毎朝の集計（Windsor.ai・busilabo.com）で、コラムの下書きは SharePoint のフォルダを今見た数です。目安：SNS は週1本（8日で🟡・14日で🔴）、コラムの公開は週1本（10日で🔴）。🔴 はだれでも受け取れる仕事になり、様子が戻ると自動で完了します</div></details></div></div></details>';
+      '<div class="lilo-foot"><details class="lilo-help"><summary>ℹ️ 数字の見かた</summary><div>運用は、問い合わせ・成約後の構築タスク・運用中の顧客・仕事のカードを今数えたものです。マーケティングは毎朝の集計（Instagram・Facebook は Windsor.ai、ホームページは GA4・Search Console〈ビジラボ分析〉、コラムの公開は busilabo.com）で、コラムの下書きは SharePoint のフォルダを今見た数です。目安：SNS は週1本（8日で🟡・14日で🔴）、コラムの公開は週1本（10日で🔴）。🔴 はだれでも受け取れる仕事になり、様子が戻ると自動で完了します</div></details></div></div></details>';
   }
   // ---- 成長の画面（2026-11-17 代表の指定。見本「成長の画面」の A〜D をそのまま。データは SharePoint の「目標と数字」「発信」「試していること」と毎朝の集計）----
   var growthState = { loaded: false, goals: [], posts: [], tests: [] };
@@ -9795,8 +9795,8 @@
 })();
 </script>
 <script src="vendor/msal-browser.min.js"></script>
-<script src="sync.js?v=4e2a5b7"></script>
-<script src="chat.js?v=4e2a5b7"></script>
+<script src="sync.js?v=88ec38c"></script>
+<script src="chat.js?v=88ec38c"></script>
 <script>
 // 新しい版が出たら知らせて切り替える（2026-11-17 代表の指摘：ブラウザが古い版を覚えていて、更新しても前の画面のままだった）。
 // 公開のたびに version.txt に版の番号が入る。5分ごとと、画面に戻ってきたときに見比べ、違えば上に帯を出す。押すと読み直す（入力中の内容を消さないよう、勝手には読み直さない）

@@ -968,7 +968,7 @@
   // 鍵（RecordKey）は「週の初め|事業|発信|数字の名前」。同じ鍵があれば値が変わったときだけ直す。取れなかった週（null）は行を作らない
   var METRIC_LIST = "数字の記録";
   var METRIC_OF = { ig: "reach", fb: "views", mail: "site_visits", yomimono: "views", feature: "views", column: "views", site: "sessions", sales: "sales" };
-  var METRIC_SOURCE = { ig: "Windsor.ai（Instagram）", fb: "Windsor.ai（Facebook）", column: "Windsor.ai（GA4）", site: "Windsor.ai（GA4）", mail: "Shopify", yomimono: "Shopify", feature: "Shopify", sales: "Shopify" };
+  var METRIC_SOURCE = { ig: "Windsor.ai（Instagram）", fb: "Windsor.ai（Facebook）", column: "GA4（ビジラボ分析）", site: "GA4（ビジラボ分析）", mail: "Shopify", yomimono: "Shopify", feature: "Shopify", sales: "Shopify" };
   var metricListId = null;
   async function recordMetrics(st) {
     var d = st && st.loaded && st.data;
