@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 公開のときに、公開の仕組み（.github/workflows/publish-annken-kanri-app.yml）がこの版の番号に書き換える。手元では dev のまま -->
-<meta name="app-version" content="a4f796d">
+<meta name="app-version" content="597e1db">
 <title>ビジラボ 仕事管理</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@500&display=swap">
 <style>
@@ -2005,7 +2005,7 @@
   .tile.dragging { opacity: .45; }
   .band.drop-over { outline: 3px dashed var(--accent); outline-offset: -3px; background: var(--accent-soft); }
 </style>
-<script src="rules.js?v=a4f796d"></script>
+<script src="rules.js?v=597e1db"></script>
 </head>
 <body>
 
@@ -5354,9 +5354,10 @@
       { id: 'reply', type: 'mail', to: 'requester', useDraft: true, end: true, title: 'お客様にお返事する', help: 'AI の下書きを見て、直して送ります' }
     ] },
     'lilo-taikai': { family: 'taikai', label: '退会のご希望', steps: [
-      { id: 'ask', type: 'site', site: 'claude', title: 'Claude に退会の手続きを頼む', help: '下の文をコピーして Claude に貼り付けます。Claude がお客様の情報を消し、完了のメールを contact@ から送ります', doneLabel: '✅ 頼んだ', copy: function () { return '退会希望を処理して'; } },
-      { id: 'result', type: 'choose', end: true, title: 'Claude の結果を見る', help: '完了のメールが送られると、この仕事は自動で完了します',
-        choices: [{ label: '✅ 完了のメールが送られた', go: 'end' }, { label: '🙋「確認が必要」と言われた', go: 'rep' }] }
+      // 2026-11-25 代表の指定：画面の中で終わらせる（前は Claude にスキル lilocle-taikai を頼んでいた）。照合は差出人のアドレスだけ
+      { id: 'do', type: 'taikai', title: 'Shopify のお客様情報を消す（退会の手続き）', help: '差出人と同じメールアドレスのお客様を Shopify で探し、1人だけなら消します。注文の記録があるお客様は消せないので、メルマガの配信だけ止めます' },
+      { id: 'mail', type: 'mail', to: 'requester', end: true, title: 'お客様に、手続き完了のメールを送る', help: 'contact@ から送ります。引き止めの言葉・クーポン・アンケートのお願いは書きません',
+        instruction: function (x) { var only = /メルマガ/.test(x.memo('do') || ''); return 'LILOCLE の退会手続き完了のお知らせを書く。件名は「【LILOCLE】退会手続き完了のお知らせ」。宛名は姓だけ（メールに氏名が無ければ「お客様」）。本文はこのとおり：「このたびはLILOCLE（リロクル）にご連絡いただき、ありがとうございます。／ご希望をうけて、' + (only ? 'メールマガジンの配信を停止いたしました。今後LILOCLEからのメールマガジンは届きません。' : '退会の手続きをいたしました。ご登録いただいていたお客様情報は削除しておりますので、今後LILOCLEからのメールマガジンは届きません。') + '／これまでLILOCLEをご利用いただき、ありがとうございました。またどこかで、LILOCLEの商品を手に取っていただける日がありましたら幸いです。」引き止めの言葉・クーポン・アンケートのお願いは書かない。署名は付けない。'; } }
     ] },
     // ---- LILOCLE のメーカー様 ----
     'maker-shortage': { family: 'maker', label: '欠品・作れない', hint: '在庫がない・作れない・遅れる', steps: [
@@ -5690,6 +5691,11 @@
         '<label class="f-receipt">' + (src ? '別の PDF にする' : 'PDF') + '<input type="file" accept="application/pdf,.pdf" data-f-inv-file></label>' +
         '<button type="button" class="s-btn s-primary f-big" data-f-act="inv-check" ' + b + '>🔍 照らし合わせる</button><div class="f-hint" data-f-inv-hint></div>';
     }
+    else if (d.type === 'taikai') {
+      var tri = replyInfoOf(card, c) || {};
+      html += (tri.to ? '<div class="f-got">✉️ 差出人：' + esc(tri.to) + '（このアドレスと同じお客様だけを消します）</div>' : '<div class="f-hint">差出人のメールアドレスが分かりません。「分からないので代表に聞く」を押してください</div>') +
+        (tri.to ? '<button type="button" class="s-btn s-primary f-big" data-f-act="taikai-do" ' + b + '>🗑 退会の手続きをする</button>' : '') + '<div class="f-hint" data-f-taikai-hint></div>';
+    }
     else if (d.type === 'invoice-keep') {
       html += '<button type="button" class="s-btn s-primary f-big" data-f-act="inv-keep" ' + b + '>💾 保存して印刷する</button>' +
         '<button type="button" class="s-btn f-big" data-f-act="inv-keep-noprint" ' + b + '>保存だけする</button><div class="f-hint" data-f-inv-hint></div>';
@@ -6010,6 +6016,18 @@
         if (statusOf(card) === '未着手') setTaskStatus(card, '進行中');
         finishFlowStep(card, line, 'next', memo, d.title);
       }, function (err) { t.disabled = false; t.textContent = '🔍 照らし合わせる'; ihint.textContent = '照らし合わせられませんでした：' + (err.message || err); });
+      return;
+    }
+    if (act === 'taikai-do') {
+      var tinfo = replyInfoOf(card, c) || {}, thint = t.closest('.f-now').querySelector('[data-f-taikai-hint]');
+      if (!tinfo.to || !window.confirm(tinfo.to + ' のお客様の退会の手続きをしますか？（Shopify のお客様情報を消します。注文の記録があれば、メルマガだけ止めます）')) return;
+      t.disabled = true; t.textContent = '手続きしています…';
+      window.__act.taikai(tinfo.to).then(function (r) {
+        if (r.result === 'deleted' || r.result === 'unsubscribed') { finishFlowStep(card, line, 'next', r.text + '（' + tinfo.to + '）', d.title); return; }
+        // 見つからない・2人以上：消していない。代表に聞く
+        t.disabled = false; t.textContent = '🗑 退会の手続きをする';
+        thint.textContent = r.text + '。「分からないので代表に聞く」を押してください';
+      }, function (err) { t.disabled = false; t.textContent = '🗑 退会の手続きをする'; thint.textContent = '手続きできませんでした：' + (err.message || err); });
       return;
     }
     if (act === 'inv-keep' || act === 'inv-keep-noprint') {
@@ -9795,8 +9813,8 @@
 })();
 </script>
 <script src="vendor/msal-browser.min.js"></script>
-<script src="sync.js?v=a4f796d"></script>
-<script src="chat.js?v=a4f796d"></script>
+<script src="sync.js?v=597e1db"></script>
+<script src="chat.js?v=597e1db"></script>
 <script>
 // 新しい版が出たら知らせて切り替える（2026-11-17 代表の指摘：ブラウザが古い版を覚えていて、更新しても前の画面のままだった）。
 // 公開のたびに version.txt に版の番号が入る。5分ごとと、画面に戻ってきたときに見比べ、違えば上に帯を出す。押すと読み直す（入力中の内容を消さないよう、勝手には読み直さない）

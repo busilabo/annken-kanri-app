@@ -869,6 +869,8 @@
     } catch (e) { orderCache[number] = { at: Date.now(), order: null, error: e.message }; }
     return orderCache[number];
   }
+  // 退会のご希望：差出人のアドレスと同じお客様を Shopify で消す（注文があればメルマガだけ止める）。2026-11-25
+  async function shopifyTaikai(email) { return callApi(SHOPIFY_ENDPOINT, { action: "taikai", email: email }, 60000); }
   async function shopifyCancel(req) {
     var out = await callApi(SHOPIFY_ENDPOINT, Object.assign({ action: "cancel" }, req), 60000);
     delete orderCache[req.number];
@@ -1477,7 +1479,7 @@
     var blob = await res.blob();
     return new File([blob], name, { type: "application/pdf" });
   }
-  window.__act = { receipt: makeReceipt, invoiceCheck: invoiceCheck, invoiceKeep: invoiceKeep, invoiceUpload: invoiceUpload, driveFile: driveFile, order: shopifyOrder, orderCached: function (n) { return orderCache[n] || null; }, cancel: shopifyCancel, finalCheck: finalCheck, draft: composeDraft, send: sendMail, cancelSteps: function () { return STEPS.liloCancel.slice(); }, isCancelRequest: function (t) { return isCancelRequest(t, ""); },
+  window.__act = { receipt: makeReceipt, invoiceCheck: invoiceCheck, invoiceKeep: invoiceKeep, invoiceUpload: invoiceUpload, driveFile: driveFile, order: shopifyOrder, orderCached: function (n) { return orderCache[n] || null; }, cancel: shopifyCancel, taikai: shopifyTaikai, finalCheck: finalCheck, draft: composeDraft, send: sendMail, cancelSteps: function () { return STEPS.liloCancel.slice(); }, isCancelRequest: function (t) { return isCancelRequest(t, ""); },
     me: function () { return (account && account.username) || ""; },
     // 仕事の流れ（index.html の FLOWS）が、前の作りの手順を見分けるのに使う
     steps: function () { return STEPS; },
