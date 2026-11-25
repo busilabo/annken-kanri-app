@@ -287,6 +287,33 @@ $Plan = [ordered]@{
     @{ name = 'Source';      type = 'text';      desc = '出所（Shopify／セラーセントラル／問い合わせ管理 など）' }
     @{ name = 'MeasuredAt';  type = 'dateTime';  desc = '数えた日時（台帳係）' }
   )}
+  # 日報（2026-11-25）：Teams サイトのドキュメント直下「ビジラボ AIチーム日報.xlsx」（Forms の回答）の控え。エクセルが正本。台帳係が写す。手で直さない
+  '日報' = @{ create = $true; columns = @(
+    @{ name = 'RecordKey';   type = 'text';      desc = '目印 nippo:Forms の回答番号（同じ回答を二重に入れないための鍵）'; indexed = $true }
+    @{ name = 'Day';         type = 'text';      desc = '出した日（YYYY-MM-DD・日本時間）'; indexed = $true }
+    @{ name = 'Staff';       type = 'text';      desc = 'スタッフの名前（フォームで選んだ名前）'; indexed = $true }
+    @{ name = 'SubmittedAt'; type = 'dateTime';  desc = '出した日時（Forms の完了時刻）' }
+    @{ name = 'FormVersion'; type = 'text';      desc = 'フォームの形（旧＝2026-09-14〜／新＝2026-11-10〜）' }
+    @{ name = 'WorkHours';   type = 'text';      desc = '今日の稼働時間（新）' }
+    @{ name = 'WorkKinds';   type = 'text';      desc = '業務の種類（新。いくつでも「、」で区切る）' }
+    @{ name = 'Tools';       type = 'text';      desc = '使ったツール・AIチーム（いくつでも「、」で区切る）' }
+    @{ name = 'Output';      type = 'multiline'; desc = '業務内容と成果／できあがったもの' }
+    @{ name = 'Hard';        type = 'multiline'; desc = '時間がかかったこと・やりにくかったこと（週の設問「いちばん時間がかかった作業」も）' }
+    @{ name = 'Good';        type = 'multiline'; desc = 'うまくいったこと・工夫したこと' }
+    @{ name = 'Idea';        type = 'multiline'; desc = '「こうすればもっと楽・早くなる」アイデア' }
+    @{ name = 'Tomorrow';    type = 'multiline'; desc = '明日の予定／来週、任せてほしい仕事・試してみたいこと' }
+    @{ name = 'Consult';     type = 'multiline'; desc = '相談したいこと' }
+    @{ name = 'Feel';        type = 'number';    desc = '今日の手応え（新。1〜5）' }
+    @{ name = 'AiUsable';    type = 'text';      desc = 'AIチームの案はそのまま使えたか（旧）' }
+    @{ name = 'Rewrite';     type = 'multiline'; desc = '文章のどこを書き直したか（旧）' }
+    @{ name = 'InsightKind'; type = 'text';      desc = '今日の気づきの種類（旧）' }
+    @{ name = 'Insight';     type = 'multiline'; desc = '気づきの中身（旧）' }
+    @{ name = 'Pace';        type = 'text';      desc = '進め方（一人で／少し聞いた…。旧）' }
+    @{ name = 'Publish';     type = 'text';      desc = '代表が紹介してよいか（旧）' }
+    @{ name = 'WeekNew';     type = 'multiline'; desc = '今週、新しく一人でできるようになったこと（旧・週の最後の日）' }
+    @{ name = 'SyncedAt';    type = 'dateTime';  desc = '写した日時（台帳係）' }
+    $Deleted
+  )}
   'データの置き場所' = @{ create = $true; columns = @(
     @{ name = 'LastCollectedAt'; type = 'dateTime'; desc = '最後に集めた時刻（台帳係が書く）' }
     @{ name = 'LastResult';  type = 'text';      desc = '最後の結果（ok／遅れ／止まっている と一言）' }
